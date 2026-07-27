@@ -24,6 +24,9 @@ struct MainWindowView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             terminalContent
+            if workspace.isStatusBarVisible {
+                StatusBarView(workspace: workspace)
+            }
         }
         .frame(minWidth: 480, minHeight: 320)
         .onAppear {
