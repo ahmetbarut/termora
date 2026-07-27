@@ -1,0 +1,52 @@
+//
+//  TerminalSession.swift
+//  Termora
+//
+
+import Foundation
+import Observation
+
+/// Lifecycle of the shell process behind a session.
+enum ProcessState: Equatable {
+    case running
+    case exited(ExitStatus)
+}
+
+/// One shell process plus everything the UI shows about it.
+/// The AppKit view that renders it lives in `SessionManager`'s cache, not here:
+/// the session outlives any particular SwiftUI representable.
+@Observable
+final class TerminalSession: Identifiable {
+    let id: UUID
+    let profileID: UUID?
+
+    /// Not `let`: `SessionManager.restartSession(id:forceDefaultShell:)` may bring the session
+    /// back up on the default shell after a broken path, and the status bar must then show the
+    /// shell that is actually running.
+    var shellPath: String
+
+    var workingDirectory: String?
+    var title: String = ""
+    var processState: ProcessState = .running
+
+    /// The shell path that could not be executed, or nil after a successful start.
+    /// Spec §8: the pane draws an in-pane error banner with a "try the default shell" action.
+    var launchFailure: String?
+
+    /// Bumped by `SessionManager.restartSession(id:forceDefaultShell:)`, which installs a brand
+    /// new AppKit view for the same session id. SwiftUI would otherwise keep showing the dead
+    /// one, so the pane keys its `TerminalHostView` on this value. Only `SessionManager` writes it.
+    var restartGeneration: Int = 0
+
+    init(
+        id: UUID = UUID(),
+        shellPath: String,
+        profileID: UUID? = nil,
+        workingDirectory: String? = nil
+    ) {
+        self.id = id
+        self.shellPath = shellPath
+        self.profileID = profileID
+        self.workingDirectory = workingDirectory
+    }
+}
