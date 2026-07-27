@@ -9,8 +9,10 @@ struct ProfilesSettingsView: View {
     @State private var fontFamilies: [String] = []
 
     /// `selection` geçersizleştiğinde okunan kararlı yer tutucu (yeni UUID üretmez).
+    /// Force unwrap yok (brief bölüm 2, geliştirme kuralları): sıfır UUID'si
+    /// `UUID(uuid:)` ile doğrudan kurulur, ayrıştırılacak bir metin yoktur.
     private static let placeholder = TerminalProfile(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+        id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
         name: ""
     )
 
