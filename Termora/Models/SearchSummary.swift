@@ -17,3 +17,18 @@ enum SearchSummaryFormatter {
         return "\(index)/\(summary.total)"
     }
 }
+
+/// Arama isteğinin SwiftTerm'den bağımsız gösterimi (SwiftTerm sınırı dar tutulur).
+struct TerminalSearchQuery: Equatable {
+    var term: String
+    var caseSensitive: Bool
+    var usesRegex: Bool
+    var wholeWord: Bool
+
+    init(term: String, caseSensitive: Bool = false, usesRegex: Bool = false, wholeWord: Bool = false) {
+        self.term = term
+        self.caseSensitive = caseSensitive
+        self.usesRegex = usesRegex
+        self.wholeWord = wholeWord
+    }
+}

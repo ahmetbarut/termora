@@ -17,6 +17,11 @@ final class TerminalTab: Identifiable {
     var activePaneID: UUID
     var isSearchVisible: Bool = false
 
+    /// Arama çubuğundaki metin ve seçenekler (sekme başına ayrı tutulur).
+    var searchQuery = TerminalSearchQuery(term: "")
+    /// Son `searchMatchSummary` sonucu; çubuktaki "2/14" sayacını besler.
+    var searchSummary: SearchSummary = .empty
+
     var displayTitle: String {
         if let customTitle, !customTitle.isEmpty { return customTitle }
         return automaticTitle.isEmpty ? "Terminal" : automaticTitle

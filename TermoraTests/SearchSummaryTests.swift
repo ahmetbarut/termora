@@ -26,3 +26,27 @@ struct SearchSummaryFormatterTests {
         #expect(SearchSummaryFormatter.text(SearchSummary(index: 9, total: 5)) == "5/5")
     }
 }
+
+@Suite("TerminalTab search state")
+@MainActor
+struct TerminalTabSearchStateTests {
+
+    @Test func newTabStartsWithEmptySearchState() {
+        let paneID = UUID()
+        let tab = TerminalTab(root: .leaf(paneID: paneID, sessionID: UUID()), activePaneID: paneID)
+
+        #expect(tab.isSearchVisible == false)
+        #expect(tab.searchQuery == TerminalSearchQuery(term: ""))
+        #expect(tab.searchSummary == .empty)
+    }
+
+    @Test func queryCarriesOptionFlags() {
+        let query = TerminalSearchQuery(term: "error", caseSensitive: true, usesRegex: false, wholeWord: true)
+
+        #expect(query.term == "error")
+        #expect(query.caseSensitive)
+        #expect(query.wholeWord)
+        #expect(query.usesRegex == false)
+        #expect(query != TerminalSearchQuery(term: "error"))
+    }
+}
