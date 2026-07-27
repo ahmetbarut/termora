@@ -59,7 +59,7 @@ Yapıyı belirleyen kararlar:
 
 1. **Oturum ömrü ≠ görünüm ömrü.** `SessionManager`, `TermoraTerminalView` örneklerini oturum UUID'siyle cache'te tutar (CodeEdit'te doğrulanan kalıp). SwiftUI representable'ı söküp yeniden kursa da shell süreci ve scrollback yaşar. Sekme/panel kapanınca cache'ten düşer, süreç sonlandırılır.
 2. **Sekme/panel modeli binary tree.** `PaneNode = leaf(paneID, sessionID) | split(eksen, oran, iki çocuk)`. Bölme = leaf → split dönüşümü; panel kapatma = kardeşin ebeveyni ikame etmesi. Divider'lı bölme görünümü özel ve hafif bir SwiftUI implementasyonudur (dış paket yok).
-3. **Kısayol yönlendirme.** Kısayollar `Commands` API'sinde; `@FocusedValue` yalnız key window'un WorkspaceViewModel'ine ulaştırır. ⌘W: `CommandGroup(replacing: .saveItem)`. Son sekme kapanınca `dismissWindow` (macOS 14+).
+3. **Kısayol yönlendirme.** Kısayollar `Commands` API'sinde; `@FocusedValue` yalnız key window'un WorkspaceViewModel'ine ulaştırır. ⌘W: `CommandGroup(replacing: .saveItem)`. Son sekme kapanınca pencere kapanmaz; yerine yeni boş bir sekme açılır (terminal uygulaması konvansiyonu). Pencerenin kendisi kırmızı düğme veya ⌘Q ile kapatılır ve çalışan işlem varsa tek toplu onay istenir.
 4. **SwiftTerm sınırı dar tutulur.** Kütüphane pürüzleri `TermoraTerminalView` + `ShellService`/`SessionManager` içinde kapatılır; uygulamanın geri kalanı bunları görmez. İleride özel PTY katmanına (yaklaşım B) geçiş bu sınır içinde kalır.
 5. **Ayar akışı tek yönlü.** `SettingsStore` → değişiklik → `SessionManager` açık tüm terminallere uygular. Terminal tarafından ayar yazılmaz.
 
@@ -76,7 +76,7 @@ Klasör yapısı brief'teki öneriye uyar (`App/ Models/ Views/ ViewModels/ Serv
 | `TerminalTab` | id, başlık (otomatik/elle ayrımıyla), ağaç kökü, aktif panel | Kalıcı değil |
 | `TerminalSession` | id, shell yolu, çalışma dizini, süreç durumu (çalışıyor/çıktı(kod)) | Kalıcı değil |
 
-Sekme başlığı: shell OSC ile başlık gönderirse (`setTerminalTitle`) otomatik gösterilir; kullanıcı elle ad verdiyse elle ad kazanır.
+Sekme başlığı öncelik sırası: kullanıcının elle verdiği ad → shell'in OSC ile gönderdiği başlık (`setTerminalTitle`) → çalışma dizininin son bileşeni → shell adı. OSC başlığına bel bağlanmaz: macOS'un stok `zsh` yapılandırması başlık dizisini yalnız `TERM_PROGRAM=Apple_Terminal` iken yayar, Termora ise `TERM_PROGRAM=Termora` gönderir; bu yüzden dizin tabanlı geri düşüş (spec §7'deki "başlıkta aktif klasör") zorunludur.
 
 ## 5. Servisler
 

@@ -18,7 +18,8 @@ Bu kısıtlar HER görev için geçerlidir; görev metinlerinde tekrar edilmese 
 - **Dosya ekleme:** Proje `PBXFileSystemSynchronizedRootGroup` kullanır (objectVersion 77). `Termora/` veya `TermoraTests/` altına diske yazılan her dosya otomatik olarak derlemeye girer — pbxproj düzenlemesi GEREKMEZ. Tek istisna Task 1'deki SwiftTerm SPM paketi eklemesidir.
 - **Minimum macOS:** 14.0 Sonoma. macOS 15+ API'leri (`pointerStyle`, `containerBackground(.window)`, `windowBackgroundDragBehavior`, yeni `Tab`/`TabSection`, `@Entry`, `onModifierKeysChanged`) ve macOS 26 API'leri (Liquid Glass / `glassEffect`) YASAK.
 - **Sandbox:** `ENABLE_APP_SANDBOX = NO` (Task 1 ayarlar). `ENABLE_HARDENED_RUNTIME = YES` korunur.
-- **Test framework:** Swift Testing (`import Testing`, `@Test`, `@Suite`, `#expect`). XCTest kullanılmaz.
+- **Test framework:** Swift Testing (`import Testing`, `@Test`, `@Suite`, `#expect`). XCTest kullanılmaz. **Tek istisna:** `TermoraUITests` hedefi XCUITest gerektirir (`XCUIApplication` Swift Testing ile kullanılamaz); yalnız o hedefte `import XCTest` serbesttir.
+- **Metal Toolchain önkoşulu:** SwiftTerm 1.15.0 bir `.metal` shader içerir ve Xcode 26'da Metal derleyicisi ayrı indirilen bir bileşendir. Kurulu değilse **her** build `error: cannot execute tool 'metal' due to missing Metal Toolchain` ile düşer. Task 1 bunu `xcodebuild -downloadComponent MetalToolchain` ile çözer; sonraki hiçbir görev bu hatayı kendi kodunun hatası sanmamalıdır.
 - **Aktör izolasyonu:** Proje `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ve `SWIFT_APPROACHABLE_CONCURRENCY = YES` ile derlenir; bildirimlerin varsayılan izolasyonu MainActor'dır.
 - **Derleme komutu:** `xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet`
 - **Test komutu:** `xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/<SuiteAdı> 2>&1 | tail -20`
@@ -39,16 +40,18 @@ Bu kısıtlar HER görev için geçerlidir; görev metinlerinde tekrar edilmese 
 - Modify: `/Users/ahmetbarut/Apps/Termora/Termora.xcodeproj/project.pbxproj`
 - Modify (taşı + sadeleştir): `/Users/ahmetbarut/Apps/Termora/Termora/TermoraApp.swift` → `/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift`
 - Delete: `/Users/ahmetbarut/Apps/Termora/Termora/ContentView.swift`
-- Create: `/Users/ahmetbarut/Apps/Termora/Termora/Services/SwiftTermLinkCheck.swift` (geçici import doğrulama dosyası; Task 8 gerçek SwiftTerm kullanımını getirince silinebilir)
+- Create: `/Users/ahmetbarut/Apps/Termora/Termora/Services/SwiftTermLinkCheck.swift` (geçici import doğrulama dosyası; **Task 8 bu dosyayı `git rm` ile siler** — orada `TermoraTerminalView` gerçek SwiftTerm kullanımını getirir)
 - Test: yok (altyapı görevi) — build doğrulaması şart
 
 **Interfaces:**
 - Consumes: —
-- Produces: `import SwiftTerm` derlenebilir durumda; `MACOSX_DEPLOYMENT_TARGET = 14.0` (tüm konfigürasyonlar); `ENABLE_APP_SANDBOX = NO`; klasör iskeleti (`Termora/App`, `Models`, `Views/{MainWindow,Terminal,Tabs,SplitView,Search,Settings}`, `ViewModels`, `Services`, `Extensions`, `Resources/Themes`)
+- Produces: `import SwiftTerm` hem `Termora` hem `TermoraTests` hedeflerinde derlenebilir durumda; `MACOSX_DEPLOYMENT_TARGET = 14.0` (tüm konfigürasyonlar); `ENABLE_APP_SANDBOX = NO`; `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (app + test hedefi); klasör iskeleti (`Termora/App`, `Models`, `Views/{Terminal,Settings,Support}`, `ViewModels`, `Services`, `Extensions`, `Resources/Themes`)
 
-Not: Proje `PBXFileSystemSynchronizedRootGroup` kullanıyor (objectVersion 77) — `Termora/` altına yazılan her dosya otomatik derlemeye girer; pbxproj'a dosya referansı eklenmez. Bu görevdeki TEK pbxproj düzenlemesi SwiftTerm SPM paketidir. Ayrıca şablonda `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ve `SWIFT_APPROACHABLE_CONCURRENCY = YES` açıktır ve KORUNUR: tüm bildirimlerin varsayılan izolasyonu MainActor'dır; sonraki görevlerdeki saf model/servis kodu ve Swift Testing testleri bu varsayımla tutarlıdır (ekstra `@MainActor`/`nonisolated` işaretine gerek yoktur).
+Not: Proje `PBXFileSystemSynchronizedRootGroup` kullanıyor (objectVersion 77) — `Termora/` veya `TermoraTests/` altına yazılan her dosya otomatik derlemeye girer; pbxproj'a **dosya referansı** eklenmez. Bu görevdeki pbxproj düzenlemeleri yalnız build ayarları (Step 1) ve SwiftTerm SPM paketinin iki hedefe bağlanmasıdır (Step 2-5).
 
-- [ ] **Step 1: Deployment target ve sandbox ayarlarını değiştir**
+Aktör izolasyonu: şablonda `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ve `SWIFT_APPROACHABLE_CONCURRENCY = YES` yalnız **uygulama** hedefinde açıktır ve KORUNUR; Step 1 aynı ayarı **`TermoraTests` hedefine de** ekler. Böylece uygulama tipleri (hepsi MainActor izole) ile test kodu aynı izolasyon varsayımı altında derlenir. Buna rağmen sonraki görevlerdeki Swift Testing suite'leri **açıkça `@MainActor` işaretlenir** (Task 5/6/7 ve sonrası) — ayar yanlışlıkla düşerse veya Swift 6 diline geçilirse testler yine de derlenir.
+
+- [ ] **Step 1: Deployment target, sandbox ve test hedefi aktör izolasyonu ayarlarını değiştir**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
@@ -60,6 +63,35 @@ grep -c 'ENABLE_APP_SANDBOX = NO;' Termora.xcodeproj/project.pbxproj
 
 Beklenen: ilk grep `4` (proje Debug/Release + TermoraTests Debug/Release), ikinci grep `2` (app hedefi Debug/Release). `ENABLE_HARDENED_RUNTIME = YES` zaten var, dokunma.
 
+Ardından `TermoraTests` hedefinin iki konfigürasyonuna `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ekle. `SWIFT_APPROACHABLE_CONCURRENCY = YES;` satırı dosyada 6 kez geçtiğinden (app + test + UI test) düz `sed` kullanılamaz; aşağıdaki betik yalnız `PRODUCT_BUNDLE_IDENTIFIER = com.ahmetbarut.TermoraTests;` içeren `buildSettings` bloklarını yamalar, alfabetik sırayı korur ve tekrar çalıştırılabilir (idempotent):
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+python3 - <<'PY'
+import pathlib
+path = pathlib.Path("Termora.xcodeproj/project.pbxproj")
+text = path.read_text()
+opener = "\t\t\tbuildSettings = {\n"
+marker = "PRODUCT_BUNDLE_IDENTIFIER = com.ahmetbarut.TermoraTests;"
+anchor = "\t\t\t\tSWIFT_APPROACHABLE_CONCURRENCY = YES;\n"
+line = "\t\t\t\tSWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;\n"
+chunks = text.split(opener)
+for i in range(1, len(chunks)):
+    body, sep, rest = chunks[i].partition("\t\t\t};\n")
+    if marker in body and line not in body:
+        assert body.count(anchor) == 1, "SWIFT_APPROACHABLE_CONCURRENCY tekil degil"
+        body = body.replace(anchor, anchor + line)
+    chunks[i] = body + sep + rest
+result = opener.join(chunks)
+assert result.count(line) == 4, f"beklenen 4 satir, bulunan {result.count(line)}"
+path.write_text(result)
+print("ACTOR_ISOLATION_OK", result.count(line))
+PY
+grep -c 'SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;' Termora.xcodeproj/project.pbxproj
+```
+
+Beklenen: `ACTOR_ISOLATION_OK 4` ve grep çıktısı `4` (app Debug/Release + TermoraTests Debug/Release). Betik `AssertionError` verirse pbxproj beklenen şekilde değildir — hiçbir şey yazılmamıştır, dosya bozulmaz. `TermoraUITests` hedefine bu ayar **eklenmez** (XCUITest kodu XCTest kalıbında yazılır).
+
 - [ ] **Step 2: pbxproj'a SwiftTerm SPM paketini ekle — PBXBuildFile bölümü**
 
 `Termora.xcodeproj/project.pbxproj` içinde (girintiler TAB karakteridir) şu satırı bul:
@@ -68,19 +100,22 @@ Beklenen: ilk grep `4` (proje Debug/Release + TermoraTests Debug/Release), ikinc
 /* Begin PBXContainerItemProxy section */
 ```
 
-ve şununla değiştir (üstüne yeni bölüm eklenmiş olur):
+ve şununla değiştir (üstüne yeni bölüm eklenmiş olur — **iki** build file: biri app, biri test hedefi için):
 
 ```
 /* Begin PBXBuildFile section */
 		1FB09E01301781D200585465 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 1FB09E03301781D200585465 /* SwiftTerm */; };
+		1FB09E04301781D200585465 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 1FB09E05301781D200585465 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 ```
 
-- [ ] **Step 3: pbxproj — app hedefinin Frameworks build phase'ine ürünü bağla**
+Neden test hedefi de: `TermoraTests/ThemeTests.swift`, `AppSettingsTests.swift` ve `SessionManagerTests.swift` doğrudan `import SwiftTerm` yapar (`SwiftTerm.Color`, `SwiftTerm.CursorStyle`). Ürün test hedefine bağlanmazsa bu dosyalar `error: no such module 'SwiftTerm'` ile derlenmez. Bu **tek seferlik** ayardır; sonraki hiçbir görev "Xcode'da elle ekle" demez.
 
-Şu bloğu bul (ID `1FB09D52...` app hedefinin Frameworks fazıdır; aynı yapıda 3 blok var, ID satırı tekilleştirir):
+- [ ] **Step 3: pbxproj — app ve test hedeflerinin Frameworks build phase'lerine ürünü bağla**
+
+Üç `PBXFrameworksBuildPhase` bloğu birbirinin aynısıdır; yalnız ID satırı ayırır. Önce app hedefininkini (`1FB09D52...`) bul:
 
 ```
 		1FB09D52301781CF00585465 /* Frameworks */ = {
@@ -105,6 +140,33 @@ ve şununla değiştir:
 		};
 ```
 
+Sonra test hedefininkini (`1FB09D5F...`) bul:
+
+```
+		1FB09D5F301781D100585465 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+```
+
+ve şununla değiştir:
+
+```
+		1FB09D5F301781D100585465 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1FB09E04301781D200585465 /* SwiftTerm in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+```
+
+`1FB09D69...` bloğu (`TermoraUITests`) DEĞİŞMEZ — UI test hedefi SwiftTerm kullanmaz.
+
 - [ ] **Step 4: pbxproj — target packageProductDependencies + proje packageReferences**
 
 `PBXNativeTarget "Termora"` içinde şu ikiliyi bul (dosyada tek geçer):
@@ -123,6 +185,25 @@ ve şununla değiştir:
 				1FB09E03301781D200585465 /* SwiftTerm */,
 			);
 ```
+
+`PBXNativeTarget "TermoraTests"` içinde şu ikiliyi bul (dosyada tek geçer):
+
+```
+			name = TermoraTests;
+			packageProductDependencies = (
+			);
+```
+
+ve şununla değiştir:
+
+```
+			name = TermoraTests;
+			packageProductDependencies = (
+				1FB09E05301781D200585465 /* SwiftTerm */,
+			);
+```
+
+`name = TermoraUITests;` bloğu DEĞİŞMEZ.
 
 Sonra `PBXProject` bölümünde şu ikiliyi bul:
 
@@ -172,11 +253,34 @@ ve şununla değiştir:
 			package = 1FB09E02301781D200585465 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
 		};
+		1FB09E05301781D200585465 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FB09E02301781D200585465 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
 /* End XCSwiftPackageProductDependency section */
 	};
 ```
 
-- [ ] **Step 6: Paket çözümlemesini doğrula**
+(İki ürün bağımlılığı da aynı paket referansını gösterir: `1FB09E03…` app hedefinin, `1FB09E05…` test hedefinin girdisidir — Xcode her hedef için ayrı `XCSwiftPackageProductDependency` bekler.)
+
+- [ ] **Step 6: pbxproj düzenlemelerini ve paket çözümlemesini doğrula**
+
+Önce eklenen kimliklerin sayısını doğrula (her biri beklenen sayıda geçmeli):
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+grep -c '1FB09E01301781D200585465' Termora.xcodeproj/project.pbxproj   # 2 (tanim + app Frameworks)
+grep -c '1FB09E04301781D200585465' Termora.xcodeproj/project.pbxproj   # 2 (tanim + test Frameworks)
+grep -c '1FB09E03301781D200585465' Termora.xcodeproj/project.pbxproj   # 3 (buildFile productRef + app packageProductDependencies + tanim)
+grep -c '1FB09E05301781D200585465' Termora.xcodeproj/project.pbxproj   # 3 (buildFile productRef + test packageProductDependencies + tanim)
+grep -c '1FB09E02301781D200585465' Termora.xcodeproj/project.pbxproj   # 4 (packageReferences + tanim + iki urun bagimliligi)
+plutil -lint Termora.xcodeproj/project.pbxproj
+```
+
+Beklenen: sırasıyla `2`, `2`, `3`, `3`, `4` ve `project.pbxproj: OK`. Sayılar tutmuyorsa Step 2-5'teki bloklardan biri eksik/yanlış yapıştırılmıştır.
+
+Sonra paketi çözümle:
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
@@ -185,17 +289,29 @@ xcodebuild -resolvePackageDependencies -project Termora.xcodeproj -scheme Termor
 
 Beklenen: çıktıda `Resolved source packages:` altında `SwiftTerm: https://github.com/migueldeicaza/SwiftTerm @ 1.15.x` satırı (ağ erişimi gerekir; ilk çözümleme 1-2 dk sürebilir). Hata (`xcodebuild: error:` / `could not resolve`) görülürse pbxproj düzenlemelerinde yazım hatası var demektir — Step 2-5'i tekrar kontrol et.
 
+**Metal Toolchain önkoşulu (bu makinede DOĞRULANDI: eksik).** SwiftTerm 1.15.0 `Sources/SwiftTerm/Metal/Shaders.metal` içerir; `SwiftTerm_SwiftTerm` resource hedefi bu shader'ı derler. Xcode 26'da Metal derleyicisi ayrı indirilen bir bileşendir ve kurulu değilse **her** build şu hatayla düşer:
+
+```
+error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
+** BUILD FAILED **
+```
+
+Bu, Step 10'dan itibaren planın TÜM build/test adımlarını bloke eder. Step 10'a geçmeden bileşeni indir (tek seferlik, birkaç GB, ağ gerekir):
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
+Doğrulama: `xcodebuild -downloadComponent MetalToolchain` ikinci kez çalıştırıldığında bileşenin zaten kurulu olduğunu bildirir; kesin kontrol için Step 10'daki build'in `BUILD_OK` vermesidir.
+
 - [ ] **Step 7: Klasör iskeletini aç**
 
 ```bash
 mkdir -p /Users/ahmetbarut/Apps/Termora/Termora/App \
   /Users/ahmetbarut/Apps/Termora/Termora/Models \
-  /Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindow \
   /Users/ahmetbarut/Apps/Termora/Termora/Views/Terminal \
-  /Users/ahmetbarut/Apps/Termora/Termora/Views/Tabs \
-  /Users/ahmetbarut/Apps/Termora/Termora/Views/SplitView \
-  /Users/ahmetbarut/Apps/Termora/Termora/Views/Search \
   /Users/ahmetbarut/Apps/Termora/Termora/Views/Settings \
+  /Users/ahmetbarut/Apps/Termora/Termora/Views/Support \
   /Users/ahmetbarut/Apps/Termora/Termora/ViewModels \
   /Users/ahmetbarut/Apps/Termora/Termora/Services \
   /Users/ahmetbarut/Apps/Termora/Termora/Extensions \
@@ -203,6 +319,8 @@ mkdir -p /Users/ahmetbarut/Apps/Termora/Termora/App \
 ```
 
 Not: git boş klasörleri izlemez; klasörler sonraki görevlerde dosya aldıkça commit'lere girer. Bu normaldir.
+
+İskelet, sonraki görevlerin gerçekten yazdığı yollarla birebir eşleşir: `Views/` kökü (`MainWindowView`, `TabBarView`, `SearchBarView`, `StatusBarView`, `SettingsPlaceholderView`), `Views/Terminal/` (`TermoraTerminalView`, `TerminalHostView`, `PaneTreeView`), `Views/Settings/` (Task 18) ve `Views/Support/` (Task 18 `WindowChrome`). Kullanılmayan `Views/{MainWindow,Tabs,SplitView,Search}` klasörleri bilinçli olarak açılmaz.
 
 - [ ] **Step 8: ContentView.swift'i sil, TermoraApp.swift'i App/ altına taşı ve sadeleştir**
 
@@ -236,7 +354,8 @@ struct TermoraApp: App {
 import SwiftTerm
 
 /// Build-time smoke check: SwiftTerm paketinin çözülüp linklendiğini garanti eder.
-/// Task 8 gerçek SwiftTerm kullanımını (TermoraTerminalView) getirdiğinde bu dosya silinebilir.
+/// GEÇİCİDİR: Task 8 gerçek SwiftTerm kullanımını (TermoraTerminalView) getirir ve
+/// kendi commit adımında bu dosyayı `git rm` ile siler.
 enum SwiftTermLinkCheck {
     static let terminalViewType: AnyClass = LocalProcessTerminalView.self
 }
@@ -251,6 +370,26 @@ xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platfo
 
 Beklenen: son satır `BUILD_OK` (exit code 0). `-quiet` ile başarılı build'de neredeyse hiç çıktı olmaz. `cannot find 'LocalProcessTerminalView'` hatası görülürse paket bağlanmamıştır — Step 2-5 blokları kontrol edilir.
 
+Ardından test hedefinin de SwiftTerm'e erişebildiğini geçici bir sonda dosyasıyla doğrula (Task 5/6/8 testleri buna bağlıdır):
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+cat > TermoraTests/SwiftTermLinkProbe.swift <<'SWIFT'
+import SwiftTerm
+import Testing
+
+@Test func swiftTermIsLinkedIntoTheTestTarget() {
+    #expect(SwiftTerm.Color(red: 0, green: 0, blue: 0).red == 0)
+}
+SWIFT
+xcodebuild build-for-testing -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet && echo TEST_TARGET_OK
+rm TermoraTests/SwiftTermLinkProbe.swift
+```
+
+Beklenen: `TEST_TARGET_OK`. `error: no such module 'SwiftTerm'` görülürse Step 2-5'teki **test hedefi** blokları (`1FB09E04…` / `1FB09E05…`) eksiktir. Sonda dosyası doğrulamadan hemen sonra silinir; commit'e girmez.
+
+Not: SwiftTerm hem uygulamaya hem test bundle'ına linklendiğinden test koşumunda `objc[…]: Class _TtC9SwiftTerm… is implemented in both …` uyarıları görülebilir. Bunlar zararsızdır (aynı sürümün iki kopyası); testleri düşürmezler.
+
 - [ ] **Step 11: Commit**
 
 ```bash
@@ -258,6 +397,8 @@ cd /Users/ahmetbarut/Apps/Termora
 git add -A
 git commit -m "chore: target macOS 14, disable sandbox, add SwiftTerm 1.15.0, scaffold folders"
 ```
+
+---
 
 ---
 
@@ -421,6 +562,8 @@ cd /Users/ahmetbarut/Apps/Termora
 git add Termora/Models/ExitStatus.swift TermoraTests/ExitStatusTests.swift
 git commit -m "feat: add ExitStatus model parsing raw waitpid status"
 ```
+
+---
 
 ---
 
@@ -600,6 +743,8 @@ git commit -m "feat: add EnvironmentBuilder for terminal child environment"
 
 ---
 
+---
+
 ### Task 4: ShellService (M1)
 
 **Files:**
@@ -752,18 +897,22 @@ enum ShellService {
     /// Kullanicinin gercek varsayilan shell'i. GUI uygulamada SHELL env bayat
     /// olabileceginden kullanici veritabanindan (`getpwuid_r().pw_shell`) okunur;
     /// bos/erisilemezse /bin/zsh'e duser.
+    ///
+    /// `pw_shell` `buffer`'in icine isaret eder ve `&buffer` ile uretilen isaretci
+    /// YALNIZ cagri suresince gecerlidir; bu yuzden String kopyasi
+    /// `withUnsafeMutableBufferPointer` blogunun ICINDE alinir.
     static func defaultShellPath() -> String {
         var pwd = passwd()
         var result: UnsafeMutablePointer<passwd>? = nil
         var buffer = [CChar](repeating: 0, count: 4096)
-        let status = getpwuid_r(getuid(), &pwd, &buffer, buffer.count, &result)
-        if status == 0, result != nil, let shellPtr = pwd.pw_shell {
-            let shell = String(cString: shellPtr)
-            if !shell.isEmpty {
-                return shell
-            }
+        let shell: String? = buffer.withUnsafeMutableBufferPointer { raw -> String? in
+            guard getpwuid_r(getuid(), &pwd, raw.baseAddress, raw.count, &result) == 0,
+                  result != nil,
+                  let shellPtr = pwd.pw_shell else { return nil }
+            let value = String(cString: shellPtr)
+            return value.isEmpty ? nil : value
         }
-        return "/bin/zsh"
+        return shell ?? "/bin/zsh"
     }
 
     /// Test dikisli saf cekirdek: /etc/shells icerigini parse eder (yorum/bos satir
@@ -830,6 +979,8 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 
 ---
 
+---
+
 ### Task 5: Theme modeli, NSColor+Hex, ThemeStore ve 5 tema JSON'u (M1)
 
 **Files:**
@@ -844,15 +995,15 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - Produces:
   - `extension NSColor { convenience init?(hexString: String) }` — `#RRGGBB` ve `#RRGGBBAA` (baştaki `#` opsiyonel), geçersiz girdi → `nil`.
   - `struct Theme: Codable, Identifiable, Equatable { var id: String; var name: String; var background: String; var foreground: String; var cursor: String; var selection: String; var ansi: [String] }`
-  - `extension Theme { func swiftTermAnsiColors() -> [SwiftTerm.Color]; var backgroundNSColor: NSColor; var foregroundNSColor: NSColor; var cursorNSColor: NSColor }`
+  - `extension Theme { func swiftTermAnsiColors() -> [SwiftTerm.Color]; var backgroundNSColor: NSColor; var foregroundNSColor: NSColor; var cursorNSColor: NSColor; var selectionNSColor: NSColor }` — `selectionNSColor`'ı Task 19 `applyAppearance(to:sessionID:)` içinde terminale uygular (spec §4 seçim rengi); orada SwiftTerm'ün gerçek özellik adı doğrulanır.
   - `final class ThemeStore { init(bundle: Bundle = .main); let themes: [Theme]; func theme(id: String) -> Theme; static let fallback: Theme }`
 
 **Notlar:**
 - Dosya-senkronize proje (PBXFileSystemSynchronizedRootGroup): `Termora/Resources/Themes/*.json` diske yazılınca **otomatik olarak uygulama hedefine resource girer**; `TermoraTests/` altına yazılan `.json` fixture'ları da test bundle'ına resource olarak kopyalanır. pbxproj düzenlemesi gerekmez.
 - Senkronize gruplar resource'ları bundle köküne **düzleştirebilir**; ThemeStore bu yüzden sırasıyla `Themes/`, `Resources/Themes/` alt dizinlerine ve bundle köküne bakar. Test fixture'ları bilinçli olarak `TermoraTests/` kökünde tutulur (her iki yerleşimde de bundle kökünde bulunurlar).
-- Proje `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (pbxproj'dan doğrulandı) kullanıyor; tüm test suite'leri açıkça `@MainActor` işaretlenir ki Task 1 bu ayarı değiştirse bile derleme bozulmasın.
+- `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` hem uygulama hem test hedefinde açıktır (Task 1 Step 1 test hedefine ekler); yine de tüm test suite'leri açıkça `@MainActor` işaretlenir — ayar düşse veya Swift 6 diline geçilse bile derleme bozulmasın.
 - Test hedefi `TEST_HOST = Termora.app` ile koşar (pbxproj'dan doğrulandı) → testte `Bundle.main` uygulama bundle'ıdır; 5 temanın gerçekten pakete girdiği bu sayede test edilir.
-- Testlerde `import SwiftTerm` "no such module" hatası verirse (Task 1 paketi yalnız uygulama hedefine eklediyse): Xcode'da TermoraTests hedefinin *Frameworks and Libraries* listesine SwiftTerm ürününü ekle — tek seferlik proje ayarı.
+- `import SwiftTerm` test hedefinde çalışır: SwiftTerm ürünü Task 1 Step 2-5'te **hem `Termora` hem `TermoraTests`** hedefine bağlanır. Elle Xcode ayarı gerekmez.
 
 - [ ] **Step 1: NSColor+Hex testlerini yaz**
   `TermoraTests/NSColorHexTests.swift`:
@@ -944,7 +1095,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 5: Commit**
   ```bash
   git add Termora/Extensions/NSColor+Hex.swift TermoraTests/NSColorHexTests.swift
-  git commit -m "feat: add hex string initializer to NSColor" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add hex string initializer to NSColor"
   ```
 
 - [ ] **Step 6: Theme model testlerini yaz**
@@ -1006,6 +1157,10 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
           #expect(abs(cursor.blueComponent - 0.0) < 0.001)
           let background = try #require(theme.backgroundNSColor.usingColorSpace(.sRGB))
           #expect(abs(background.blueComponent - CGFloat(0x15) / 255.0) < 0.001)
+          let selection = try #require(theme.selectionNSColor.usingColorSpace(.sRGB))
+          #expect(abs(selection.redComponent - CGFloat(0x33) / 255.0) < 0.001)
+          #expect(abs(selection.greenComponent - CGFloat(0x46) / 255.0) < 0.001)
+          #expect(abs(selection.blueComponent - CGFloat(0x7C) / 255.0) < 0.001)
       }
   }
   ```
@@ -1041,6 +1196,8 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
       var backgroundNSColor: NSColor { NSColor(hexString: background) ?? .black }
       var foregroundNSColor: NSColor { NSColor(hexString: foreground) ?? .white }
       var cursorNSColor: NSColor { NSColor(hexString: cursor) ?? .white }
+      /// Applied to the terminal in Task 19's `applyAppearance(to:sessionID:)`.
+      var selectionNSColor: NSColor { NSColor(hexString: selection) ?? .selectedTextBackgroundColor }
 
       /// Scales 8-bit hex channels to SwiftTerm's 16-bit channels (0xFF -> 65535, since 255 * 257 == 65535).
       private static func swiftTermColor(fromHex hex: String) -> SwiftTerm.Color {
@@ -1070,7 +1227,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 10: Commit**
   ```bash
   git add Termora/Models/Theme.swift TermoraTests/ThemeTests.swift
-  git commit -m "feat: add Theme model with SwiftTerm color conversion" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add Theme model with SwiftTerm color conversion"
   ```
 
 - [ ] **Step 11: ThemeStore fixture'larını ve testlerini yaz**
@@ -1204,7 +1361,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 15: Commit**
   ```bash
   git add Termora/Services/ThemeStore.swift TermoraTests/ThemeStoreTests.swift TermoraTests/fixture-valid-theme.json TermoraTests/fixture-broken-theme.json
-  git commit -m "feat: add ThemeStore with bundle loading and fallback theme" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add ThemeStore with bundle loading and fallback theme"
   ```
 
 - [ ] **Step 16: Uygulama bundle'ı testi ekle (5 tema)**
@@ -1310,8 +1467,10 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 20: Commit**
   ```bash
   git add Termora/Resources/Themes TermoraTests/ThemeStoreTests.swift
-  git commit -m "feat: bundle five built-in terminal themes" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: bundle five built-in terminal themes"
   ```
+
+---
 
 ### Task 6: AppSettings + SettingsStore (M1)
 
@@ -1445,7 +1604,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 5: Commit**
   ```bash
   git add Termora/Models/AppSettings.swift TermoraTests/AppSettingsTests.swift
-  git commit -m "feat: add AppSettings model with cursor style mapping" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add AppSettings model with cursor style mapping"
   ```
 
 - [ ] **Step 6: SettingsStore kalıcılık testlerini yaz**
@@ -1548,7 +1707,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 10: Commit**
   ```bash
   git add Termora/Services/SettingsStore.swift TermoraTests/SettingsStoreTests.swift
-  git commit -m "feat: add SettingsStore persisting to UserDefaults" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add SettingsStore persisting to UserDefaults"
   ```
 
 - [ ] **Step 11: Bozuk blob kurtarma testini ekle**
@@ -1627,8 +1786,10 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 15: Commit**
   ```bash
   git add Termora/Services/SettingsStore.swift TermoraTests/SettingsStoreTests.swift
-  git commit -m "feat: back up corrupt settings blob before restoring defaults" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: back up corrupt settings blob before restoring defaults"
   ```
+
+---
 
 ### Task 7: TerminalProfile + ProfileStore (M1)
 
@@ -1732,7 +1893,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 5: Commit**
   ```bash
   git add Termora/Models/TerminalProfile.swift TermoraTests/TerminalProfileTests.swift
-  git commit -m "feat: add TerminalProfile model" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add TerminalProfile model"
   ```
 
 - [ ] **Step 6: ProfileStore kalıcılık + CRUD testlerini yaz**
@@ -1833,7 +1994,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 10: Commit**
   ```bash
   git add Termora/Services/ProfileStore.swift TermoraTests/ProfileStoreTests.swift
-  git commit -m "feat: add ProfileStore persisting to UserDefaults" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: add ProfileStore persisting to UserDefaults"
   ```
 
 - [ ] **Step 11: Bozuk veri kurtarma testini ekle**
@@ -1912,8 +2073,10 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - [ ] **Step 15: Commit**
   ```bash
   git add Termora/Services/ProfileStore.swift TermoraTests/ProfileStoreTests.swift
-  git commit -m "feat: back up corrupt profiles blob before restoring defaults" -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  git commit -m "feat: back up corrupt profiles blob before restoring defaults"
   ```
+
+---
 
 ---
 
@@ -1924,6 +2087,7 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/Terminal/TermoraTerminalView.swift`
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Services/ProcessProbe.swift` (Task 9 bunu `currentWorkingDirectory` ile tamamlar)
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift`
+- Delete: `/Users/ahmetbarut/Apps/Termora/Termora/Services/SwiftTermLinkCheck.swift` (Task 1'in geçici bağlantı kontrolü; gerçek SwiftTerm kullanımı geldiği için Step 10'da `git rm` ile silinir)
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/TerminalSessionTests.swift`
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/TermoraTerminalViewTests.swift`
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/ProcessProbeTests.swift`
@@ -1937,20 +2101,21 @@ git commit -m "feat: add ShellService with shell discovery and login argv0"
 - Task 4 — `ShellService.defaultShellPath() -> String`, `ShellService.loginArgv0(forShellPath: String) -> String`
 - Task 5 — `ThemeStore.init(bundle:)`, `ThemeStore.theme(id: String) -> Theme`, `Theme.swiftTermAnsiColors() -> [SwiftTerm.Color]`, `Theme.backgroundNSColor/foregroundNSColor/cursorNSColor: NSColor`
 - Task 6 — `SettingsStore.init(defaults: UserDefaults)`, `SettingsStore.settings: AppSettings`, `CursorStyleSetting.swiftTermStyle: SwiftTerm.CursorStyle`
-- Task 7 — `TerminalProfile` (memberwise init; `Optional` alanların varsayılanı `nil`)
+- Task 7 — `TerminalProfile` (memberwise init; `Optional` alanların varsayılanı `nil`), `ProfileStore.init(defaults: UserDefaults = .standard)`, `ProfileStore.profiles: [TerminalProfile]`
 
 *Produces:*
 - `enum ProcessState: Equatable { case running; case exited(ExitStatus) }`
-- `@Observable final class TerminalSession: Identifiable` — `init(id: UUID = UUID(), shellPath: String, profileID: UUID? = nil, workingDirectory: String? = nil)`
-- `final class TermoraTerminalView: LocalProcessTerminalView` — `let sessionID: UUID`, `init(sessionID: UUID, frame: CGRect)`
+- `@Observable final class TerminalSession: Identifiable` — `init(id: UUID = UUID(), shellPath: String, profileID: UUID? = nil, workingDirectory: String? = nil)`, `var shellPath: String` (yeniden başlatma varsayılan shell'e düşerse güncellenir), `var launchFailure: String?` (shell çalıştırılamadıysa denenen yol; başarılı başlatmada `nil`), `var restartGeneration: Int` (yeniden başlatma sayacı — panel `TerminalHostView`'ı `.id(session.restartGeneration)` ile anahtarlar ki SwiftUI ölü NSView'ı bırakıp yenisini kursun; yalnız `SessionManager` yazar)
+- `final class TermoraTerminalView: LocalProcessTerminalView` — `let sessionID: UUID`, `init(sessionID: UUID, frame: CGRect)`, `override func performKeyEquivalent(with: NSEvent) -> Bool` (⌘ kombinasyonlarını menüye bırakır)
 - `enum ProcessProbe` — `nonisolated static func hasForegroundJob(masterFD: Int32, shellPID: pid_t) -> Bool`, `nonisolated static func isAlive(pid: pid_t) -> Bool`
-- `@MainActor protocol SessionManaging: AnyObject` — `createSession(profile:workingDirectory:)`, `session(id:)`, `terminateSession(id:)`, `hasRunningProcess(sessionID:)`
-- `@MainActor @Observable final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate` — `init(settings: SettingsStore, themes: ThemeStore, escalationDelay: TimeInterval = 1.5)`, `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`, `func applyAppearanceToAllSessions()`, `static func resolveFont(name: String?, size: Double) -> NSFont`, `static func workingDirectory(fromHostReport report: String?) -> String?`
+- `@MainActor protocol SessionManaging: AnyObject` — `createSession(profile:workingDirectory:)`, `session(id:)`, `terminateSession(id:)`, `hasRunningProcess(sessionID:)`, **`func restartSession(id: UUID, forceDefaultShell: Bool)`** (spec §8: panel açık kalır, aynı `sessionID` ile yeni shell başlar; `forceDefaultShell == true` iken ayar/profil yolu yok sayılıp `ShellService.defaultShellPath()` kullanılır. Protokolde varsayılan argüman YOKTUR — `any SessionManaging` üzerinden her çağrı iki argümanı da verir; `MockSessionManager` bunu `restartedSessionIDs`'e kaydederek gerçekler.)
+- `@MainActor @Observable final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate` — `init(settings: SettingsStore, themes: ThemeStore, profiles: ProfileStore, escalationDelay: TimeInterval = 1.5)`, `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`, `func applyAppearanceToAllSessions()`, `func restartSession(id: UUID, forceDefaultShell: Bool)`, `static func resolveFont(name: String?, size: Double) -> NSFont` (Task 18'de `FontCatalog.resolvedFont` ile değiştirilir), `static func workingDirectory(fromHostReport report: String?) -> String?`
+- Task 19'un dolduracağı özel yüzey (bu görevde adı ve imzası kesinleşir, gövdesi M1'de sade kalır): `private func applyAppearance(to view: TermoraTerminalView, sessionID: UUID)` — `apply(appearanceTo:)` adı planın hiçbir yerinde kullanılmaz.
 
 **Notlar (bu görevde uyulacak teknik kısıtlar):**
 - App hedefinde `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` açık (pbxproj'da doğrulandı). Bu yüzden SwiftTerm'ün izole olmayan delegate metotları `nonisolated` yazılıp gövdede `MainActor.assumeIsolated` ile ana aktöre girilir. `LocalProcess` delegate'i `DispatchQueue.main` üzerinde çağırır (`LocalProcess.swift:127` — `dispatchQueue ?? DispatchQueue.main`), dolayısıyla `assumeIsolated` güvenlidir.
 - `ProcessProbe`'un statik fonksiyonları `nonisolated` işaretlenir; `DispatchQueue.main.asyncAfter` bloğu (izole olmayan `@Sendable` closure) içinden çağrılabilmesi için bu şarttır.
-- Test hedefinde `SWIFT_DEFAULT_ACTOR_ISOLATION` ayarlı değil; `SessionManager`/`TerminalSession`/`TermoraTerminalView`'a dokunan suite'ler `@MainActor` işaretlenir.
+- Task 1 test hedefine de `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ekler; yine de `SessionManager`/`TerminalSession`/`TermoraTerminalView`'a dokunan suite'ler açıkça `@MainActor` işaretlenir (Global Constraints kuralı; ayarın hedefte olup olmamasından bağımsız derlenir).
 
 - [ ] **Step 1: TerminalSession testini yaz**
 
@@ -1977,6 +2142,7 @@ struct TerminalSessionTests {
         #expect(session.workingDirectory == nil)
         #expect(session.title == "")
         #expect(session.processState == .running)
+        #expect(session.launchFailure == nil)
     }
 
     @Test func keepsTheIdentityAndOptionalArgumentsItWasGiven() {
@@ -2060,12 +2226,25 @@ enum ProcessState: Equatable {
 @Observable
 final class TerminalSession: Identifiable {
     let id: UUID
-    let shellPath: String
     let profileID: UUID?
+
+    /// Not `let`: `SessionManager.restartSession(id:forceDefaultShell:)` may bring the session
+    /// back up on the default shell after a broken path, and the status bar must then show the
+    /// shell that is actually running.
+    var shellPath: String
 
     var workingDirectory: String?
     var title: String = ""
     var processState: ProcessState = .running
+
+    /// The shell path that could not be executed, or nil after a successful start.
+    /// Spec §8: the pane draws an in-pane error banner with a "try the default shell" action.
+    var launchFailure: String?
+
+    /// Bumped by `SessionManager.restartSession(id:forceDefaultShell:)`, which installs a brand
+    /// new AppKit view for the same session id. SwiftUI would otherwise keep showing the dead
+    /// one, so the pane keys its `TerminalHostView` on this value. Only `SessionManager` writes it.
+    var restartGeneration: Int = 0
 
     init(
         id: UUID = UUID(),
@@ -2156,6 +2335,25 @@ struct TermoraTerminalViewTests {
 
         #expect(view.frame.size == NSSize(width: 320, height: 180))
     }
+
+    @Test func commandShortcutsAreLeftToTheMenu() throws {
+        // Spec §7: application shortcuts must not be swallowed by the terminal.
+        let view = makeView()
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "t",
+            charactersIgnoringModifiers: "t",
+            isARepeat: false,
+            keyCode: 17
+        ))
+
+        #expect(view.performKeyEquivalent(with: event) == false)
+    }
 }
 ```
 
@@ -2182,13 +2380,17 @@ import AppKit
 import Foundation
 import SwiftTerm
 
-/// `LocalProcessTerminalView` subclass with the two things Termora needs on top of SwiftTerm:
+/// `LocalProcessTerminalView` subclass with the three things Termora needs on top of SwiftTerm:
 ///
 /// 1. It knows which session it renders, so `SessionManager` can route delegate callbacks
 ///    back to a `TerminalSession` from the `source` argument alone.
 /// 2. It ignores zero and negative layout passes. SwiftUI hands an `NSViewRepresentable`
 ///    a 0x0 frame during transient layout; SwiftTerm would recompute a 0-column terminal
 ///    and push that size onto the PTY with `TIOCSWINSZ`, wrecking the running program.
+/// 3. Spec §7 key handling: AppKit offers a ⌘ key equivalent to the key window's view
+///    hierarchy *before* the main menu, so a terminal that handles ⌘ itself would swallow
+///    ⌘T / ⌘W / ⌘D / ⌘F. Declining every ⌘ combination here hands them to the menu;
+///    ⌘C / ⌘V keep working through the standard Edit menu and SwiftTerm's `copy(_:)`/`paste(_:)`.
 final class TermoraTerminalView: LocalProcessTerminalView {
     let sessionID: UUID
 
@@ -2205,6 +2407,11 @@ final class TermoraTerminalView: LocalProcessTerminalView {
         guard newSize.width > 0, newSize.height > 0 else { return }
         super.setFrameSize(newSize)
     }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) { return false }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 ```
 
@@ -2215,12 +2422,15 @@ cd /Users/ahmetbarut/Apps/Termora
 xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/TermoraTerminalViewTests 2>&1 | tail -20
 ```
 
-Beklenen: `** TEST SUCCEEDED **` (4 test).
+Beklenen: `** TEST SUCCEEDED **` (5 test).
 
 - [ ] **Step 10: Commit**
 
+Gerçek SwiftTerm kullanımı geldiği için Task 1'in geçici bağlantı kontrolü dosyası da bu commit'te düşer:
+
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
+git rm Termora/Services/SwiftTermLinkCheck.swift
 git add Termora/Views/Terminal/TermoraTerminalView.swift TermoraTests/TermoraTerminalViewTests.swift
 git commit -m "feat: add TermoraTerminalView with zero-size layout guard"
 ```
@@ -2392,7 +2602,7 @@ xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platfor
 
 Beklenen: `error: cannot find 'SessionManager' in scope` + `** TEST BUILD FAILED **`.
 
-- [ ] **Step 18: SessionManager'ı yaz (yaratma, cache, görünüm uygulama, saf yardımcılar)**
+- [ ] **Step 18: SessionManager'ı yaz (yaratma, cache, görünüm uygulama, saf yardımcılar, boş delegate gövdeleri)**
 
 `/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift`:
 
@@ -2425,19 +2635,30 @@ protocol SessionManaging: AnyObject {
 /// deterministically (SIGTERM, then SIGKILL).
 @MainActor
 @Observable
-final class SessionManager: SessionManaging {
+final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
 
     private let settings: SettingsStore
     private let themes: ThemeStore
+    private let profiles: ProfileStore
     private let escalationDelay: TimeInterval
     private let logger = Logger(subsystem: "com.ahmetbarut.Termora", category: "SessionManager")
 
     private var sessions: [UUID: TerminalSession] = [:]
     @ObservationIgnored private var views: [UUID: TermoraTerminalView] = [:]
 
-    init(settings: SettingsStore, themes: ThemeStore, escalationDelay: TimeInterval = 1.5) {
+    /// `profiles` is injected from day one: `restartSession` needs the session's profile to
+    /// bring the shell back up with the same environment, and Task 19 resolves the per-profile
+    /// theme/font override through the same store. Every call site (AppServices, tests) is
+    /// written against this initialiser, so the object graph is never rewired later.
+    init(
+        settings: SettingsStore,
+        themes: ThemeStore,
+        profiles: ProfileStore,
+        escalationDelay: TimeInterval = 1.5
+    ) {
         self.settings = settings
         self.themes = themes
+        self.profiles = profiles
         self.escalationDelay = escalationDelay
     }
 
@@ -2456,34 +2677,17 @@ final class SessionManager: SessionManaging {
         )
         sessions[session.id] = session
 
-        let view = TermoraTerminalView(
-            sessionID: session.id,
-            frame: CGRect(x: 0, y: 0, width: 640, height: 400)
-        )
-        view.processDelegate = self
+        let view = makeView(sessionID: session.id)
         views[session.id] = view
-        apply(appearanceTo: view)
 
-        // §8: check X_OK before startProcess, otherwise forkpty succeeds and the child
-        // silently dies in exec with no useful signal for the user.
-        guard access(shellPath, X_OK) == 0 else {
-            logger.error("Shell is not executable: \(shellPath, privacy: .public)")
-            view.feed(text: "Termora: cannot execute \(shellPath)\r\n")
-            session.processState = .exited(ExitStatus(rawStatus: 127 << 8))
-            return session
-        }
-
-        view.startProcess(
-            executable: shellPath,
-            args: [],
-            environment: EnvironmentBuilder.environment(extra: profile?.environment ?? [:]),
-            execName: ShellService.loginArgv0(forShellPath: shellPath),
-            currentDirectory: directory
+        startShell(
+            shellPath,
+            in: view,
+            session: session,
+            environment: profile?.environment ?? [:],
+            startupCommand: profile?.startupCommand,
+            workingDirectory: directory
         )
-
-        if let command = profile?.startupCommand, !command.isEmpty {
-            view.send(txt: command + "\n")
-        }
 
         return session
     }
@@ -2493,13 +2697,68 @@ final class SessionManager: SessionManaging {
     }
 
     func terminateSession(id: UUID) {
-        guard let view = views.removeValue(forKey: id) else {
-            sessions[id] = nil
+        sessions[id] = nil
+        guard let view = views.removeValue(forKey: id) else { return }
+        view.processDelegate = nil
+        killProcess(of: view)
+    }
+
+    func hasRunningProcess(sessionID: UUID) -> Bool {
+        guard let process = views[sessionID]?.process else { return false }
+        return ProcessProbe.hasForegroundJob(masterFD: process.childfd, shellPID: process.shellPid)
+    }
+
+    // MARK: - Shell lifecycle
+
+    /// A terminal view wired to this manager and dressed in the current appearance.
+    private func makeView(sessionID: UUID) -> TermoraTerminalView {
+        let view = TermoraTerminalView(
+            sessionID: sessionID,
+            frame: CGRect(x: 0, y: 0, width: 640, height: 400)
+        )
+        view.processDelegate = self
+        applyAppearance(to: view, sessionID: sessionID)
+        return view
+    }
+
+    /// Starts `shellPath` behind `view`, or records the failure on the session.
+    ///
+    /// §8: X_OK is checked before `startProcess`, otherwise `forkpty` succeeds and the child
+    /// dies silently inside `exec` with nothing to show the user. `launchFailure` is what the
+    /// pane's error banner (M3) reads in order to offer "try the default shell".
+    private func startShell(
+        _ shellPath: String,
+        in view: TermoraTerminalView,
+        session: TerminalSession,
+        environment: [String: String],
+        startupCommand: String?,
+        workingDirectory: String?
+    ) {
+        guard access(shellPath, X_OK) == 0 else {
+            logger.error("Shell is not executable: \(shellPath, privacy: .public)")
+            view.feed(text: "Termora: cannot execute \(shellPath)\r\n")
+            session.launchFailure = shellPath
+            session.processState = .exited(ExitStatus(rawStatus: 127 << 8))
             return
         }
-        sessions[id] = nil
-        view.processDelegate = nil
 
+        session.launchFailure = nil
+        view.startProcess(
+            executable: shellPath,
+            args: [],
+            environment: EnvironmentBuilder.environment(extra: environment),
+            execName: ShellService.loginArgv0(forShellPath: shellPath),
+            currentDirectory: workingDirectory
+        )
+
+        if let startupCommand, !startupCommand.isEmpty {
+            view.send(txt: startupCommand + "\n")
+        }
+    }
+
+    /// SIGTERM now, SIGKILL after `escalationDelay` if the shell is still there.
+    /// The caller has already dropped the view from `views` and cleared its delegate.
+    private func killProcess(of view: TermoraTerminalView) {
         let pid = view.process.shellPid
         guard pid > 0 else { return }
 
@@ -2514,11 +2773,6 @@ final class SessionManager: SessionManaging {
         }
     }
 
-    func hasRunningProcess(sessionID: UUID) -> Bool {
-        guard let process = views[sessionID]?.process else { return false }
-        return ProcessProbe.hasForegroundJob(masterFD: process.childfd, shellPID: process.shellPid)
-    }
-
     // MARK: - View cache
 
     /// The cached AppKit view for a session. Never creates one: views come into existence
@@ -2531,12 +2785,15 @@ final class SessionManager: SessionManaging {
 
     /// One-way settings flow (§3.5): settings change -> every open terminal is updated.
     func applyAppearanceToAllSessions() {
-        for view in views.values {
-            apply(appearanceTo: view)
+        for (sessionID, view) in views {
+            applyAppearance(to: view, sessionID: sessionID)
         }
     }
 
-    private func apply(appearanceTo view: TermoraTerminalView) {
+    /// M1 applies the global settings to every terminal alike. `sessionID` is already part of
+    /// the signature because Task 19 resolves the session's profile through it (per-profile
+    /// theme and font overrides); the name and the parameter list are final from here on.
+    private func applyAppearance(to view: TermoraTerminalView, sessionID: UUID) {
         let current = settings.settings
         let theme = themes.theme(id: current.themeID)
 
@@ -2577,6 +2834,25 @@ final class SessionManager: SessionManaging {
         if let path = settings.settings.defaultShellPath, !path.isEmpty { return path }
         return ShellService.defaultShellPath()
     }
+
+    // MARK: - LocalProcessTerminalViewDelegate
+    //
+    // The conformance is declared on the class itself rather than in an extension because
+    // `makeView` assigns `view.processDelegate = self`: without it this file does not compile
+    // (`cannot assign value of type 'SessionManager' to type '(any LocalProcessTerminalViewDelegate)?'`).
+    // The bodies stay empty until Step 26 — no extension adds the conformance later.
+    //
+    // SwiftTerm's delegate is not actor-isolated, but `LocalProcess` dispatches every callback
+    // on `DispatchQueue.main` (its `dispatchQueue` defaults to the main queue), so the bodies
+    // hop in with `MainActor.assumeIsolated` instead of an async detour.
+
+    nonisolated func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
+
+    nonisolated func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
+
+    nonisolated func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+
+    nonisolated func processTerminated(source: TerminalView, exitCode: Int32?) {}
 }
 ```
 
@@ -2607,7 +2883,9 @@ git commit -m "feat: add SessionManager with shell startup and view cache"
 /// Fresh store stack on an isolated UserDefaults suite so tests never see (or leave) real settings.
 @MainActor
 private func makeStack(escalationDelay: TimeInterval = 1.5) -> (settings: SettingsStore, manager: SessionManager) {
-    let suiteName = "TermoraTests.SessionManager"
+    // Swift Testing runs these tests in parallel by default, so the suite name must be unique
+    // per call: a shared suite would let one test wipe another test's defaultShellPath.
+    let suiteName = "TermoraTests.SessionManager.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
 
@@ -2617,6 +2895,7 @@ private func makeStack(escalationDelay: TimeInterval = 1.5) -> (settings: Settin
     let manager = SessionManager(
         settings: settings,
         themes: ThemeStore(),
+        profiles: ProfileStore(defaults: defaults),
         escalationDelay: escalationDelay
     )
     return (settings, manager)
@@ -2708,14 +2987,14 @@ Ardından `struct SessionManagerTests` gövdesine şu testleri ekle:
     }
 ```
 
-- [ ] **Step 22: Testi çalıştır, FAIL bekle**
+- [ ] **Step 22: Testi çalıştır, PASS bekle (gerçek PTY karakterizasyonu)**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
 xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SessionManagerTests 2>&1 | tail -30
 ```
 
-Beklenen: `escalationDelay` parametresi ve `terminateSession` gövdesi Step 18'de zaten yazıldığı için bu testler **derlenir**; başarısızlık `anIdleShellIsNotBusyButAForegroundCommandIs` ve `terminateSessionKills...` testlerinde **PASS** olarak dönerse implementasyon doğrudur. Beklenen çıktı: `** TEST SUCCEEDED **` (8 test). Eğer `becameBusy` false gelirse `hasRunningProcess` yanlıştır (çoğu zaman `childfd`/`shellPid` karışması); eğer `died` false gelirse `terminateSession`'daki eskalasyon bloğu çalışmıyordur (ana kuyruk beslenmemiş olabilir) — düzeltip tekrar çalıştır.
+Bu testler Step 18'de yazılan implementasyona karşı koşar ve ilk çalıştırmada geçmelidir (kırmızıdan yeşile geçiş değil, gerçek PTY davranışının karakterizasyonudur). Beklenen çıktı: `** TEST SUCCEEDED **` (8 test). Eğer `becameBusy` false gelirse `hasRunningProcess` yanlıştır (çoğu zaman `childfd`/`shellPid` karışması); eğer `died` false gelirse `terminateSession`'daki eskalasyon bloğu çalışmıyordur (ana kuyruk beslenmemiş olabilir) — düzeltip tekrar çalıştır.
 
 - [ ] **Step 23: Commit**
 
@@ -2801,23 +3080,16 @@ cd /Users/ahmetbarut/Apps/Termora
 xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SessionManagerTests 2>&1 | tail -30
 ```
 
-Beklenen: derleme hatası — `error: value of type 'SessionManager' has no member 'setTerminalTitle'` ve `no member 'hostCurrentDirectoryUpdate'`, `no member 'processTerminated'` + `** TEST BUILD FAILED **`.
+Beklenen: testler **derlenir** (dört delegate metodu Step 18'de boş gövdelerle sınıfta duruyor) ama `delegateCallbacksAreRoutedByTheViewsSessionIdentifier` başarısız olur: `Expectation failed: session.title == "make build"` + `** TEST FAILED **`. Diğer iki test (yabancı görünüm yok sayma, görünüm uygulama) bu aşamada zaten geçer.
 
-- [ ] **Step 26: Delegate uzantısını yaz**
+- [ ] **Step 26: Delegate gövdelerini doldur**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` dosyasının **sonuna** ekle:
+`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içindeki `// MARK: - LocalProcessTerminalViewDelegate` bölümünde duran dört boş metodu aşağıdakilerle **değiştir**. Uyum (`conformance`) zaten sınıf bildiriminde olduğu için burada **extension eklenmez**:
 
 ```swift
-// MARK: - LocalProcessTerminalViewDelegate
-
-/// SwiftTerm's delegate is not actor-isolated, but `LocalProcess` dispatches every callback
-/// on `DispatchQueue.main` (its `dispatchQueue` defaults to the main queue), so hopping in
-/// with `assumeIsolated` is sound and keeps the callbacks synchronous for tests.
-extension SessionManager: LocalProcessTerminalViewDelegate {
-
     nonisolated func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
         // SwiftTerm already pushed the new winsize onto the PTY. The status bar consumes
-        // cols/rows in M5; nothing to do in M1.
+        // cols/rows in M5 (Task 21 fills this body); nothing to do in M1.
     }
 
     nonisolated func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
@@ -2845,7 +3117,6 @@ extension SessionManager: LocalProcessTerminalViewDelegate {
             sessions[sessionID]?.processState = .exited(ExitStatus(rawStatus: exitCode ?? SIGHUP))
         }
     }
-}
 ```
 
 - [ ] **Step 27: Testi çalıştır, PASS bekle**
@@ -2857,16 +3128,174 @@ xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platfor
 
 Beklenen: `** TEST SUCCEEDED **` (11 test).
 
-- [ ] **Step 28: Tüm test hedefini çalıştır ve commit**
+- [ ] **Step 28: Commit**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
-xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests 2>&1 | tail -20
 git add Termora/Services/SessionManager.swift TermoraTests/SessionManagerTests.swift
 git commit -m "feat: route SwiftTerm delegate events into terminal sessions"
 ```
 
-Beklenen: `** TEST SUCCEEDED **` (Task 2-8 arası tüm suite'ler yeşil).
+- [ ] **Step 29: Oturum yeniden başlatma testlerini yaz**
+
+Spec §8: shell çıktığında (ya da hiç çalıştırılamadığında) panel açık kalır ve **aynı panelde** yeni bir oturum başlatılabilir. Panel bandını Task 17 çizer; buradaki iş, aynı `sessionID`'yi koruyarak süreci yeniden ayağa kaldıran API'dir.
+
+`/Users/ahmetbarut/Apps/Termora/TermoraTests/SessionManagerTests.swift` içine ekle:
+
+```swift
+    @Test func restartSessionPutsAFreshShellBehindTheSameIdentifier() async throws {
+        let (_, manager) = makeStack(escalationDelay: 0.05)
+        let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        let firstView = try #require(manager.terminalView(for: session.id))
+        let firstPID = firstView.process.shellPid
+        let firstStarted = await poll { ProcessProbe.isAlive(pid: firstPID) }
+        #expect(firstStarted)
+
+        // The shell exited on its own; the pane is still there and asks for a new one.
+        session.processState = .exited(ExitStatus(rawStatus: 0))
+        manager.restartSession(id: session.id, forceDefaultShell: false)
+
+        let secondView = try #require(manager.terminalView(for: session.id))
+        #expect(secondView !== firstView, "restart must install a brand new view")
+        #expect(secondView.sessionID == session.id)
+        #expect(manager.session(id: session.id) === session, "the session object must survive")
+        #expect(session.processState == .running)
+        #expect(session.launchFailure == nil)
+        #expect(session.restartGeneration == 1, "the pane keys its host view on this")
+
+        let secondPID = secondView.process.shellPid
+        #expect(secondPID > 0)
+        #expect(secondPID != firstPID)
+
+        let restarted = await poll { ProcessProbe.isAlive(pid: secondPID) }
+        #expect(restarted, "the replacement shell must be running")
+
+        let oldOneDied = await poll { ProcessProbe.isAlive(pid: firstPID) == false }
+        #expect(oldOneDied, "the old shell must be reaped, not leaked")
+    }
+
+    @Test func aBrokenShellPathIsRecordedAndRecoverableWithTheDefaultShell() async throws {
+        let (settings, manager) = makeStack(escalationDelay: 0.05)
+        settings.settings.defaultShellPath = "/nonexistent/shell"
+
+        let session = manager.createSession(profile: nil, workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        #expect(session.launchFailure == "/nonexistent/shell")
+        #expect(session.processState == .exited(ExitStatus(rawStatus: 127 << 8)))
+        #expect((manager.terminalView(for: session.id)?.process.shellPid ?? 0) <= 0)
+
+        // §8 recovery action: ignore the broken setting and come up on the login shell.
+        manager.restartSession(id: session.id, forceDefaultShell: true)
+
+        #expect(session.launchFailure == nil)
+        #expect(session.processState == .running)
+        #expect(session.shellPath == ShellService.defaultShellPath())
+
+        let view = try #require(manager.terminalView(for: session.id))
+        let alive = await poll { ProcessProbe.isAlive(pid: view.process.shellPid) }
+        #expect(alive, "the default shell must come up even though the setting is broken")
+    }
+
+    @Test func restartingAnUnknownSessionIsAHarmlessNoOp() {
+        let (_, manager) = makeStack()
+        manager.restartSession(id: UUID(), forceDefaultShell: false)
+        manager.restartSession(id: UUID(), forceDefaultShell: true)
+    }
+```
+
+- [ ] **Step 30: Testi çalıştır, FAIL bekle**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SessionManagerTests 2>&1 | tail -20
+```
+
+Beklenen: `error: value of type 'SessionManager' has no member 'restartSession'` + `** TEST BUILD FAILED **`.
+
+- [ ] **Step 31: `restartSession(id:forceDefaultShell:)`'i yaz**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içinde önce protokole yeni gereksinimi ekle (`hasRunningProcess` satırının altına):
+
+```swift
+    /// §8: the pane stays open when the shell dies. Restart puts a new shell behind the SAME
+    /// session id, so panes, tabs and every id-keyed lookup survive it. `forceDefaultShell`
+    /// ignores the settings/profile path and uses the login shell — the recovery action for
+    /// "this shell cannot be executed".
+    func restartSession(id: UUID, forceDefaultShell: Bool)
+```
+
+Ardından `killProcess(of:)`'in altına implementasyonu ekle:
+
+```swift
+    func restartSession(id: UUID, forceDefaultShell: Bool) {
+        guard let session = sessions[id] else { return }
+
+        if let oldView = views.removeValue(forKey: id) {
+            // Clear the delegate first: `terminate()` fires processTerminated on the main queue
+            // and it must not overwrite the state of the session we are just reviving.
+            oldView.processDelegate = nil
+            killProcess(of: oldView)
+        }
+
+        let profile = session.profileID.flatMap { profileID in
+            profiles.profiles.first { $0.id == profileID }
+        }
+        let shellPath = forceDefaultShell
+            ? ShellService.defaultShellPath()
+            : resolveShellPath(profile: profile)
+        session.shellPath = shellPath
+
+        let view = makeView(sessionID: id)
+        views[id] = view
+
+        // The pane's `TerminalHostView` is keyed on this, so SwiftUI drops the dead NSView and
+        // hosts the new one; the session id — and therefore the pane and the tab — stays put.
+        session.restartGeneration += 1
+        session.processState = .running
+        startShell(
+            shellPath,
+            in: view,
+            session: session,
+            environment: profile?.environment ?? [:],
+            startupCommand: profile?.startupCommand,
+            workingDirectory: session.workingDirectory
+        )
+    }
+```
+
+`startShell` başarısız olursa `session.processState`'i tekrar `.exited(...)` yapar ve `launchFailure`'ı doldurur, yani bozuk yolla yeniden deneme sessizce "çalışıyor" görünmez.
+
+- [ ] **Step 32: Testi çalıştır, PASS bekle**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SessionManagerTests 2>&1 | tail -20
+```
+
+Beklenen: `** TEST SUCCEEDED **` (14 test).
+
+- [ ] **Step 33: Commit**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+git add Termora/Services/SessionManager.swift TermoraTests/SessionManagerTests.swift
+git commit -m "feat: restart a session in place after the shell exits or fails to launch"
+```
+
+- [ ] **Step 34: Tüm test hedefini çalıştır**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests 2>&1 | tail -20
+git status --short
+```
+
+Beklenen: `** TEST SUCCEEDED **` (Task 2-8 arası tüm suite'ler yeşil) ve `git status --short` temiz — bu görevin her parçası Step 5/10/15/20/23/28/33 commit'lerinde tarihçeye girdi.
+
+---
 
 ---
 
@@ -2874,7 +3303,7 @@ Beklenen: `** TEST SUCCEEDED **` (Task 2-8 arası tüm suite'ler yeşil).
 
 **Files:**
 - Modify: `/Users/ahmetbarut/Apps/Termora/Termora/Services/ProcessProbe.swift` (Task 8'de yaratıldı; `currentWorkingDirectory` burada eklenir)
-- Create: `/Users/ahmetbarut/Apps/Termora/TermoraTests/Support/PTYTestHarness.swift`
+- Create: `/Users/ahmetbarut/Apps/Termora/TermoraTests/PTYTestHarness.swift` (test yardımcıları `TermoraTests/` kökünde durur — `MockSessionManager.swift` gibi; `Support/` alt klasörü Task 1 iskeletinde açılmaz)
 - Modify: `/Users/ahmetbarut/Apps/Termora/TermoraTests/ProcessProbeTests.swift`
 
 **Interfaces:**
@@ -2964,7 +3393,7 @@ git commit -m "feat: read a process working directory via libproc"
 
 - [ ] **Step 6: PTY test altyapısını yaz**
 
-`/Users/ahmetbarut/Apps/Termora/TermoraTests/Support/PTYTestHarness.swift`:
+`/Users/ahmetbarut/Apps/Termora/TermoraTests/PTYTestHarness.swift`:
 
 ```swift
 //
@@ -3083,7 +3512,7 @@ Beklenen: `** TEST SUCCEEDED **` (hâlâ 5 test; yeni dosya yalnız derlenir).
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
-git add TermoraTests/Support/PTYTestHarness.swift
+git add TermoraTests/PTYTestHarness.swift
 git commit -m "test: add forkpty harness for pseudo-terminal tests"
 ```
 
@@ -3156,15 +3585,16 @@ git commit -m "test: verify ProcessProbe against real pseudo-terminals"
 
 ---
 
+---
+
 ### Task 10: Minimal çalışan uygulama (M1 kapanışı)
 
 **Files:**
-- Create: `/Users/ahmetbarut/Apps/Termora/Termora/App/AppEnvironment.swift`
+- Create: `/Users/ahmetbarut/Apps/Termora/Termora/App/AppServices.swift` (uygulamanın tek servis kapsayıcısı; Task 12 bunu yeniden yaratmaz, yalnız kullanır)
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/Terminal/TerminalHostView.swift`
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift`
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/SettingsPlaceholderView.swift`
-- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/TermoraApp.swift`
-- Delete: `/Users/ahmetbarut/Apps/Termora/Termora/ContentView.swift`
+- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` (Task 1 Step 8'de bu yola taşındı)
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/TerminalHostViewTests.swift`
 
 **Interfaces:**
@@ -3172,12 +3602,13 @@ git commit -m "test: verify ProcessProbe against real pseudo-terminals"
 *Consumes:*
 - Task 5 — `ThemeStore.init(bundle:)`
 - Task 6 — `SettingsStore.init(defaults:)`
-- Task 8 — `SessionManager.init(settings:themes:escalationDelay:)`, `SessionManager.createSession(profile:workingDirectory:) -> TerminalSession`, `SessionManager.terminalView(for:) -> TermoraTerminalView?`, `TermoraTerminalView`
+- Task 7 — `ProfileStore.init(defaults:)`
+- Task 8 — `SessionManager.init(settings:themes:profiles:escalationDelay:)`, `SessionManager.createSession(profile:workingDirectory:) -> TerminalSession`, `SessionManager.terminalView(for:) -> TermoraTerminalView?`, `TermoraTerminalView`
 
 *Produces:*
-- `@MainActor final class AppEnvironment` — `init()`, `let settings: SettingsStore`, `let themes: ThemeStore`, `let sessions: SessionManager`
+- `@MainActor final class AppServices` — `init()`, `let settings: SettingsStore`, `let themes: ThemeStore`, `let profiles: ProfileStore`, `let sessionManager: SessionManager`. Plan boyunca tek servis grafiği budur; `AppEnvironment` diye bir tip hiç var olmaz.
 - `struct TerminalHostView: NSViewRepresentable` — `init(sessionID: UUID, sessionManager: SessionManager, isActive: Bool)`, iç sınıf `TerminalHostView.Coordinator` (`shouldRequestFocus(sessionID:isActive:) -> Bool`, `resignFocusTracking()`)
-- `struct MainWindowView: View` — `init(environment: AppEnvironment)`
+- `struct MainWindowView: View` — `init(services: AppServices)`; özellik adı `private let services` (Task 12 buna `@State private var workspace: WorkspaceViewModel` ekler)
 - `struct SettingsPlaceholderView: View`
 
 - [ ] **Step 1: Odak mantığı testini yaz**
@@ -3257,6 +3688,11 @@ import SwiftUI
 /// It never creates or destroys terminals. SwiftUI may tear this representable down and
 /// rebuild it (tab switch, split rebuild) without the shell process or its scrollback
 /// noticing — that is the whole point of the view cache in `SessionManager`.
+///
+/// The one case where the hosted NSView is replaced is `SessionManager.restartSession`, which
+/// puts a new terminal behind the same session id. Callers therefore key this representable on
+/// `session.restartGeneration` (M3 panes do) so SwiftUI asks for the new view instead of
+/// keeping the dead one on screen.
 struct TerminalHostView: NSViewRepresentable {
 
     let sessionID: UUID
@@ -3330,32 +3766,43 @@ git add Termora/Views/Terminal/TerminalHostView.swift TermoraTests/TerminalHostV
 git commit -m "feat: host SessionManager terminal views in SwiftUI"
 ```
 
-- [ ] **Step 6: AppEnvironment'ı yaz**
+- [ ] **Step 6: AppServices'i yaz**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/App/AppEnvironment.swift`:
+Bu dosya planın **tek** servis grafiğidir: Task 12, 13, 17, 18, 19 hepsi bu tipi kullanır, hiçbiri yeniden yaratmaz.
+
+`/Users/ahmetbarut/Apps/Termora/Termora/App/AppServices.swift`:
 
 ```swift
 //
-//  AppEnvironment.swift
+//  AppServices.swift
 //  Termora
 //
 
+import AppKit
 import Foundation
 
 /// Object graph for one running Termora instance, built once by `TermoraApp`.
-/// Stores are shared by every window; `WorkspaceViewModel` (M2) will be per-window.
+/// Stores are shared by every window, and so is `SessionManager` — it owns the terminal view
+/// cache, so a per-window copy would lose live shells. `WorkspaceViewModel` (M2) is per-window.
 @MainActor
-final class AppEnvironment {
+final class AppServices {
     let settings: SettingsStore
     let themes: ThemeStore
-    let sessions: SessionManager
+    let profiles: ProfileStore
+    let sessionManager: SessionManager
 
     init() {
+        // Termora draws its own tab bar (M2); leaving the system tabbing on would add a
+        // "Show Tab Bar" menu item and fight ⌘T for the same gesture.
+        NSWindow.allowsAutomaticWindowTabbing = false
+
         let settings = SettingsStore()
         let themes = ThemeStore()
+        let profiles = ProfileStore()
         self.settings = settings
         self.themes = themes
-        self.sessions = SessionManager(settings: settings, themes: themes)
+        self.profiles = profiles
+        self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
     }
 }
 ```
@@ -3385,16 +3832,22 @@ import SwiftUI
 /// Tabs arrive in M2 (`TabBarView`), splits in M3 (`PaneTreeView`).
 struct MainWindowView: View {
 
-    let environment: AppEnvironment
+    private let services: AppServices
 
     @State private var sessionID: UUID?
+
+    /// Explicit because `services` is private: the synthesised memberwise initialiser would be
+    /// private too. Task 12 keeps this initialiser and adds the workspace view model to it.
+    init(services: AppServices) {
+        self.services = services
+    }
 
     var body: some View {
         Group {
             if let sessionID {
                 TerminalHostView(
                     sessionID: sessionID,
-                    sessionManager: environment.sessions,
+                    sessionManager: services.sessionManager,
                     isActive: true
                 )
             } else {
@@ -3404,7 +3857,7 @@ struct MainWindowView: View {
         .frame(minWidth: 480, minHeight: 320)
         .onAppear {
             guard sessionID == nil else { return }
-            sessionID = environment.sessions
+            sessionID = services.sessionManager
                 .createSession(profile: nil, workingDirectory: nil)
                 .id
         }
@@ -3447,16 +3900,9 @@ xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platfo
 
 Beklenen: `BUILD_OK`.
 
-- [ ] **Step 8: TermoraApp'i bağla ve ContentView'ı sil**
+- [ ] **Step 8: TermoraApp'i bağla**
 
-Önce dosyanın güncel yolunu doğrula (Task 1 klasör iskeletini kurarken taşımış olabilir):
-
-```bash
-cd /Users/ahmetbarut/Apps/Termora
-ls Termora/TermoraApp.swift Termora/App/TermoraApp.swift 2>/dev/null
-```
-
-Var olan yoldaki `TermoraApp.swift` dosyasının **tüm içeriğini** şununla değiştir:
+`Termora/App/TermoraApp.swift` dosyasının (Task 1 Step 8'de bu yola taşındı; `Termora/ContentView.swift` de orada silindi) **tüm içeriğini** şununla değiştir:
 
 ```swift
 //
@@ -3469,11 +3915,13 @@ import SwiftUI
 @main
 struct TermoraApp: App {
 
-    @State private var environment = AppEnvironment()
+    /// `@State`, not `let`: SwiftUI may rebuild the `App` struct, and a fresh `AppServices`
+    /// on every rebuild would mean a fresh `SessionManager` — every open shell would vanish.
+    @State private var services = AppServices()
 
     var body: some Scene {
         WindowGroup {
-            MainWindowView(environment: environment)
+            MainWindowView(services: services)
         }
         .defaultSize(width: 900, height: 560)
 
@@ -3484,15 +3932,14 @@ struct TermoraApp: App {
 }
 ```
 
-Ardından şablon görünümünü kaldır ve derle:
+Ardından derle:
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora
-git rm Termora/ContentView.swift
 xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet && echo BUILD_OK
 ```
 
-Beklenen: `BUILD_OK` (PBXFileSystemSynchronizedRootGroup sayesinde silinen dosya derlemeden kendiliğinden düşer).
+Beklenen: `BUILD_OK`.
 
 - [ ] **Step 9: Tüm testleri çalıştır ve commit**
 
@@ -3558,10 +4005,12 @@ Beklenen: `git status --short` temiz (Step 9'da her şey commit'lendi); boş com
 
 ---
 
+---
+
 ### Task 11: TerminalTab + WorkspaceViewModel sekme operasyonları (M2)
 
 **Files:**
-- Create: `/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift` (yalnız enum tanımı + salt-okunur erişimciler; Task 14 aynı dosyaya `splitting`/`removing`/`updatingRatio` operasyonlarını ekler)
+- Create: `/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift` (yalnız enum tanımı + salt-okunur erişimciler; Task 14 aynı dosyayı **Modify** ederek `splitting`/`removing`/`updatingRatio`/`siblingLeafPaneID` operasyonlarını ekler)
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Models/TerminalTab.swift`
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/ViewModels/WorkspaceViewModel.swift`
 - Test (Create): `/Users/ahmetbarut/Apps/Termora/TermoraTests/MockSessionManager.swift`
@@ -3576,14 +4025,14 @@ Consumes (Task 6/7/8'den, kesin imzalar):
 - `@MainActor @Observable final class ProfileStore { init(defaults: UserDefaults = .standard); var profiles: [TerminalProfile] }`
 - `struct TerminalProfile: Codable, Identifiable, Equatable { var id: UUID = UUID(); var name: String; var shellPath: String?; ... }`
 - `@Observable final class TerminalSession: Identifiable { let id: UUID; let shellPath: String; let profileID: UUID?; var workingDirectory: String?; var title: String; var processState: ProcessState; init(id: UUID = UUID(), shellPath: String, profileID: UUID? = nil, workingDirectory: String? = nil) }`
-- `@MainActor protocol SessionManaging: AnyObject { func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession; func session(id: UUID) -> TerminalSession?; func terminateSession(id: UUID); func hasRunningProcess(sessionID: UUID) -> Bool }`
+- `@MainActor protocol SessionManaging: AnyObject { func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession; func session(id: UUID) -> TerminalSession?; func terminateSession(id: UUID); func restartSession(id: UUID, forceDefaultShell: Bool); func hasRunningProcess(sessionID: UUID) -> Bool }` — `restartSession(id:forceDefaultShell:)` panel içi "İşlem sonlandı" bandının yeniden başlatma eylemini karşılar (Task 8 tanımlar, Task 17 kullanır); `MockSessionManager` bu görevde onu da gerçekler.
 
 Produces (sonraki görevler bunları kullanır):
 - `enum SplitAxis: String, Codable { case vertical, horizontal }`
 - `indirect enum PaneNode: Equatable { case leaf(paneID: UUID, sessionID: UUID); case split(id: UUID, axis: SplitAxis, ratio: Double, first: PaneNode, second: PaneNode); var leaves: [(paneID: UUID, sessionID: UUID)]; func sessionID(ofPane paneID: UUID) -> UUID? }` — Task 14 bu dosyayı **Modify** ederek `splitting(paneID:axis:newPaneID:newSessionID:)`, `removing(paneID:)`, `updatingRatio(splitID:ratio:)` ekler; buradaki iki erişimcinin imzası değişmez.
 - `@Observable final class TerminalTab: Identifiable { let id: UUID; var customTitle: String?; var automaticTitle: String; var displayTitle: String { get }; var root: PaneNode; var activePaneID: UUID; var isSearchVisible: Bool; init(id: UUID = UUID(), root: PaneNode, activePaneID: UUID) }`
 - `@MainActor @Observable final class WorkspaceViewModel` — `init(sessionManager: any SessionManaging, settings: SettingsStore, profiles: ProfileStore)`, `let settings: SettingsStore`, `let profiles: ProfileStore`, `private(set) var tabs: [TerminalTab]`, `var activeTabID: UUID?`, `var activeTab: TerminalTab? { get }`, `var pendingClose: PendingClose?`, `var paneFrames: [UUID: CGRect]`, `struct PendingClose: Identifiable, Equatable { let id: UUID; let target: Target; enum Target: Equatable { case tab(UUID); case pane(paneID: UUID); case window } }`, `func newTab(profile: TerminalProfile? = nil)`, `func requestCloseTab(id: UUID)`, `func confirmPendingClose()`, `func cancelPendingClose()`, `func closeAllTabs()`, `func selectTab(at index: Int)`, `func nextTab()`, `func previousTab()`, `func renameTab(id: UUID, to newName: String?)`, `func hasAnyRunningProcess() -> Bool`, `func syncAutomaticTitles()`, `var sessionTitleDigest: String { get }`
-- `@MainActor final class MockSessionManager: SessionManaging` (test hedefi) — `var busySessionIDs: Set<UUID>`, `private(set) var sessions: [UUID: TerminalSession]`, `private(set) var terminatedSessionIDs: [UUID]`, `private(set) var createdProfiles: [TerminalProfile?]`, `var defaultShellPath: String`. Task 16 testleri de bunu kullanır.
+- `@MainActor final class MockSessionManager: SessionManaging` (test hedefi, **tek dosya**: `TermoraTests/MockSessionManager.swift` — `Support/` alt klasörü yok) — `var busySessionIDs: Set<UUID>`, `var defaultShellPath: String`, `private(set) var sessions: [UUID: TerminalSession]`, `private(set) var createdSessions: [TerminalSession]`, `private(set) var terminatedSessionIDs: [UUID]`, `private(set) var createdProfiles: [TerminalProfile?]`, `private(set) var createdWorkingDirectories: [String?]`, `private(set) var restartedSessionIDs: [UUID]`. Task 16 ve Task 17 testleri de tam olarak bu adları kullanır (`terminatedIDs` diye bir üye YOKTUR).
 
 ---
 
@@ -3596,6 +4045,7 @@ import Foundation
 import Testing
 @testable import Termora
 
+@MainActor
 @Suite struct PaneNodeLeafTests {
 
     @Test func leafReturnsItselfAsOnlyLeaf() {
@@ -3718,6 +4168,7 @@ import Foundation
 import Testing
 @testable import Termora
 
+@MainActor
 @Suite struct TerminalTabTests {
 
     private func makeTab() -> TerminalTab {
@@ -3830,7 +4281,8 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/Models/PaneNode.swift Termo
 import Foundation
 @testable import Termora
 
-/// SessionManaging'in test double'ı. Task 11 ve Task 16 testleri bunu paylaşır.
+/// SessionManaging'in test double'ı. Task 11, Task 16 ve Task 17 testleri bunu paylaşır.
+/// Üye adları kanoniktir; sonraki görevler tam olarak bu adları kullanır.
 @MainActor
 final class MockSessionManager: SessionManaging {
 
@@ -3841,9 +4293,11 @@ final class MockSessionManager: SessionManaging {
     var defaultShellPath: String = "/bin/zsh"
 
     private(set) var sessions: [UUID: TerminalSession] = [:]
+    private(set) var createdSessions: [TerminalSession] = []
     private(set) var terminatedSessionIDs: [UUID] = []
     private(set) var createdProfiles: [TerminalProfile?] = []
     private(set) var createdWorkingDirectories: [String?] = []
+    private(set) var restartedSessionIDs: [UUID] = []
 
     func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession {
         createdProfiles.append(profile)
@@ -3854,6 +4308,7 @@ final class MockSessionManager: SessionManaging {
             workingDirectory: workingDirectory
         )
         sessions[session.id] = session
+        createdSessions.append(session)
         return session
     }
 
@@ -3864,6 +4319,19 @@ final class MockSessionManager: SessionManaging {
     func terminateSession(id: UUID) {
         terminatedSessionIDs.append(id)
         sessions[id] = nil
+        busySessionIDs.remove(id)
+    }
+
+    /// Gerçek yönetici gibi AYNI sessionID ile taze bir oturum kurar; çağrı sırası kaydedilir.
+    func restartSession(id: UUID, forceDefaultShell: Bool) {
+        restartedSessionIDs.append(id)
+        guard let old = sessions[id] else { return }
+        sessions[id] = TerminalSession(
+            id: id,
+            shellPath: forceDefaultShell ? defaultShellPath : old.shellPath,
+            profileID: forceDefaultShell ? nil : old.profileID,
+            workingDirectory: old.workingDirectory
+        )
         busySessionIDs.remove(id)
     }
 
@@ -4324,7 +4792,34 @@ Beklenen: hâlâ `error: value of type 'WorkspaceViewModel' has no member 'selec
 
         #expect(tab.automaticTitle == "vim")
     }
+
+    @Test func automaticTitleFallsBackToWorkingDirectoryBasename() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let tab = workspace.tabs[0]
+        let sessionID = tab.root.leaves[0].sessionID
+        manager.session(id: sessionID)?.workingDirectory = "/Users/ahmetbarut/code"
+
+        workspace.syncAutomaticTitles()
+
+        #expect(tab.automaticTitle == "code")
+        #expect(tab.displayTitle == "code")
+    }
+
+    @Test func automaticTitleFallsBackToShellNameWhenNothingIsKnown() {
+        let (workspace, manager) = makeWorkspace()
+        manager.defaultShellPath = "/bin/zsh"
+        workspace.newTab()
+        let tab = workspace.tabs[0]
+
+        workspace.syncAutomaticTitles()
+
+        #expect(tab.automaticTitle == "zsh")
+        #expect(tab.displayTitle == "zsh")
+    }
 ```
+
+Not (spec §7 "başlıkta aktif klasör/işlem adı"): macOS'un stok `/etc/zshrc`'si OSC başlık dizisini yalnız `TERM_PROGRAM = Apple_Terminal` iken yayar. Termora `TERM_PROGRAM=Termora` gönderdiği için varsayılan zsh hiç başlık yaymaz; `session.title` boş kalır. Bu iki test, o durumda sekmenin kalıcı olarak "Terminal" yazmasını engelleyen geri düşüş zincirini (oturum başlığı → çalışma dizini adı → shell adı) sabitler.
 
 - [ ] **Step 20: Testi çalıştır, derleme hatası bekle**
 
@@ -4371,23 +4866,46 @@ Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'selectTab'` 
         tab.customTitle = trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Aktif panelin oturum başlığını sekmeye yansıtır.
+    /// Aktif panelin başlığını sekmeye yansıtır. Geri düşüş zinciri:
+    /// shell'in OSC ile bildirdiği başlık → çalışma dizininin son bileşeni → profil adı → shell adı.
+    /// (Stok macOS zsh'ı `TERM_PROGRAM=Termora` iken OSC başlık YAYMAZ; geri düşüş olmadan
+    /// tüm sekmeler kalıcı olarak "Terminal" yazardı — spec §7.)
     /// Oturum kapandıysa son bilinen başlık korunur.
     func syncAutomaticTitles() {
         for tab in tabs {
             guard let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),
-                  let session = sessionManager.session(id: sessionID),
-                  !session.title.isEmpty else { continue }
-            tab.automaticTitle = session.title
+                  let session = sessionManager.session(id: sessionID) else { continue }
+
+            if !session.title.isEmpty {
+                tab.automaticTitle = session.title
+            } else if let directory = session.workingDirectory, !directory.isEmpty {
+                let basename = (directory as NSString).lastPathComponent
+                tab.automaticTitle = basename.isEmpty ? "/" : basename
+            } else if let profileName = profileName(for: session), !profileName.isEmpty {
+                // newTab(profile:) sekmeye profil adını tohumlar; senkron onu ezmemeli.
+                tab.automaticTitle = profileName
+            } else {
+                tab.automaticTitle = (session.shellPath as NSString).lastPathComponent
+            }
         }
+    }
+
+    private func profileName(for session: TerminalSession) -> String? {
+        guard let profileID = session.profileID else { return nil }
+        return profiles.profiles.first { $0.id == profileID }?.name
     }
 
     /// Observation köprüsü: MainWindowView bu değeri .onChange ile izleyip
     /// syncAutomaticTitles() çağırır (oturum başlıkları @Observable üzerinden okunur).
+    /// Çalışma dizini de karışıma girer, çünkü başlık geri düşüşü ona da bakar
+    /// (yalnız `title` izlenseydi cwd değişince sekme başlığı güncellenmezdi).
     var sessionTitleDigest: String {
         tabs.map { tab in
             tab.root.leaves
-                .compactMap { sessionManager.session(id: $0.sessionID)?.title }
+                .compactMap { leaf -> String? in
+                    guard let session = sessionManager.session(id: leaf.sessionID) else { return nil }
+                    return session.title + "\u{1D}" + (session.workingDirectory ?? "")
+                }
                 .joined(separator: "\u{1F}")
         }
         .joined(separator: "\u{1E}")
@@ -4400,7 +4918,7 @@ Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'selectTab'` 
 cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspaceViewModelTests 2>&1 | tail -20
 ```
 
-Beklenen: `Test run with 18 tests passed`, `** TEST SUCCEEDED **`.
+Beklenen: `Test run with 20 tests passed`, `** TEST SUCCEEDED **`.
 
 - [ ] **Step 23: Tüm test hedefini çalıştır ve commit et**
 
@@ -4416,28 +4934,30 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/ViewModels/WorkspaceViewMod
 
 ---
 
+---
+
 ### Task 12: TabBarView (M2)
 
 **Files:**
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/TabBarView.swift` (`TabBarLayout` + `TabBarView`)
-- Create: `/Users/ahmetbarut/Apps/Termora/Termora/App/AppServices.swift`
 - Modify: `/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` (Task 10'un tek terminalli gövdesi bu görevde tamamen yenilenir)
-- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` (servis kurulumu `AppServices`'e taşınır)
 - Test (Create): `/Users/ahmetbarut/Apps/Termora/TermoraTests/TabBarLayoutTests.swift`
+
+Bu görev `AppServices`'i **yaratmaz**: `Termora/App/AppServices.swift` Task 10'da yazıldı ve `TermoraApp` orada ona bağlandı. Burada yalnız kullanılır.
 
 **Interfaces:**
 
 Consumes:
 - Task 11: `WorkspaceViewModel` (tabs / activeTabID / activeTab / newTab / requestCloseTab / renameTab / syncAutomaticTitles / sessionTitleDigest / profiles), `TerminalTab.displayTitle`, `PaneNode.sessionID(ofPane:)`
-- Task 10: `struct TerminalHostView: NSViewRepresentable { init(sessionID: UUID) }` — terminal NSView'ını `SessionManager` cache'inden alıp yerleştirir.
-- Task 8: `@MainActor @Observable final class SessionManager: SessionManaging { init(settings: SettingsStore, themes: ThemeStore) }`
+- Task 10: `struct TerminalHostView: NSViewRepresentable { let sessionID: UUID; let sessionManager: SessionManager; let isActive: Bool }` — terminal NSView'ını `SessionManager` cache'inden alıp yerleştirir; üç argüman da her çağrıda verilir.
+- Task 10: `@MainActor final class AppServices { let settings: SettingsStore; let themes: ThemeStore; let profiles: ProfileStore; let sessionManager: SessionManager; init() }` ve `struct TermoraApp: App { @State private var services = AppServices() }`
+- Task 8: `@MainActor @Observable final class SessionManager: SessionManaging { init(settings: SettingsStore, themes: ThemeStore, profiles: ProfileStore, escalationDelay: TimeInterval = 1.5) }`
 - Task 5/6/7: `ThemeStore(bundle:)`, `SettingsStore(defaults:)`, `ProfileStore(defaults:)`
 
 Produces:
 - `enum TabBarLayout { static let height: CGFloat; static let newTabButtonWidth: CGFloat; static let maxTabWidth: CGFloat; static let minTabWidth: CGFloat; static func tabWidth(availableWidth: CGFloat, tabCount: Int) -> CGFloat }`
-- `struct TabBarView: View { init(workspace: WorkspaceViewModel) }`
-- `@MainActor final class AppServices { let settings: SettingsStore; let profiles: ProfileStore; let themes: ThemeStore; let sessionManager: SessionManager; init() }`
-- `struct MainWindowView: View { @MainActor init(services: AppServices) }` — Task 13 buna `.focusedSceneValue` ve onay diyaloğunu ekler.
+- `struct TabBarView: View { init(workspace: WorkspaceViewModel) }` — her sekme öğesinde `.accessibilityIdentifier("tab-<tab.id>")`, yeni sekme düğmesinde `.accessibilityIdentifier("new-tab-button")` bulunur (Task 13'ün XCUITest smoke testi bunları kullanır).
+- `struct MainWindowView: View { @MainActor init(services: AppServices) }` — `private let services: AppServices` + `@State private var workspace: WorkspaceViewModel`; Task 13 buna `.focusedSceneValue` ve onay diyaloğunu ekler.
 
 ---
 
@@ -4450,6 +4970,7 @@ import CoreGraphics
 import Testing
 @testable import Termora
 
+@MainActor
 @Suite struct TabBarLayoutTests {
 
     @Test func zeroTabsHaveZeroWidth() {
@@ -4601,6 +5122,8 @@ struct TabBarView: View {
                 .frame(height: 2)
         }
         .contentShape(Rectangle())
+        // XCUITest smoke testi (Task 13) sekmeleri bu önekle sayar.
+        .accessibilityIdentifier("tab-\(tab.id)")
         .onHover { hovering in
             if hovering {
                 hoveredTabID = tab.id
@@ -4622,6 +5145,7 @@ struct TabBarView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("new-tab-button")
         .help("Yeni sekme (⌘T)")
         .contextMenu {
             if workspace.profiles.profiles.isEmpty {
@@ -4658,43 +5182,12 @@ cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj
 
 Beklenen: `BUILD_OK`.
 
-- [ ] **Step 7: AppServices'i yaz**
-
-`/Users/ahmetbarut/Apps/Termora/Termora/App/AppServices.swift`:
-
-```swift
-import AppKit
-import Foundation
-
-/// Uygulama ömrü boyunca tek örnek olan servisler.
-/// SessionManager terminal view cache'ini tuttuğu için pencereler arasında paylaşılır.
-@MainActor
-final class AppServices {
-    let settings: SettingsStore
-    let profiles: ProfileStore
-    let themes: ThemeStore
-    let sessionManager: SessionManager
-
-    init() {
-        // Sistemin otomatik pencere sekmelerini kapat: kendi sekme çubuğumuzu çiziyoruz,
-        // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
-        NSWindow.allowsAutomaticWindowTabbing = false
-
-        let settings = SettingsStore()
-        let themes = ThemeStore()
-        self.settings = settings
-        self.themes = themes
-        self.profiles = ProfileStore()
-        self.sessionManager = SessionManager(settings: settings, themes: themes)
-    }
-}
-```
-
-- [ ] **Step 8: MainWindowView'ı sekme çubuğuyla yeniden yaz**
+- [ ] **Step 7: MainWindowView'ı sekme çubuğuyla yeniden yaz**
 
 `/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` içeriğini tamamen aşağıdakiyle değiştir:
 
 ```swift
+import AppKit
 import SwiftUI
 
 struct MainWindowView: View {
@@ -4719,6 +5212,9 @@ struct MainWindowView: View {
         }
         .frame(minWidth: 480, minHeight: 320)
         .onAppear {
+            // Sistemin otomatik pencere sekmelerini kapat: kendi sekme çubuğumuzu çiziyoruz,
+            // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
+            NSWindow.allowsAutomaticWindowTabbing = false
             if workspace.tabs.isEmpty { workspace.newTab() }
         }
         .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
@@ -4730,7 +5226,9 @@ struct MainWindowView: View {
     private var terminalContent: some View {
         if let tab = workspace.activeTab,
            let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) {
-            TerminalHostView(sessionID: sessionID)
+            TerminalHostView(sessionID: sessionID,
+                             sessionManager: services.sessionManager,
+                             isActive: true)
                 .id(sessionID)
         } else {
             Color.clear
@@ -4739,26 +5237,35 @@ struct MainWindowView: View {
 }
 ```
 
-- [ ] **Step 9: TermoraApp'i AppServices ile bağla**
+- [ ] **Step 8: TermoraApp'in AppServices bağlantısını doğrula**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` içeriğini tamamen aşağıdakiyle değiştir:
+`TermoraApp` Task 10 Step 8'de zaten `AppServices`'e bağlandı; bu görevde **yeniden yazılmaz**. Yalnız dosyanın aşağıdaki hâlde olduğunu doğrula (değilse yalnız farkı düzelt — `Settings` sahnesi ve `.defaultSize` KORUNUR):
 
 ```swift
-import SwiftUI
-
 @main
 struct TermoraApp: App {
-    private let services = AppServices()
+    @State private var services = AppServices()
 
     var body: some Scene {
         WindowGroup {
             MainWindowView(services: services)
         }
+        .defaultSize(width: 900, height: 560)
+
+        Settings {
+            SettingsPlaceholderView()
+        }
     }
 }
 ```
 
-- [ ] **Step 10: Derle**
+```bash
+cd /Users/ahmetbarut/Apps/Termora && grep -n "@State private var services\|MainWindowView(services:\|Settings {" Termora/App/TermoraApp.swift
+```
+
+Beklenen: üç satır da bulunur (`App` bir struct olduğu ve SwiftUI onu yeniden oluşturabildiği için servisler `@State` ile tutulur; `let` olsaydı her yeniden oluşturmada yeni `SessionManager` doğar ve açık oturumlar kaybolurdu).
+
+- [ ] **Step 9: Derle**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet && echo BUILD_OK
@@ -4766,7 +5273,7 @@ cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj
 
 Beklenen: `BUILD_OK`.
 
-- [ ] **Step 11: Elle doğrulama — sekme çubuğu**
+- [ ] **Step 10: Elle doğrulama — sekme çubuğu**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -derivedDataPath /tmp/TermoraDD -quiet && open /tmp/TermoraDD/Build/Products/Debug/Termora.app
@@ -4780,15 +5287,18 @@ Görülmesi gerekenler:
 5. Bir sekmeye çift tıkla → başlık TextField'a döner; "Build" yazıp Enter → başlık "Build" olur ve shell başlığı artık ezmez.
 6. Aynı sekmeye çift tıkla, tümünü sil, Enter → otomatik başlığa döner.
 7. "x" butonuna tıkla → sekme kapanır, komşu sekme aktifleşir.
-8. Menü çubuğunda **View** altında "Show Tab Bar" öğesi **yok** (AppServices'teki `allowsAutomaticWindowTabbing = false`).
+8. Menü çubuğunda **View** altında "Show Tab Bar" öğesi **yok** (`MainWindowView.onAppear`'daki `NSWindow.allowsAutomaticWindowTabbing = false`).
+9. ⌘, ile Ayarlar penceresi hâlâ açılıyor (Task 10'un `SettingsPlaceholderView` yer tutucusu; M4'te gerçek panelle değişir).
 
 Uygulamayı kapat.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/TabBarView.swift Termora/Views/MainWindowView.swift Termora/App/AppServices.swift Termora/App/TermoraApp.swift TermoraTests/TabBarLayoutTests.swift && git commit -m "feat: add tab bar with rename and close affordances"
+cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/TabBarView.swift Termora/Views/MainWindowView.swift TermoraTests/TabBarLayoutTests.swift && git commit -m "feat: add tab bar with rename and close affordances"
 ```
+
+---
 
 ---
 
@@ -4800,18 +5310,22 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/TabBarView.swift Term
 - Modify: `/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` (`.focusedSceneValue` + `.confirmationDialog`)
 - Modify: `/Users/ahmetbarut/Apps/Termora/Termora/ViewModels/WorkspaceViewModel.swift` (son sekme kapanınca yeni sekme)
 - Test (Modify): `/Users/ahmetbarut/Apps/Termora/TermoraTests/WorkspaceViewModelTests.swift`
+- Test (Create): `/Users/ahmetbarut/Apps/Termora/TermoraUITests/TabSmokeUITests.swift` (XCUITest; `TermoraUITests` hedefi projede zaten var)
 
 **Interfaces:**
 
 Consumes:
 - Task 11: `WorkspaceViewModel` (newTab / requestCloseTab / confirmPendingClose / cancelPendingClose / selectTab / nextTab / previousTab / activeTabID / pendingClose / tabs)
-- Task 12: `MainWindowView(services:)`, `AppServices`, `TabBarView`
+- Task 12: `MainWindowView(services:)` (`private let services: AppServices` + `@State private var workspace: WorkspaceViewModel`), `TabBarView` (sekme öğelerinde `tab-<id>` accessibility identifier'ı)
+- Task 10: `AppServices`, `TermoraApp` (`@State private var services = AppServices()`, `Settings` sahnesi, `.defaultSize`)
 
 Produces:
 - `struct WorkspaceFocusedKey: FocusedValueKey { typealias Value = WorkspaceViewModel }`
 - `extension FocusedValues { var workspace: WorkspaceViewModel? { get set } }`
 - `struct AppCommands: Commands` — ⌘T yeni sekme, ⌘W (`CommandGroup(replacing: .saveItem)`) aktif sekmeyi kapat, ⌘1–⌘9 `selectTab(at: n-1)`, ⌘⇧] / ⌘⇧[ next/previous. Task 17 buna ⌘D/⌘⇧D/⌘⌥ok, Task 20 ⌘F ekler.
-- Davranış değişikliği: `WorkspaceViewModel` son sekme kapandığında otomatik olarak yeni boş sekme açar (pencere açık kalır; `dismissWindow` kullanılmaz).
+- `final class TabSmokeUITests: XCTestCase` — açılış + ⌘T + ⌘W smoke testi (spec §11).
+- Davranış değişikliği: `WorkspaceViewModel` son sekme kapandığında otomatik olarak yeni boş sekme açar (pencere açık kalır; `dismissWindow` kullanılmaz). Bu, spec §3 madde 3'ten **bilinçli sapmadır** (terminal uygulaması konvansiyonu) — spec bu kararla güncellenmeli.
+- Not (test çerçevesi istisnası): `TermoraUITests` hedefi XCUITest gerektirir (XCUIApplication Swift Testing ile kullanılamaz); yalnız bu hedefte `import XCTest` serbesttir.
 
 ---
 
@@ -4888,7 +5402,7 @@ Beklenen: `✘ Test closingLastTabOpensAReplacementTab() recorded an issue` — 
 cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspaceViewModelTests 2>&1 | tail -20
 ```
 
-Beklenen: `Test run with 19 tests passed`, `** TEST SUCCEEDED **`.
+Beklenen: `Test run with 21 tests passed`, `** TEST SUCCEEDED **` (Task 11'in 20 testi; biri ikiye bölündü).
 
 - [ ] **Step 5: AppCommands'i yaz**
 
@@ -4932,11 +5446,15 @@ struct AppCommands: Commands {
             .disabled(workspace?.activeTabID == nil)
         }
 
+        // DİKKAT: `Commands` protokolünde `disabled` YOKTUR (yalnız `View` üzerinde vardır);
+        // `CommandMenu { … }.disabled(…)` derlenmez. Etkinlik her Button'a tek tek verilir.
         CommandMenu("Sekme") {
             Button("Sonraki Sekme") { workspace?.nextTab() }
                 .keyboardShortcut("]", modifiers: [.command, .shift])
+                .disabled(workspace == nil)
             Button("Önceki Sekme") { workspace?.previousTab() }
                 .keyboardShortcut("[", modifiers: [.command, .shift])
+                .disabled(workspace == nil)
 
             Divider()
 
@@ -4945,28 +5463,33 @@ struct AppCommands: Commands {
                     workspace?.selectTab(at: number - 1)
                 }
                 .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
+                .disabled(workspace == nil)
             }
         }
-        .disabled(workspace == nil)
     }
 }
 ```
 
 - [ ] **Step 6: TermoraApp'e komutları bağla**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` içindeki `WindowGroup` bloğunu değiştir:
+`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` içindeki `WindowGroup` bloğuna yalnız `.commands` ekle; `Settings` sahnesi ve `.defaultSize` olduğu gibi KALIR (⌘, ölü menü öğesine dönmemeli):
 
 ```swift
 @main
 struct TermoraApp: App {
-    private let services = AppServices()
+    @State private var services = AppServices()
 
     var body: some Scene {
         WindowGroup {
             MainWindowView(services: services)
         }
+        .defaultSize(width: 900, height: 560)
         .commands {
             AppCommands()
+        }
+
+        Settings {
+            SettingsPlaceholderView()
         }
     }
 }
@@ -4974,7 +5497,7 @@ struct TermoraApp: App {
 
 - [ ] **Step 7: MainWindowView'a odak değeri ve onay diyaloğunu ekle**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` içinde `body`'yi aşağıdakiyle değiştir ve altına `pendingCloseBinding`'i ekle:
+`/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` içinde `body`'yi aşağıdakiyle değiştir ve altına `pendingCloseBinding` ile `pendingCloseMessage`'ı ekle:
 
 ```swift
     var body: some View {
@@ -4985,6 +5508,7 @@ struct TermoraApp: App {
         }
         .frame(minWidth: 480, minHeight: 320)
         .onAppear {
+            NSWindow.allowsAutomaticWindowTabbing = false
             if workspace.tabs.isEmpty { workspace.newTab() }
         }
         .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
@@ -4992,7 +5516,7 @@ struct TermoraApp: App {
         }
         .focusedSceneValue(\.workspace, workspace)
         .confirmationDialog(
-            "Bu sekmede çalışan bir işlem var. Kapatılsın mı?",
+            pendingCloseMessage,
             isPresented: pendingCloseBinding
         ) {
             Button("Kapat", role: .destructive) { workspace.confirmPendingClose() }
@@ -5007,6 +5531,18 @@ struct TermoraApp: App {
                 if !isPresented { workspace.cancelPendingClose() }
             }
         )
+    }
+
+    /// Onay metni hedefe göre değişir; M3'te panel (Task 17), M5'te pencere (Task 22) dalı da kullanılır.
+    private var pendingCloseMessage: String {
+        switch workspace.pendingClose?.target {
+        case .pane:
+            return "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?"
+        case .window:
+            return "Çalışan işlemler var. Pencere kapatılsın mı?"
+        case .tab, .none:
+            return "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"
+        }
     }
 ```
 
@@ -5026,7 +5562,73 @@ cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj 
 
 Beklenen: `** TEST SUCCEEDED **`.
 
-- [ ] **Step 10: Elle doğrulama — kısayollar ve onay**
+- [ ] **Step 10: XCUITest smoke testini yaz (açılış + sekme aç/kapat)**
+
+Spec §11 "UI: açılış + sekme aç/kapat smoke testi" maddesi. Bu tek testin hedefi `TermoraUITests`'tir; XCUIApplication Swift Testing ile kullanılamadığı için **yalnız bu hedefte** `import XCTest` serbesttir (Global Constraints'teki test çerçevesi istisnası). `TermoraUITests` hedefi şablondan geldiği için projede zaten var (`project.pbxproj`, `com.apple.product-type.bundle.ui-testing`), yeni hedef eklemek gerekmez.
+
+`/Users/ahmetbarut/Apps/Termora/TermoraUITests/TabSmokeUITests.swift`:
+
+```swift
+import XCTest
+
+/// Spec §11 smoke testi: uygulama açılıyor, ⌘T sekme ekliyor, ⌘W sekmeyi kapatıyor.
+/// Sekmeler TabBarView'ın verdiği "tab-<uuid>" accessibility identifier'ı ile sayılır.
+final class TabSmokeUITests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
+    func testLaunchesThenOpensAndClosesATab() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 15),
+                      "Ana pencere 15 sn içinde açılmadı")
+        XCTAssertTrue(waitForTabCount(1, in: app), "Açılışta tam olarak bir sekme beklenir")
+
+        app.typeKey("t", modifierFlags: .command)
+        XCTAssertTrue(waitForTabCount(2, in: app), "⌘T ikinci sekmeyi açmadı")
+
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(waitForTabCount(1, in: app), "⌘W sekmeyi kapatmadı")
+    }
+
+    // MARK: - Yardımcılar
+
+    private func tabCount(in app: XCUIApplication) -> Int {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "tab-"))
+            .count
+    }
+
+    private func waitForTabCount(_ expected: Int,
+                                 in app: XCUIApplication,
+                                 timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if tabCount(in: app) == expected { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return false
+    }
+}
+```
+
+Testi çalıştır:
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraUITests/TabSmokeUITests 2>&1 | tail -20
+```
+
+Beklenen: `Test Suite 'TabSmokeUITests' passed` ve `** TEST SUCCEEDED **`. Test koşarken pencere görünür biçimde açılır; makineyi kilitleme.
+
+`xcodebuild` "does not match any tests" derse şemanın test eylemi `TermoraUITests` hedefini içermiyordur: `xcodebuild -project Termora.xcodeproj -scheme Termora -showTestPlans` / `xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraUITests 2>&1 | grep -i "TermoraUITests"` ile doğrula (otomatik üretilen şemalarda hedef zaten ekli olur).
+
+Şablondan gelen boş `TermoraUITests/TermoraUITests.swift` ve `TermoraUITests/TermoraUITestsLaunchTests.swift` dosyaları duruyorsa ve derlemeyi yavaşlatıyorsa oldukları gibi bırak (silmek gerekmez); yalnız bu smoke testi eklenir.
+
+- [ ] **Step 11: Elle doğrulama — kısayollar ve onay**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -derivedDataPath /tmp/TermoraDD -quiet && open /tmp/TermoraDD/Build/Products/Debug/Termora.app
@@ -5036,56 +5638,63 @@ Görülmesi gerekenler:
 1. **File** menüsünde "Yeni Sekme ⌘T" ve "Sekmeyi Kapat ⌘W" var; standart "Close Window" öğesi yok.
 2. Menü çubuğunda **Sekme** menüsü var: "Sonraki Sekme ⌘⇧]", "Önceki Sekme ⌘⇧[", ayraç, "Sekme 1…9 ⌘1…⌘9".
 3. ⌘T üç kez → dört sekme; ⌘1 → ilk sekme aktifleşir; ⌘3 → üçüncü; ⌘⇧] son sekmeden ilk sekmeye sarmalar; ⌘⇧[ geri sarmalar.
-4. Aktif sekmede `sleep 60` yaz ve çalıştır, ⌘W → "Bu sekmede çalışan bir işlem var. Kapatılsın mı?" diyaloğu çıkar. "Vazgeç" → sekme kalır, `sleep` sürüyor. Tekrar ⌘W → "Kapat" → sekme kapanır.
+4. Aktif sekmede `sleep 60` yaz ve çalıştır, ⌘W → "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?" diyaloğu çıkar. "Vazgeç" → sekme kalır, `sleep` sürüyor. Tekrar ⌘W → "Kapat" → sekme kapanır.
 5. Boştaki (komut çalışmayan) bir sekmede ⌘W → onaysız kapanır.
 6. Tek sekme kalana kadar kapat, sonra ⌘W → pencere **kapanmaz**, yeni boş bir sekme açılır ve prompt gelir.
 7. Terminale odaklıyken `echo ⌘W` gibi bir metin yazarken kısayolların terminale kaçmadığını, menü öğelerinin çalıştığını gör.
 
 Uygulamayı kapat.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
-cd /Users/ahmetbarut/Apps/Termora && git add Termora/App/AppCommands.swift Termora/App/TermoraApp.swift Termora/Views/MainWindowView.swift Termora/ViewModels/WorkspaceViewModel.swift TermoraTests/WorkspaceViewModelTests.swift && git commit -m "feat: add menu commands and tab close confirmation"
+cd /Users/ahmetbarut/Apps/Termora && git add Termora/App/AppCommands.swift Termora/App/TermoraApp.swift Termora/Views/MainWindowView.swift Termora/ViewModels/WorkspaceViewModel.swift TermoraTests/WorkspaceViewModelTests.swift TermoraUITests/TabSmokeUITests.swift && git commit -m "feat: add menu commands and tab close confirmation"
 ```
+
+---
 
 ---
 
 ### Task 14: PaneNode ağacı (M3)
 
 **Files:**
-- Create: `/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift`
+- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift` (Task 11'de yaratıldı; `splitting`/`removing`/`updatingRatio`/`siblingLeafPaneID` burada eklenir)
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/PaneNodeTests.swift`
 
 **Interfaces:**
 
-*Consumes:* Yok. Görev tamamen saf `Foundation` üzerinde çalışır; hiçbir önceki görevin sembolüne bağımlı değildir.
+*Consumes:*
+- Task 11: `enum SplitAxis` ve `indirect enum PaneNode` (`leaf`/`split` case'leri, `leaves`, `sessionID(ofPane:)`) — `/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift`. Bu görev dosyayı **sıfırdan yazmaz**, yalnız yeni operasyonları ekler; mevcut case'lerin ve iki erişimcinin imzası değişmez.
+- Task 11 testleri: `TermoraTests/PaneNodeLeafTests.swift` (ayrı tip adı — bu görevin `PaneNodeTests`'i ile çakışmaz, ikisi de kalır).
 
 *Produces:*
 ```swift
+// Task 11'de zaten var — burada DEĞİŞMEZ, yalnız referans için:
 enum SplitAxis: String, Codable { case vertical; case horizontal }
 
 indirect enum PaneNode: Equatable {
     case leaf(paneID: UUID, sessionID: UUID)
     case split(id: UUID, axis: SplitAxis, ratio: Double, first: PaneNode, second: PaneNode)
 
+    var leaves: [(paneID: UUID, sessionID: UUID)] { get }
+    func sessionID(ofPane paneID: UUID) -> UUID?
+}
+
+// Bu görevde EKLENEN operasyonlar (aynı dosyanın sonuna `extension PaneNode` olarak):
+extension PaneNode {
+    static let ratioRange: ClosedRange<Double>         // 0.15...0.85 — Task 17 SplitLayoutMath da okur
+
     func splitting(paneID: UUID, axis: SplitAxis, newPaneID: UUID, newSessionID: UUID) -> PaneNode
     func removing(paneID: UUID) -> PaneNode?
     func updatingRatio(splitID: UUID, ratio: Double) -> PaneNode
-    var leaves: [(paneID: UUID, sessionID: UUID)] { get }
-    func sessionID(ofPane paneID: UUID) -> UUID?
     func siblingLeafPaneID(of paneID: UUID) -> UUID?   // Task 16 odak devri için kullanır
 }
 ```
 `SplitAxis.vertical` = dikey ayraç, paneller **yan yana** (⌘D). `SplitAxis.horizontal` = yatay ayraç, paneller **üst üste** (⌘⇧D).
 
-- [ ] **Step 1: `Models/` klasörünü hazırla ve ilk test dosyasını yaz (böl / iç içe böl / leaves / sessionID)**
+- [ ] **Step 1: `PaneNodeTests.swift` test dosyasını yaz (böl / iç içe böl / leaves / sessionID)**
 
-```bash
-mkdir -p /Users/ahmetbarut/Apps/Termora/Termora/Models
-```
-
-`/Users/ahmetbarut/Apps/Termora/TermoraTests/PaneNodeTests.swift` dosyasını oluştur:
+`/Users/ahmetbarut/Apps/Termora/TermoraTests/PaneNodeTests.swift` dosyasını oluştur (`Termora/Models/` klasörü Task 1 Step 7'de, `PaneNode.swift` Task 11 Step 3'te açıldı):
 
 ```swift
 //
@@ -5201,36 +5810,18 @@ struct PaneNodeTests {
 - [ ] **Step 2: Testi çalıştır, derleme hatasıyla FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNode 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNodeTests 2>&1 | tail -20
 ```
 
-Beklenen (kırmızı): `PaneNodeTests.swift:...: error: cannot find 'PaneNode' in scope` ve son satırda `** TEST BUILD FAILED **`.
+Beklenen (kırmızı): `PaneNodeTests.swift:...: error: value of type 'PaneNode' has no member 'splitting'` ve son satırda `** TEST BUILD FAILED **`.
 
-- [ ] **Step 3: `PaneNode.swift`'i splitting/leaves/sessionID ile oluştur (minimum)**
+(Not: `PaneNode` ve `SplitAxis` Task 11 Step 3'te tanımlandığı için "cannot find 'PaneNode' in scope" hatası **beklenmez**; eksik olan yalnız operasyonlardır.)
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift`:
+- [ ] **Step 3: `splitting(paneID:axis:newPaneID:newSessionID:)` operasyonunu MEVCUT dosyaya ekle**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Models/PaneNode.swift` dosyasının **sonuna** aşağıdaki extension'ı ekle. Dosyanın başındaki `import Foundation`, `enum SplitAxis`, `indirect enum PaneNode` bildirimi ve enum gövdesindeki `leaves` / `sessionID(ofPane:)` erişimcileri Task 11'den olduğu gibi KALIR — tekrar yazılmaz (yoksa `error: invalid redeclaration of 'SplitAxis'` alınır).
 
 ```swift
-//
-//  PaneNode.swift
-//  Termora
-//
-
-import Foundation
-
-/// Split orientation. `vertical` draws a vertical divider, so panes sit side by side (⌘D).
-/// `horizontal` draws a horizontal divider, so panes are stacked (⌘⇧D).
-enum SplitAxis: String, Codable {
-    case vertical
-    case horizontal
-}
-
-/// Binary layout tree of a tab. A leaf hosts one terminal session.
-indirect enum PaneNode: Equatable {
-    case leaf(paneID: UUID, sessionID: UUID)
-    case split(id: UUID, axis: SplitAxis, ratio: Double, first: PaneNode, second: PaneNode)
-}
-
 extension PaneNode {
 
     /// Turns the target leaf into a 50/50 split; the old pane stays in `first`.
@@ -5255,27 +5846,13 @@ extension PaneNode {
                                                    newPaneID: newPaneID, newSessionID: newSessionID))
         }
     }
-
-    /// Leaves in visual order (left→right for vertical splits, top→bottom for horizontal ones).
-    var leaves: [(paneID: UUID, sessionID: UUID)] {
-        switch self {
-        case let .leaf(paneID, sessionID):
-            return [(paneID: paneID, sessionID: sessionID)]
-        case let .split(_, _, _, first, second):
-            return first.leaves + second.leaves
-        }
-    }
-
-    func sessionID(ofPane paneID: UUID) -> UUID? {
-        leaves.first { $0.paneID == paneID }?.sessionID
-    }
 }
 ```
 
 - [ ] **Step 4: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNode 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNodeTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 4 tests passed` ve `** TEST SUCCEEDED **`.
@@ -5361,14 +5938,14 @@ Beklenen: `Test run with 4 tests passed` ve `** TEST SUCCEEDED **`.
 - [ ] **Step 6: Testi çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNode 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNodeTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: value of type 'PaneNode' has no member 'removing'` (ve `siblingLeafPaneID` için aynısı), `** TEST BUILD FAILED **`.
 
 - [ ] **Step 7: `removing` ve `siblingLeafPaneID`'i uygula**
 
-`PaneNode.swift` içindeki `extension PaneNode` bloğunun sonuna, `sessionID(ofPane:)` fonksiyonundan sonra ekle:
+`PaneNode.swift` içinde Step 3'te eklenen `extension PaneNode` bloğunun sonuna, `splitting(paneID:axis:newPaneID:newSessionID:)` fonksiyonundan sonra ekle:
 
 ```swift
     /// Removes a pane; the sibling subtree replaces the parent split.
@@ -5420,7 +5997,7 @@ Beklenen: `error: value of type 'PaneNode' has no member 'removing'` (ve `siblin
 - [ ] **Step 8: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNode 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNodeTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 9 tests passed`, `** TEST SUCCEEDED **`.
@@ -5501,14 +6078,14 @@ Beklenen: `Test run with 9 tests passed`, `** TEST SUCCEEDED **`.
 - [ ] **Step 10: Testi çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNode 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNodeTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: value of type 'PaneNode' has no member 'updatingRatio'`, `** TEST BUILD FAILED **`.
 
 - [ ] **Step 11: `updatingRatio`'yu uygula**
 
-`PaneNode.swift` içindeki `extension PaneNode` bloğunun sonuna ekle:
+`PaneNode.swift` içinde Step 3'te eklenen `extension PaneNode` bloğunun sonuna ekle:
 
 ```swift
     /// Allowed divider range; keeps both panes usable.
@@ -5537,7 +6114,7 @@ Beklenen: `error: value of type 'PaneNode' has no member 'updatingRatio'`, `** T
 - [ ] **Step 12: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNode 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneNodeTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 12 tests passed`, `** TEST SUCCEEDED **`.
@@ -5548,6 +6125,8 @@ Beklenen: `Test run with 12 tests passed`, `** TEST SUCCEEDED **`.
 git -C /Users/ahmetbarut/Apps/Termora add Termora/Models/PaneNode.swift TermoraTests/PaneNodeTests.swift
 git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: add PaneNode split tree model with split/remove/ratio operations"
 ```
+
+---
 
 ---
 
@@ -5685,7 +6264,7 @@ struct PaneGeometryTests {
 - [ ] **Step 2: Testi çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneGeometry 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneGeometryTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: cannot find 'PaneGeometry' in scope`, `** TEST BUILD FAILED **`.
@@ -5791,7 +6370,7 @@ enum PaneGeometry {
 - [ ] **Step 4: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneGeometry 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/PaneGeometryTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 8 tests passed`, `** TEST SUCCEEDED **`.
@@ -5802,6 +6381,8 @@ Beklenen: `Test run with 8 tests passed`, `** TEST SUCCEEDED **`.
 git -C /Users/ahmetbarut/Apps/Termora add Termora/Models/PaneGeometry.swift TermoraTests/PaneGeometryTests.swift
 git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: add directional pane neighbor lookup"
 ```
+
+---
 
 ---
 
@@ -5816,21 +6397,28 @@ git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: add directional pane neig
 *Consumes:*
 - Task 14: `PaneNode.splitting(paneID:axis:newPaneID:newSessionID:)`, `.removing(paneID:)`, `.updatingRatio(splitID:ratio:)`, `.leaves`, `.sessionID(ofPane:)`, `.siblingLeafPaneID(of:)`, `SplitAxis`.
 - Task 15: `PaneGeometry.neighbor(of:direction:frames:)`, `FocusDirection`.
-- Task 11: `@Observable final class TerminalTab` (`id`, `root: PaneNode`, `activePaneID: UUID`), `@MainActor @Observable final class WorkspaceViewModel` — mevcut üyeleri: `private let sessionManager: any SessionManaging`, `private(set) var tabs: [TerminalTab]`, `var activeTabID: UUID?`, `var activeTab: TerminalTab?`, `var pendingClose: PendingClose?`, `var paneFrames: [UUID: CGRect]`, `func newTab(profile:)`, `func requestCloseTab(id:)`, `func confirmPendingClose()`, `func cancelPendingClose()`, ve iç yardımcılar `private func closeTab(id: UUID)` / `private func closeAllTabs()`.
-- Task 11 test desteği: `/Users/ahmetbarut/Apps/Termora/TermoraTests/Support/MockSessionManager.swift`
+- Task 11: `@Observable final class TerminalTab` (`id`, `root: PaneNode`, `activePaneID: UUID`), `@MainActor @Observable final class WorkspaceViewModel` — mevcut üyeleri: `private let sessionManager: any SessionManaging`, `private(set) var tabs: [TerminalTab]`, `var activeTabID: UUID?`, `var activeTab: TerminalTab?`, `var pendingClose: PendingClose?`, `var paneFrames: [UUID: CGRect]`, `func newTab(profile:)`, `func requestCloseTab(id:)`, `func confirmPendingClose()`, `func cancelPendingClose()`, ve iç yardımcı `private func closeTab(id: UUID)`. Dikkat: `func closeAllTabs()` **internal**'dır (`private` DEĞİL) — Task 22'deki `WindowCloseCoordinator` onu dışarıdan çağırır.
+- Task 11 test desteği: `/Users/ahmetbarut/Apps/Termora/TermoraTests/MockSessionManager.swift` (tek dosya, `Support/` alt klasörü YOK)
   ```swift
   @MainActor final class MockSessionManager: SessionManaging {
-      private(set) var createdSessions: [TerminalSession] = []   // createSession sırayla ekler
-      private(set) var terminatedIDs: [UUID] = []
-      var busySessionIDs: Set<UUID> = []                          // hasRunningProcess bunu okur
+      var busySessionIDs: Set<UUID> = []                              // hasRunningProcess bunu okur
+      var defaultShellPath: String = "/bin/zsh"
+      private(set) var sessions: [UUID: TerminalSession] = [:]
+      private(set) var createdSessions: [TerminalSession] = []        // createSession sırayla ekler
+      private(set) var terminatedSessionIDs: [UUID] = []
+      private(set) var createdProfiles: [TerminalProfile?] = []
+      private(set) var createdWorkingDirectories: [String?] = []
+      private(set) var restartedSessionIDs: [UUID] = []
       func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession
-      // → TerminalSession(shellPath: "/bin/zsh", profileID: profile?.id, workingDirectory: workingDirectory)
+      // → TerminalSession(shellPath: profile?.shellPath ?? defaultShellPath,
+      //                   profileID: profile?.id, workingDirectory: workingDirectory)
       func session(id: UUID) -> TerminalSession?
       func terminateSession(id: UUID)
+      func restartSession(id: UUID, forceDefaultShell: Bool)
       func hasRunningProcess(sessionID: UUID) -> Bool
   }
   ```
-- Task 8: `TerminalSession` (`id`, `workingDirectory`), `SessionManaging`.
+- Task 8: `TerminalSession` (`id`, `workingDirectory`), `@MainActor protocol SessionManaging` — `createSession(profile:workingDirectory:)`, `session(id:)`, `terminateSession(id:)`, `restartSession(id:forceDefaultShell:)`, `hasRunningProcess(sessionID:)`.
 - Task 6/7: `SettingsStore(defaults:)`, `ProfileStore(defaults:)`.
 
 *Produces:* `WorkspaceViewModel` üzerinde
@@ -5840,6 +6428,7 @@ func requestCloseActivePane()
 func activatePane(paneID: UUID)          // Task 17 tıklamayla odak için kullanır
 func focusPane(_ direction: FocusDirection)
 func updateSplitRatio(tabID: UUID, splitID: UUID, ratio: Double)
+func restartPaneSession(paneID: UUID, forceDefaultShell: Bool = false)   // Task 17 çıkış bandı kullanır
 ```
 ve `confirmPendingClose()` artık `PendingClose.Target.pane(paneID:)` hedefini de işler.
 
@@ -5942,7 +6531,7 @@ struct WorkspacePaneOperationsTests {
 - [ ] **Step 2: Testi çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperations 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'splitActivePane'`, `** TEST BUILD FAILED **`.
@@ -5977,7 +6566,7 @@ Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'splitActiveP
 - [ ] **Step 4: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperations 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
@@ -5999,7 +6588,10 @@ Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
         let firstPaneID = tab.activePaneID
         fixture.viewModel.splitActivePane(axis: .vertical)
         let secondPaneID = tab.activePaneID
-        let secondSessionID = tab.root.sessionID(ofPane: secondPaneID)
+        guard let secondSessionID = tab.root.sessionID(ofPane: secondPaneID) else {
+            Issue.record("yeni panelin oturumu bulunamadı")
+            return
+        }
 
         fixture.viewModel.requestCloseActivePane()
 
@@ -6007,7 +6599,7 @@ Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
         #expect(tab.root == .leaf(paneID: firstPaneID,
                                   sessionID: tab.root.sessionID(ofPane: firstPaneID)!))
         #expect(tab.activePaneID == firstPaneID)
-        #expect(fixture.sessions.terminatedIDs == [secondSessionID])
+        #expect(fixture.sessions.terminatedSessionIDs == [secondSessionID])
         #expect(fixture.viewModel.paneFrames[secondPaneID] == nil)
         #expect(fixture.viewModel.tabs.count == 1)
     }
@@ -6029,7 +6621,7 @@ Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
 
         #expect(fixture.viewModel.pendingClose?.target == .pane(paneID: busyPaneID))
         #expect(tab.root == treeBefore)
-        #expect(fixture.sessions.terminatedIDs.isEmpty)
+        #expect(fixture.sessions.terminatedSessionIDs.isEmpty)
     }
 
     @Test("onay verilince panel kapanır")
@@ -6051,7 +6643,7 @@ Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
         #expect(fixture.viewModel.pendingClose == nil)
         #expect(tab.root.leaves.count == 1)
         #expect(tab.activePaneID == firstPaneID)
-        #expect(fixture.sessions.terminatedIDs == [busySessionID])
+        #expect(fixture.sessions.terminatedSessionIDs == [busySessionID])
     }
 
     @Test("iptal edilince panel açık kalır")
@@ -6070,7 +6662,7 @@ Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
 
         #expect(fixture.viewModel.pendingClose == nil)
         #expect(tab.root.leaves.count == 2)
-        #expect(fixture.sessions.terminatedIDs.isEmpty)
+        #expect(fixture.sessions.terminatedSessionIDs.isEmpty)
     }
 
     @Test("tek panelli sekmede panel kapatma sekme kapatmaya delege eder")
@@ -6093,7 +6685,7 @@ Beklenen: `Test run with 3 tests passed`, `** TEST SUCCEEDED **`.
 - [ ] **Step 6: Testi çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperations 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'requestCloseActivePane'`, `** TEST BUILD FAILED **`.
@@ -6157,10 +6749,12 @@ Task 11'de yazılan `confirmPendingClose()` gövdesindeki `switch pending.target
     }
 ```
 
+Aynı düzenlemede Task 11 Step 17'de yazılan tek argümanlı `private func closePane(paneID: UUID)` metodu (ve üstündeki `/// M2 değişmezi: …` yorumu) `WorkspaceViewModel.swift`'ten **SİLİNİR**; artık yalnız `closePane(paneID:in:)` kullanılır. (Aşırı yükleme olduğu için derleme hatası vermez, silinmezse ölü kod olarak kalır.)
+
 - [ ] **Step 9: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperations 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 8 tests passed`, `** TEST SUCCEEDED **`.
@@ -6269,7 +6863,7 @@ Beklenen: `Test run with 8 tests passed`, `** TEST SUCCEEDED **`.
 - [ ] **Step 11: Testi çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperations 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'focusPane'`, `** TEST BUILD FAILED **`.
@@ -6306,12 +6900,106 @@ Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'focusPane'`,
 - [ ] **Step 13: Testi çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperations 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 12 tests passed`, `** TEST SUCCEEDED **`.
 
-- [ ] **Step 14: Sekme testlerinin bozulmadığını doğrula**
+- [ ] **Step 14: `restartPaneSession` testlerini ekle**
+
+Spec §8: shell çıkınca panel açık kalır ve kullanıcı aynı panelde yeni oturum başlatabilir; shell hiç başlatılamadıysa "varsayılan shell ile dene" kurtarma yolu vardır. Görünüm tarafı Task 17'deki çıkış bandıdır, bu adım onun çağırdığı view model metodunu yazar.
+
+`WorkspacePaneOperationsTests.swift` içine, son `}` öncesine ekle:
+
+```swift
+    // MARK: - restartPaneSession
+
+    @Test("restartPaneSession panelin oturumunu SessionManager'a yeniden başlatır")
+    func restartPaneSessionForwardsToSessionManager() {
+        let fixture = makeFixture()
+        guard let tab = fixture.viewModel.activeTab else {
+            Issue.record("aktif sekme yok")
+            return
+        }
+        let paneID = tab.activePaneID
+        guard let sessionID = tab.root.sessionID(ofPane: paneID) else {
+            Issue.record("panelin oturumu bulunamadı")
+            return
+        }
+
+        fixture.viewModel.restartPaneSession(paneID: paneID)
+
+        #expect(fixture.sessions.restartedSessionIDs == [sessionID])
+        // Ağaç ve odak değişmez: aynı panelde yeni oturum başlar.
+        #expect(tab.root.sessionID(ofPane: paneID) == sessionID)
+        #expect(tab.activePaneID == paneID)
+        #expect(fixture.sessions.terminatedSessionIDs.isEmpty)
+    }
+
+    @Test("varsayılan shell ile yeniden başlatma da aynı oturuma yönlenir")
+    func restartWithDefaultShellTargetsTheSameSession() {
+        let fixture = makeFixture()
+        guard let tab = fixture.viewModel.activeTab else {
+            Issue.record("aktif sekme yok")
+            return
+        }
+        fixture.viewModel.splitActivePane(axis: .vertical)
+        let paneID = tab.activePaneID
+        guard let sessionID = tab.root.sessionID(ofPane: paneID) else {
+            Issue.record("panelin oturumu bulunamadı")
+            return
+        }
+
+        fixture.viewModel.restartPaneSession(paneID: paneID, forceDefaultShell: true)
+
+        #expect(fixture.sessions.restartedSessionIDs == [sessionID])
+    }
+
+    @Test("bilinmeyen panel için restartPaneSession sessizce hiçbir şey yapmaz")
+    func restartUnknownPaneIsNoop() {
+        let fixture = makeFixture()
+
+        fixture.viewModel.restartPaneSession(paneID: UUID())
+
+        #expect(fixture.sessions.restartedSessionIDs.isEmpty)
+    }
+```
+
+- [ ] **Step 15: Testi çalıştır, FAIL bekle**
+
+```bash
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
+```
+
+Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'restartPaneSession'`, `** TEST BUILD FAILED **`.
+
+- [ ] **Step 16: `restartPaneSession`'ı uygula**
+
+`WorkspaceViewModel.swift` içinde `updateSplitRatio(tabID:splitID:ratio:)`'nun altına ekle:
+
+```swift
+    /// Starts a fresh shell in the pane that is already on screen (spec §8: the pane
+    /// stays open after the process exits). `forceDefaultShell` ignores the configured
+    /// shell path — the recovery action for an unlaunchable shell.
+    func restartPaneSession(paneID: UUID, forceDefaultShell: Bool = false) {
+        guard let tab = activeTab,
+              let sessionID = tab.root.sessionID(ofPane: paneID) else { return }
+        sessionManager.restartSession(id: sessionID, forceDefaultShell: forceDefaultShell)
+        tab.activePaneID = paneID
+    }
+```
+
+Oturum kimliği ve panel ağacı KORUNUR — `SessionManager.restartSession(id:forceDefaultShell:)` (Task 8) aynı `sessionID` için yeni bir terminal view + süreç kurar, bu yüzden `PaneNode` güncellenmez.
+
+- [ ] **Step 17: Testi çalıştır, PASS bekle**
+
+```bash
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspacePaneOperationsTests 2>&1 | tail -20
+```
+
+Beklenen: `Test run with 15 tests passed`, `** TEST SUCCEEDED **`.
+
+- [ ] **Step 18: Sekme testlerinin bozulmadığını doğrula**
 
 ```bash
 xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests 2>&1 | tail -20
@@ -6319,12 +7007,14 @@ xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -schem
 
 Beklenen: `** TEST SUCCEEDED **` (Task 11'in sekme suite'i dahil tüm testler geçer).
 
-- [ ] **Step 15: Commit**
+- [ ] **Step 19: Commit**
 
 ```bash
 git -C /Users/ahmetbarut/Apps/Termora add Termora/ViewModels/WorkspaceViewModel.swift TermoraTests/WorkspacePaneOperationsTests.swift
-git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: add pane split, close, focus and ratio operations to workspace"
+git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: add pane split, close, focus, ratio and restart operations to workspace"
 ```
+
+---
 
 ---
 
@@ -6342,12 +7032,14 @@ git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: add pane split, close, fo
 **Interfaces:**
 
 *Consumes:*
-- Task 14: `PaneNode`, `SplitAxis`.
-- Task 16: `WorkspaceViewModel.splitActivePane(axis:)`, `.requestCloseActivePane()`, `.activatePane(paneID:)`, `.focusPane(_:)`, `.updateSplitRatio(tabID:splitID:ratio:)`, `.paneFrames`, `.activeTab`.
+- Task 14: `PaneNode` (`splitting`/`removing`/`updatingRatio`/`ratioRange`), `SplitAxis`.
+- Task 16: `WorkspaceViewModel.splitActivePane(axis:)`, `.requestCloseActivePane()`, `.activatePane(paneID:)`, `.focusPane(_:)`, `.updateSplitRatio(tabID:splitID:ratio:)`, `.restartPaneSession(paneID:forceDefaultShell:)`, `.paneFrames`, `.activeTab`.
 - Task 15: `FocusDirection`.
 - Task 10: `struct TerminalHostView: NSViewRepresentable { let sessionID: UUID; let sessionManager: SessionManager; let isActive: Bool }` (`/Users/ahmetbarut/Apps/Termora/Termora/Views/Terminal/TerminalHostView.swift`).
-- Task 12: `struct MainWindowView: View` — `viewModel: WorkspaceViewModel` ve `sessionManager: SessionManager` özelliklerine sahip; gövdesinde aktif sekmenin terminal içeriğini çizen bölüm bu görevde `PaneTreeView` ile değiştirilir.
+- Task 12: `struct MainWindowView: View` — `private let services: AppServices` ve `@State private var workspace: WorkspaceViewModel` özelliklerine sahip; terminal içeriğini çizen `terminalContent` hesaplanan özelliği bu görevde `PaneTreeView` ile değiştirilir. (Oturum yöneticisine `services.sessionManager` ile erişilir; `viewModel` / çıplak `sessionManager` diye üye YOKTUR.)
 - Task 13: `AppCommands` (`@FocusedValue(\.workspace) private var workspace: WorkspaceViewModel?`).
+- Task 8 (çıkış bandı için): `@Observable final class TerminalSession` — `var processState: ProcessState` (`.running` / `.exited(ExitStatus)`), `var launchFailure: String?` (shell çalıştırılamadıysa denenen yol), `SessionManager.session(id:) -> TerminalSession?`.
+- Task 2: `ExitStatus.localizedSummary` (ör. `"çıkış kodu 1"`, `"SIGTERM ile sonlandı"`).
 
 *Produces:*
 ```swift
@@ -6370,6 +7062,8 @@ struct PaneTreeView: View {
 }
 ```
 Kısayollar: ⌘D dikey böl, ⌘⇧D yatay böl, ⌘⇧W panel kapat, ⌘⌥←/→/↑/↓ panel odağı.
+
+Ayrıca `PaneTreeView.swift` içindeki `private struct PaneLeafView`, oturumun `processState`'i `.exited` olduğunda terminalin üstünde bir **süreç sonlandı bandı** çizer (spec §8): shell hiç başlatılamadıysa `"'<yol>' çalıştırılamadı"` + **Yeniden dene** / **Varsayılan shell ile dene** düğmeleri, normal çıkışta `"İşlem sonlandı (<özet>)"` + **Yeniden başlat** düğmesi ve Enter kısayolu. Hepsi `WorkspaceViewModel.restartPaneSession(paneID:forceDefaultShell:)` çağırır.
 
 - [ ] **Step 1: `SplitLayoutMath` testlerini yaz**
 
@@ -6496,7 +7190,7 @@ struct PaneFrameConverterTests {
 - [ ] **Step 3: İki testi de çalıştır, FAIL bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SplitLayoutMath -only-testing:TermoraTests/PaneFrameConverter 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SplitLayoutMathTests -only-testing:TermoraTests/PaneFrameConverterTests 2>&1 | tail -20
 ```
 
 Beklenen: `error: cannot find 'SplitLayoutMath' in scope` ve `error: cannot find 'PaneFrameConverter' in scope`, `** TEST BUILD FAILED **`.
@@ -6574,7 +7268,7 @@ enum PaneFrameConverter {
 - [ ] **Step 5: İki testi de çalıştır, PASS bekle**
 
 ```bash
-xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SplitLayoutMath -only-testing:TermoraTests/PaneFrameConverter 2>&1 | tail -20
+xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SplitLayoutMathTests -only-testing:TermoraTests/PaneFrameConverterTests 2>&1 | tail -20
 ```
 
 Beklenen: `Test run with 9 tests passed`, `** TEST SUCCEEDED **`.
@@ -6795,32 +7489,113 @@ xcodebuild build -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -sche
 
 Beklenen: hata yok, `** BUILD SUCCEEDED **`. (`PaneTreeView` henüz hiçbir yerden kullanılmıyor; bu adım yalnız tip/derleme doğrulaması.)
 
-- [ ] **Step 9: `MainWindowView`'da aktif sekme içeriğini `PaneTreeView` ile değiştir**
+- [ ] **Step 9: `PaneLeafView`'a "süreç sonlandı" bandını ekle**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` içinde, aktif sekmenin terminal içeriğini çizen bölümü aşağıdaki blokla değiştir (TabBar ve StatusBar çevresi aynen kalır):
+Spec §8: shell çıkınca panel açık kalır ve içinde `"İşlem sonlandı (çıkış kodu N)"` bandı görünür; Enter aynı panelde yeni oturum başlatır. Shell hiç başlatılamadıysa (Task 8 `createSession` içindeki `access(X_OK)` kontrolü `session.launchFailure`'a denenen yolu yazar) bandın metni ve düğmeleri kurtarma odaklıdır.
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Views/Terminal/PaneTreeView.swift` içindeki `private struct PaneLeafView`'ı **tamamen** şununla değiştir (dosyanın geri kalanı — `PaneTreeView`, `SplitContainerView`, `PaneDividerView`, `PaneFramesPreferenceKey` — aynen kalır):
 
 ```swift
-            if let tab = viewModel.activeTab {
-                GeometryReader { root in
-                    PaneTreeView(node: tab.root,
-                                 tabID: tab.id,
-                                 activePaneID: tab.activePaneID,
-                                 viewModel: viewModel,
-                                 sessionManager: sessionManager)
-                        .coordinateSpace(.named(PaneTreeView.coordinateSpaceName))
-                        .onPreferenceChange(PaneFramesPreferenceKey.self) { frames in
-                            let converted = PaneFrameConverter.appKitFrames(
-                                frames, containerHeight: root.size.height)
-                            Task { @MainActor in
-                                viewModel.paneFrames = converted
-                            }
-                        }
+private struct PaneLeafView: View {
+    let paneID: UUID
+    let sessionID: UUID
+    let isActive: Bool
+    let viewModel: WorkspaceViewModel
+    let sessionManager: SessionManager
+
+    /// The banner takes key focus when it appears, so Enter restarts the session
+    /// without the user having to click first.
+    @FocusState private var isBannerFocused: Bool
+
+    /// Reading the @Observable session here makes the leaf redraw when the shell exits.
+    private var session: TerminalSession? { sessionManager.session(id: sessionID) }
+
+    private var exitStatus: ExitStatus? {
+        guard case .exited(let status)? = session?.processState else { return nil }
+        return status
+    }
+
+    var body: some View {
+        TerminalHostView(sessionID: sessionID,
+                         sessionManager: sessionManager,
+                         isActive: isActive)
+            .overlay(alignment: .top) {
+                if let exitStatus {
+                    banner(exitStatus: exitStatus, failedPath: session?.launchFailure)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .overlay {
+                // The dimming layer only exists while inactive, so an active pane
+                // never intercepts clicks meant for the terminal (selection, links).
+                // It sits above the banner: clicking an inactive pane focuses it first.
+                if !isActive {
+                    Color.black.opacity(0.15)
+                        .contentShape(Rectangle())
+                        .onTapGesture { viewModel.activatePane(paneID: paneID) }
+                }
+            }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: PaneFramesPreferenceKey.self,
+                        value: [paneID: proxy.frame(in: .named(PaneTreeView.coordinateSpaceName))]
+                    )
+                }
+            )
+    }
+
+    /// Spec §8: the pane stays open after the process exits and offers a way back.
+    @ViewBuilder
+    private func banner(exitStatus: ExitStatus, failedPath: String?) -> some View {
+        HStack(spacing: 8) {
+            if let failedPath {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("'\(failedPath)' çalıştırılamadı")
+                Spacer(minLength: 8)
+                Button("Yeniden dene") {
+                    viewModel.restartPaneSession(paneID: paneID)
+                }
+                Button("Varsayılan shell ile dene") {
+                    viewModel.restartPaneSession(paneID: paneID, forceDefaultShell: true)
+                }
+            } else {
+                Text("İşlem sonlandı (\(exitStatus.localizedSummary))")
+                Spacer(minLength: 8)
+                Button("Yeniden başlat") {
+                    viewModel.restartPaneSession(paneID: paneID)
+                }
+            }
+        }
+        .font(.system(size: 11))
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.bar)
+        .focusable()
+        .focusEffectDisabled()
+        .focused($isBannerFocused)
+        .onKeyPress(.return) {
+            viewModel.restartPaneSession(paneID: paneID)
+            return .handled
+        }
+        .task { isBannerFocused = isActive }
+        .onChange(of: isActive) { _, active in
+            if active { isBannerFocused = true }
+        }
+        .accessibilityLabel(failedPath == nil
+                            ? "İşlem sonlandı: \(exitStatus.localizedSummary)"
+                            : "Shell çalıştırılamadı: \(failedPath ?? "")")
+    }
+}
 ```
 
-`.coordinateSpace(.named(_:))` macOS 14.0+ API'sidir (deprecate olan `coordinateSpace(name:)` değil). Çerçeveler SwiftUI düzeninde toplanır, `PaneFrameConverter` ile AppKit düzenine (y yukarı) çevrilip `viewModel.paneFrames`'e yazılır — `PaneGeometry` bu düzeni bekler.
+Notlar:
+- `focusable()`, `focusEffectDisabled()`, `onKeyPress(_:action:)` ve iki parametreli `onChange(of:)` macOS 14.0+ API'leridir.
+- Bant yalnız `processState == .exited(...)` iken var olur; süreç yeniden başlayınca (`SessionManager.restartSession` `processState`'i `.running` yapar) kaybolur ve odak terminale döner.
+- Karartma katmanı banttan SONRA eklenir; böylece pasif panelde bant düğmelerine değil, panele tıklanmış olur (önce odak, sonra düğme).
 
 - [ ] **Step 10: Derle, PASS bekle**
 
@@ -6830,7 +7605,47 @@ xcodebuild build -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -sche
 
 Beklenen: `** BUILD SUCCEEDED **`.
 
-- [ ] **Step 11: `AppCommands`'a panel menüsünü ekle**
+- [ ] **Step 11: `MainWindowView`'da aktif sekme içeriğini `PaneTreeView` ile değiştir**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` içindeki `terminalContent` hesaplanan özelliğinin **tamamını** aşağıdaki blokla değiştir (TabBar ve gövdenin geri kalanı aynen kalır). Görünümün özellikleri Task 12'de `private let services: AppServices` + `@State private var workspace: WorkspaceViewModel` olarak tanımlıdır; bu yüzden view model'e `workspace`, oturum yöneticisine `services.sessionManager` denir:
+
+```swift
+    @ViewBuilder
+    private var terminalContent: some View {
+        if let tab = workspace.activeTab {
+            GeometryReader { root in
+                PaneTreeView(node: tab.root,
+                             tabID: tab.id,
+                             activePaneID: tab.activePaneID,
+                             viewModel: workspace,
+                             sessionManager: services.sessionManager)
+                    .coordinateSpace(.named(PaneTreeView.coordinateSpaceName))
+                    .onPreferenceChange(PaneFramesPreferenceKey.self) { frames in
+                        let converted = PaneFrameConverter.appKitFrames(
+                            frames, containerHeight: root.size.height)
+                        Task { @MainActor in
+                            workspace.paneFrames = converted
+                        }
+                    }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Color.clear
+        }
+    }
+```
+
+`.coordinateSpace(.named(_:))` macOS 14.0+ API'sidir (deprecate olan `coordinateSpace(name:)` değil). Çerçeveler SwiftUI düzeninde toplanır, `PaneFrameConverter` ile AppKit düzenine (y yukarı) çevrilip `workspace.paneFrames`'e yazılır — `PaneGeometry` bu düzeni bekler.
+
+- [ ] **Step 12: Derle, PASS bekle**
+
+```bash
+xcodebuild build -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet 2>&1 | tail -20
+```
+
+Beklenen: `** BUILD SUCCEEDED **`.
+
+- [ ] **Step 13: `AppCommands`'a panel menüsünü ekle**
 
 `/Users/ahmetbarut/Apps/Termora/Termora/App/AppCommands.swift` içinde, mevcut sekme komutlarından sonra (`body: some Commands` içinde, son `}` öncesine) yeni bir menü ekle:
 
@@ -6875,7 +7690,7 @@ Beklenen: `** BUILD SUCCEEDED **`.
 
 Not: ⌘W sözleşme gereği aktif **sekmeyi** kapatır (panel odaklı olsa bile), bu yüzden panel kapatma ⌘⇧W'ye bağlandı.
 
-- [ ] **Step 12: Derle ve tüm testleri çalıştır, PASS bekle**
+- [ ] **Step 14: Derle ve tüm testleri çalıştır, PASS bekle**
 
 ```bash
 xcodebuild build -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet 2>&1 | tail -20
@@ -6884,7 +7699,7 @@ xcodebuild test -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -schem
 
 Beklenen: `** BUILD SUCCEEDED **` ve `** TEST SUCCEEDED **`.
 
-- [ ] **Step 13: Elle doğrulama — uygulamayı çalıştır ve bölme davranışını kontrol et**
+- [ ] **Step 15: Elle doğrulama — uygulamayı çalıştır ve bölme davranışını kontrol et**
 
 ```bash
 xcodebuild build -project /Users/ahmetbarut/Apps/Termora/Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -derivedDataPath /tmp/termora-dd -quiet && open /tmp/termora-dd/Build/Products/Debug/Termora.app
@@ -6902,13 +7717,17 @@ Kontrol listesi (her maddeyi gözle doğrula):
 9. Boşta bir panelde **⌘⇧W** → panel kapanır, kardeşi tüm alanı kaplar, odak kardeşe geçer.
 10. Bir panelde `sleep 60` çalıştırıp **⌘⇧W** → Task 12'de `pendingClose`'a bağlanan onay diyaloğu açılır; **İptal** panel açık bırakır, **Kapat** paneli kapatır.
 11. Tek panel kaldığında **⌘⇧W** → sekme kapatma davranışı devreye girer (sekme kapanır / onay istenir).
+12. Bir panelde `exit` yaz → panel kapanmaz; terminalin üstünde **"İşlem sonlandı (çıkış kodu 0)"** bandı ve **Yeniden başlat** düğmesi belirir. **Enter**'a bas → aynı panelde yeni prompt gelir, scrollback sıfırlanır, bant kaybolur. (`exit 3` ile bandın metninin `çıkış kodu 3` olduğunu da doğrula.)
+13. Ayarlar ▸ Genel'de shell yolunu geçersiz bir değere ayarla (ör. `/bin/yok`) ve ⌘D ile yeni panel aç → bant **"'/bin/yok' çalıştırılamadı"** metnini ve iki düğmeyi gösterir. **Varsayılan shell ile dene** → panelde varsayılan shell açılır (ayardaki bozuk yol yok sayılır); ayarı düzeltmeden kurtarma mümkündür.
 
-- [ ] **Step 14: Commit**
+- [ ] **Step 16: Commit**
 
 ```bash
 git -C /Users/ahmetbarut/Apps/Termora add Termora/Views/Terminal/PaneTreeView.swift Termora/Views/MainWindowView.swift Termora/App/AppCommands.swift
-git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: render pane tree with draggable dividers and split shortcuts"
+git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: render pane tree with dividers, split shortcuts and process-exited banner"
 ```
+
+---
 
 ---
 
@@ -6924,6 +7743,9 @@ git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: render pane tree with dra
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/Settings/AppearanceSettingsView.swift`
 - Create: `/Users/ahmetbarut/Apps/Termora/Termora/Views/Settings/SettingsWindowView.swift`
 - Modify: `/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift`
+- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` (font çözümü `FontCatalog.resolvedFont`'a taşınır — Step 20)
+- Modify: `/Users/ahmetbarut/Apps/Termora/TermoraTests/SessionManagerTests.swift` (font çözümleme testleri `FontCatalogTests`'e taşınır — Step 20)
+- Delete: `/Users/ahmetbarut/Apps/Termora/Termora/Views/SettingsPlaceholderView.swift` (Task 10'un yer tutucusu gerçek ayarlar penceresiyle değişir)
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/SettingsLimitsTests.swift`
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/FontCatalogTests.swift`
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/AppearanceOptionsTests.swift`
@@ -6935,8 +7757,9 @@ git -C /Users/ahmetbarut/Apps/Termora commit -m "feat: render pane tree with dra
 - Task 5: `final class ThemeStore { let themes: [Theme]; func theme(id: String) -> Theme }`, `struct Theme: Codable, Identifiable, Equatable { var id: String; var name: String; ...; var ansi: [String] }`, `extension Theme { var backgroundNSColor: NSColor; var foregroundNSColor: NSColor; var cursorNSColor: NSColor }`, `extension NSColor { convenience init?(hexString: String) }`
 - Task 6: `@MainActor @Observable final class SettingsStore { init(defaults: UserDefaults = .standard); var settings: AppSettings }`, `struct AppSettings: Codable, Equatable { var fontName: String?; var fontSize: Double; var lineSpacing: Double; var cursorStyle: CursorStyleSetting; var themeID: String; var windowOpacity: Double; var scrollbackLines: Int; var defaultShellPath: String?; var startupDirectory: String?; var showStatusBar: Bool }`, `enum CursorStyleSetting: String, Codable, CaseIterable`
 - Task 7: `@MainActor @Observable final class ProfileStore { var profiles: [TerminalProfile] }` (yalnız `SettingsWindowView`'a taşınır; Profiller sekmesi Task 19'da eklenir)
-- Task 8: `@MainActor @Observable final class SessionManager { func applyAppearanceToAllSessions() }`
-- Task 13/17: `Termora/App/TermoraApp.swift` içinde `WindowGroup { ... }` sahnesi ve `settings: SettingsStore`, `themes: ThemeStore`, `profiles: ProfileStore`, `sessionManager: SessionManager` özellikleri
+- Task 8: `@MainActor @Observable final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate` — `func applyAppearanceToAllSessions()`, `applyAppearance(to view: TermoraTerminalView, sessionID: UUID)`, `static func resolveFont(name: String?, size: Double) -> NSFont` (bu görevin Step 20'sinde `FontCatalog.resolvedFont` ile değiştirilip silinir)
+- Task 10: `struct SettingsPlaceholderView: View` (Step 7) + `TermoraApp` içindeki `Settings { SettingsPlaceholderView() }` sahnesi (Step 8) — bu görevin Step 22'sinde gerçek ayarlar penceresiyle değiştirilir ve yer tutucu dosya silinir
+- Task 13/17: `Termora/App/TermoraApp.swift` içinde `WindowGroup { ... }` sahnesi, `.commands { AppCommands() }` modifier'ı ve `private let services = AppServices()` özelliği — servislere `services.settings`, `services.themes`, `services.profiles`, `services.sessionManager` ile erişilir; `TermoraApp` kapsamında çıplak `settings`/`themes`/`profiles`/`sessionManager` adları YOKTUR
 
 *Produces:*
 - `enum SettingsLimits { static let scrollbackRange: ClosedRange<Int>; static let fontSizeRange: ClosedRange<Double>; static let lineSpacingRange: ClosedRange<Double>; static let opacityRange: ClosedRange<Double>; static func clampScrollback(_ value: Int) -> Int; static func clampFontSize(_ value: Double) -> Double; static func clampLineSpacing(_ value: Double) -> Double; static func clampOpacity(_ value: Double) -> Double; static func scrollback(fromText text: String, fallback: Int) -> Int }`
@@ -7114,6 +7937,26 @@ struct FontCatalogTests {
     @Test func emptyInputStillYieldsUsableList() {
         let result = FontCatalog.monospacedFamilies(from: [], isFixedPitch: { _ in true })
         #expect(result == ["Menlo"])
+    }
+
+    // Step 20'de `SessionManager.resolveFont`'un yerini aldığı için font çözümlemesinin
+    // karakterizasyon testleri de buraya taşınır.
+
+    @Test func resolvedFontFallsBackWhenTheFamilyIsMissingOrUnknown() {
+        #expect(FontCatalog.resolvedFont(name: nil, size: 13).pointSize == 13)
+        #expect(FontCatalog.resolvedFont(name: "", size: 17).pointSize == 17)
+        #expect(FontCatalog.resolvedFont(name: "ThereIsNoSuchFont-42", size: 17).pointSize == 17)
+    }
+
+    @Test func resolvedFontHonoursAnInstalledFamily() {
+        let menlo = FontCatalog.resolvedFont(name: "Menlo", size: 15)
+        #expect(menlo.familyName == "Menlo")
+        #expect(menlo.pointSize == 15)
+    }
+
+    @Test func resolvedFontSizeIsClamped() {
+        #expect(FontCatalog.resolvedFont(name: nil, size: 400).pointSize == SettingsLimits.fontSizeRange.upperBound)
+        #expect(FontCatalog.resolvedFont(name: nil, size: 1).pointSize == SettingsLimits.fontSizeRange.lowerBound)
     }
 }
 ```
@@ -7664,7 +8507,37 @@ cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj
 
 Beklenen: çıktı yok, çıkış kodu 0.
 
-- [ ] **Step 20: `SettingsWindowView.swift` dosyasını yaz**
+- [ ] **Step 20: Terminale font uygulama yolunu `FontCatalog`'a bağla**
+
+Step 19'daki seçici AİLE adı yazar ("SF Mono", "Menlo"), ama Task 8'in `SessionManager`'ı fontu `NSFont(name:size:)` ile, yani PostScript adı bekleyerek çözer: `NSFont(name: "SF Mono", size:)` **nil döner** ve kullanıcının seçtiği font sessizce sistem monospace'ine düşer. Üç düzenleme yapılır:
+
+**(a)** `/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içindeki `applyAppearance(to:sessionID:)` gövdesinde şu satır:
+
+```swift
+        view.font = Self.resolveFont(name: current.fontName, size: current.fontSize)
+```
+
+şununla değiştirilir:
+
+```swift
+        view.font = FontCatalog.resolvedFont(name: current.fontName, size: current.fontSize)
+```
+
+**(b)** Aynı dosyadaki `static func resolveFont(name:size:)` metodu ve üstündeki doküman yorumu SİLİNİR — artık çağıranı yoktur.
+
+**(c)** `/Users/ahmetbarut/Apps/Termora/TermoraTests/SessionManagerTests.swift` içindeki `fontResolutionFallsBackToTheMonospacedSystemFont` ve `fontResolutionHonoursAnInstalledFont` testleri SİLİNİR; karşılıkları Step 6'da `FontCatalogTests`'e yazıldı (`resolvedFontFallsBackWhenTheFamilyIsMissingOrUnknown`, `resolvedFontHonoursAnInstalledFamily`).
+
+Not: Task 19 Step 11 bu görünüm uygulama bölümünü profil çözümleyicisiyle yeniden yazar ama `FontCatalog.resolvedFont` çağrısını korur.
+
+Derle ve iki süiti birlikte koştur:
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/SessionManagerTests -only-testing:TermoraTests/FontCatalogTests 2>&1 | tail -20
+```
+
+Beklenen: `** TEST SUCCEEDED **` (silinen iki test artık `FontCatalogTests` altında sayılır).
+
+- [ ] **Step 21: `SettingsWindowView.swift` dosyasını yaz**
 
 `/Users/ahmetbarut/Apps/Termora/Termora/Views/Settings/SettingsWindowView.swift`:
 
@@ -7698,26 +8571,34 @@ cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj
 
 Beklenen: çıktı yok, çıkış kodu 0.
 
-- [ ] **Step 21: `TermoraApp.swift`'i bağla — Settings sahnesi + pencere saydamlığı + canlı uygulama**
+- [ ] **Step 22: `TermoraApp.swift`'i bağla — Settings sahnesi + pencere saydamlığı + canlı uygulama**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` üzerinde iki düzenleme yapılır; Task 13/17'de yazılan `WindowGroup` içeriğinin kök görünüm çağrısına dokunulmaz.
+`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` üzerinde iki düzenleme yapılır; Task 13/17'de yazılan `WindowGroup` içeriğinin kök görünüm çağrısına dokunulmaz. `TermoraApp`'in tek özelliği `services` olduğu için tüm servis erişimleri `services.` önekiyle yazılır.
 
 **(a)** `WindowGroup { ... }` içindeki kök görünüm ifadesinin sonuna aşağıdaki iki modifier zinciri eklenir:
 
 ```swift
                 .termoraWindowChrome(
-                    opacity: SettingsLimits.clampOpacity(settings.settings.windowOpacity),
-                    backgroundColor: themes.theme(id: settings.settings.themeID).backgroundNSColor
+                    opacity: SettingsLimits.clampOpacity(services.settings.settings.windowOpacity),
+                    backgroundColor: services.themes.theme(id: services.settings.settings.themeID).backgroundNSColor
                 )
-                .syncingTerminalAppearance(settings: settings, sessionManager: sessionManager)
+                .syncingTerminalAppearance(settings: services.settings, sessionManager: services.sessionManager)
 ```
 
-**(b)** `body: some Scene` içinde, `WindowGroup { ... }` bloğunun (ve varsa `.commands { ... }` modifier'ının) hemen ardına Settings sahnesi eklenir:
+**(b)** `body: some Scene` içindeki mevcut `Settings { SettingsPlaceholderView() }` sahnesinin (Task 10 Step 8'de eklendi) gövdesi gerçek ayarlar penceresiyle değiştirilir — sahne bulunamazsa `WindowGroup { ... }` bloğunun ve ona bağlı `.commands { ... }` modifier'ının hemen ardına yeni sahne olarak eklenir:
 
 ```swift
         Settings {
-            SettingsWindowView(settings: settings, themes: themes, profiles: profiles)
+            SettingsWindowView(settings: services.settings,
+                               themes: services.themes,
+                               profiles: services.profiles)
         }
+```
+
+**(c)** Yer tutucu artık referanssız kaldığı için silinir:
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && git rm Termora/Views/SettingsPlaceholderView.swift
 ```
 
 Derle:
@@ -7737,11 +8618,13 @@ Beklenen: çıktı yok, çıkış kodu 0.
 6. Görünüm sekmesi: Saydamlık kaydırıcısını %70'e çek → terminal penceresi arkasındaki masaüstü/pencereler bulanık olarak görünür; %100'e geri al → pencere tekrar opak olur.
 7. Ayarlar penceresini kapat, uygulamayı kapatıp yeniden aç → seçilen tema/font/saydamlık korunmuş olmalı.
 
-- [ ] **Step 22: Commit**
+- [ ] **Step 23: Commit**
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: add settings window with general and appearance tabs"
 ```
+
+---
 
 ---
 
@@ -7760,7 +8643,7 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: add sett
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/EnvironmentEditingTests.swift`
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/AppearanceResolverTests.swift`
 - Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/WorkspaceProfileTests.swift`
-- Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/Support/ProfileLaunchMockSessionManager.swift`
+- Test: `/Users/ahmetbarut/Apps/Termora/TermoraTests/ProfileLaunchMockSessionManager.swift` (test dosyaları `TermoraTests/` kökünde durur; `Support/` alt klasörü yoktur)
 
 **Interfaces:**
 
@@ -7769,12 +8652,13 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: add sett
 - Task 5: `final class ThemeStore { let themes: [Theme]; func theme(id: String) -> Theme }`, `extension Theme { func swiftTermAnsiColors() -> [SwiftTerm.Color]; var backgroundNSColor/foregroundNSColor/cursorNSColor: NSColor }`
 - Task 6: `struct AppSettings`, `enum CursorStyleSetting { var swiftTermStyle: SwiftTerm.CursorStyle }`, `@MainActor @Observable final class SettingsStore { var settings: AppSettings }`
 - Task 7: `struct TerminalProfile: Codable, Identifiable, Equatable { var id: UUID; var name: String; var shellPath: String?; var startupDirectory: String?; var startupCommand: String?; var fontName: String?; var fontSize: Double?; var themeID: String?; var environment: [String: String] }`, `@MainActor @Observable final class ProfileStore { init(defaults: UserDefaults = .standard); var profiles: [TerminalProfile] }`
-- Task 8: `@MainActor @Observable final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate` — `init(settings: SettingsStore, themes: ThemeStore, profiles: ProfileStore)`; depolanan özellikler `private let settings: SettingsStore`, `private let themes: ThemeStore`, `private let profiles: ProfileStore`, `private var terminalViews: [UUID: TermoraTerminalView]`, `private var sessions: [UUID: TerminalSession]`; `func applyAppearanceToAllSessions()`
+- Task 8: `@MainActor @Observable final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate` — `init(settings: SettingsStore, themes: ThemeStore, profiles: ProfileStore, escalationDelay: TimeInterval = 1.5)`; depolanan özellikler `private let settings: SettingsStore`, `private let themes: ThemeStore`, `private let profiles: ProfileStore`, `private var sessions: [UUID: TerminalSession]`, `@ObservationIgnored private var views: [UUID: TermoraTerminalView]`; `func applyAppearanceToAllSessions()`, `applyAppearance(to view: TermoraTerminalView, sessionID: UUID)`. **`profiles` Task 8'de zaten enjekte edilmiştir — bu görev init imzasına DOKUNMAZ, yalnız kullanır.**
 - Task 8: `@MainActor protocol SessionManaging: AnyObject { func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession; func session(id: UUID) -> TerminalSession?; func terminateSession(id: UUID); func hasRunningProcess(sessionID: UUID) -> Bool }`, `@Observable final class TerminalSession: Identifiable { init(id: UUID = UUID(), shellPath: String, profileID: UUID? = nil, workingDirectory: String? = nil) }`
 - Task 11: `@MainActor @Observable final class WorkspaceViewModel { init(sessionManager: any SessionManaging, settings: SettingsStore, profiles: ProfileStore); private(set) var tabs: [TerminalTab]; var activeTab: TerminalTab?; func newTab(profile: TerminalProfile? = nil) }`, `@Observable final class TerminalTab { var root: PaneNode; var activePaneID: UUID }`
 - Task 13: `extension FocusedValues { var workspace: WorkspaceViewModel? { get set } }`
 - Task 14: `indirect enum PaneNode { var leaves: [(paneID: UUID, sessionID: UUID)] { get } }`
-- Task 18: `enum SettingsLimits`, `enum FontCatalog`, `extension CursorStyleSetting { var displayName: String }`, `struct SettingsWindowView { let settings: SettingsStore; let themes: ThemeStore; let profiles: ProfileStore }`
+- Task 18: `enum SettingsLimits`, `enum FontCatalog { @MainActor static func availableMonospacedFamilies() -> [String]; @MainActor static func resolvedFont(name: String?, size: Double) -> NSFont }` (Task 18 Step 20 `SessionManager`'ın font çözümünü zaten buna bağladı), `extension CursorStyleSetting { var displayName: String }`, `struct SettingsWindowView { let settings: SettingsStore; let themes: ThemeStore; let profiles: ProfileStore }`
+- Task 12/13: `struct TermoraApp: App` içinde `private let services = AppServices()` — servislere `services.settings`, `services.themes`, `services.profiles`, `services.sessionManager` ile erişilir; `TermoraApp` kapsamında çıplak `profiles` adı YOKTUR
 
 *Produces:*
 - `struct EnvironmentEntry: Identifiable, Equatable { let id: UUID; var key: String; var value: String; init(id: UUID = UUID(), key: String, value: String) }`
@@ -8016,13 +8900,25 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: resolve 
 
 - [ ] **Step 11: `SessionManager`'ın görünüm uygulama bölümünü resolver'a bağla**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içinde Task 8'de yazılan görünüm uygulama bölümü aşağıdaki üç metotla değiştirilir (dosyanın kalanına dokunulmaz):
+`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içinde Task 8'de yazılan `// MARK: - Appearance` bölümü aşağıdaki üç metotla değiştirilir (dosyanın kalanına dokunulmaz). Bu adım **yalnız görünüm çözümünü** profil farkındalığına taşır:
+
+- `init` imzasına DOKUNULMAZ — `profiles: ProfileStore` Task 8'de zaten enjekte edilmiş ve `private let profiles` olarak saklanmıştır; çağrı yerleri (AppServices, testler) değişmez.
+- Metot adı Task 8'deki `applyAppearance(to:sessionID:)` ile aynı kalır, bu yüzden `createSession` içindeki çağrı olduğu gibi çalışır.
+- View cache'inin adı Task 8'deki gibi `views`'tir (`terminalViews` DEĞİL).
+
+Önce seçim rengi erişimcisinin ve SwiftTerm özelliğinin varlığını doğrula:
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && grep -n "selectionNSColor" Termora/Models/Theme.swift; grep -rn "var selectedTextBackgroundColor" ~/Library/Developer/Xcode/DerivedData/*/SourcePackages/checkouts/SwiftTerm/Sources/SwiftTerm/Apple/AppleTerminalView.swift
+```
+
+İkisinden biri bulunamazsa aşağıdaki `view.selectedTextBackgroundColor = ...` satırı çıkarılır (tema `selection` alanı MVP'de uygulanmamış sayılır); diğer satırlar aynen kalır.
 
 ```swift
     // MARK: - Görünüm uygulama
 
     func applyAppearanceToAllSessions() {
-        for (sessionID, view) in terminalViews {
+        for (sessionID, view) in views {
             applyAppearance(to: view, sessionID: sessionID)
         }
     }
@@ -8036,15 +8932,16 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: resolve 
         let opacity = SettingsLimits.clampOpacity(appSettings.windowOpacity)
 
         view.font = FontCatalog.resolvedFont(name: resolved.fontName, size: resolved.fontSize)
-        view.lineSpacing = SettingsLimits.clampLineSpacing(appSettings.lineSpacing)
-        view.nativeBackgroundColor = theme.backgroundNSColor.withAlphaComponent(opacity)
+        view.lineSpacing = CGFloat(SettingsLimits.clampLineSpacing(appSettings.lineSpacing))
+        view.nativeBackgroundColor = theme.backgroundNSColor.withAlphaComponent(CGFloat(opacity))
         view.nativeForegroundColor = theme.foregroundNSColor
         view.caretColor = theme.cursorNSColor
+        view.selectedTextBackgroundColor = theme.selectionNSColor
         view.installColors(theme.swiftTermAnsiColors())
 
-        let terminal = view.getTerminal()
-        terminal.setCursorStyle(appSettings.cursorStyle.swiftTermStyle)
-        terminal.changeScrollback(SettingsLimits.clampScrollback(appSettings.scrollbackLines))
+        // `TerminalView.changeScrollback` scroller'ı da günceller; `Terminal.changeScrollback` güncellemez.
+        view.changeScrollback(SettingsLimits.clampScrollback(appSettings.scrollbackLines))
+        view.getTerminal().setCursorStyle(appSettings.cursorStyle.swiftTermStyle)
     }
 
     private func profile(forSession sessionID: UUID) -> TerminalProfile? {
@@ -8110,7 +9007,7 @@ struct WorkspaceProfileTests {
         #expect(mock.createCalls.last?.profile?.shellPath == "/opt/homebrew/bin/fish")
     }
 
-    @Test func newTabWithProfileCreatesSessionWithProfileShellAndDirectory() {
+    @Test func newTabWithProfileCreatesSessionWithProfileShellAndDirectory() throws {
         let (workspace, mock, _) = makeWorkspace()
         let profile = TerminalProfile(
             name: "Fish",
@@ -8120,25 +9017,25 @@ struct WorkspaceProfileTests {
 
         workspace.newTab(profile: profile)
 
-        let tab = try! #require(workspace.activeTab)
+        let tab = try #require(workspace.activeTab)
         let leaves = tab.root.leaves
         #expect(leaves.count == 1)
-        let session = try! #require(mock.session(id: leaves[0].sessionID))
+        let session = try #require(mock.session(id: leaves[0].sessionID))
         #expect(session.shellPath == "/opt/homebrew/bin/fish")
         #expect(session.workingDirectory == "/tmp")
         #expect(session.profileID == profile.id)
     }
 
-    @Test func newTabWithoutProfileUsesDefaultShell() {
+    @Test func newTabWithoutProfileUsesDefaultShell() throws {
         let (workspace, mock, _) = makeWorkspace()
 
         workspace.newTab()
 
         #expect(mock.createCalls.count == 1)
         #expect(mock.createCalls.last?.profile == nil)
-        let tab = try! #require(workspace.activeTab)
-        let session = try! #require(mock.session(id: tab.root.leaves[0].sessionID))
-        #expect(session.shellPath == mock.fallbackShellPath)
+        let tab = try #require(workspace.activeTab)
+        let session = try #require(mock.session(id: tab.root.leaves[0].sessionID))
+        #expect(session.shellPath == mock.defaultShellPath)
         #expect(session.profileID == nil)
     }
 
@@ -8167,7 +9064,7 @@ Beklenen: `error: cannot find 'ProfileLaunchMockSessionManager' in scope` ve `**
 
 - [ ] **Step 14: `ProfileLaunchMockSessionManager.swift` dosyasını yaz**
 
-`/Users/ahmetbarut/Apps/Termora/TermoraTests/Support/ProfileLaunchMockSessionManager.swift`:
+`/Users/ahmetbarut/Apps/Termora/TermoraTests/ProfileLaunchMockSessionManager.swift`:
 
 ```swift
 import Foundation
@@ -8175,6 +9072,12 @@ import Foundation
 
 /// `SessionManaging`'in kayıt tutan sahtesi: gerçek PTY açmadan
 /// `createSession` çağrılarının argümanlarını doğrulamayı sağlar.
+///
+/// Task 11'in `MockSessionManager`'ından ayrı durur çünkü burada gereken iki şeyi
+/// modeller: çağrı argümanlarını ÇİFT olarak saklamak ve gerçek `SessionManager`'ın
+/// `workingDirectory ?? profile?.startupDirectory` geri düşme zincirini taklit etmek.
+/// Ortak üye adları (`defaultShellPath`, `busySessionIDs`, `terminatedSessionIDs`)
+/// bilerek `MockSessionManager` ile aynı tutulur.
 @MainActor
 final class ProfileLaunchMockSessionManager: SessionManaging {
 
@@ -8184,18 +9087,20 @@ final class ProfileLaunchMockSessionManager: SessionManaging {
     }
 
     private(set) var createCalls: [CreateCall] = []
-    private(set) var terminatedIDs: [UUID] = []
+    private(set) var terminatedSessionIDs: [UUID] = []
     private var sessionsByID: [UUID: TerminalSession] = [:]
 
     /// Profil kabuk belirtmediğinde kullanılacak yol (gerçek `SessionManager`'daki
     /// "profil → ayar → ShellService.defaultShellPath" zincirinin sahte karşılığı).
-    var fallbackShellPath = "/bin/zsh"
-    var runningSessionIDs: Set<UUID> = []
+    var defaultShellPath = "/bin/zsh"
+
+    /// Bu kümedeki oturumlar "çalışan işlem var" olarak raporlanır.
+    var busySessionIDs: Set<UUID> = []
 
     func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession {
         createCalls.append(CreateCall(profile: profile, workingDirectory: workingDirectory))
         let session = TerminalSession(
-            shellPath: profile?.shellPath ?? fallbackShellPath,
+            shellPath: profile?.shellPath ?? defaultShellPath,
             profileID: profile?.id,
             workingDirectory: workingDirectory ?? profile?.startupDirectory
         )
@@ -8208,13 +9113,13 @@ final class ProfileLaunchMockSessionManager: SessionManaging {
     }
 
     func terminateSession(id: UUID) {
-        terminatedIDs.append(id)
+        terminatedSessionIDs.append(id)
         sessionsByID[id] = nil
-        runningSessionIDs.remove(id)
+        busySessionIDs.remove(id)
     }
 
     func hasRunningProcess(sessionID: UUID) -> Bool {
-        runningSessionIDs.contains(sessionID)
+        busySessionIDs.contains(sessionID)
     }
 }
 ```
@@ -8618,10 +9523,10 @@ struct ProfileCommands: Commands {
 }
 ```
 
-`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` içinde `WindowGroup`'a bağlı `.commands { ... }` bloğunun içine, Task 13'te eklenen `AppCommands()` satırının hemen ardına eklenir:
+`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` içinde `WindowGroup`'a bağlı `.commands { ... }` bloğunun içine, Task 13'te eklenen `AppCommands()` satırının hemen ardına eklenir (`TermoraApp`'in tek özelliği `services` olduğu için profil deposuna `services.profiles` ile erişilir):
 
 ```swift
-            ProfileCommands(profiles: profiles)
+            ProfileCommands(profiles: services.profiles)
 ```
 
 Derle:
@@ -8648,6 +9553,8 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: add prof
 
 ---
 
+---
+
 ### Task 20: Arama çubuğu (M5)
 
 **Files:**
@@ -8670,7 +9577,7 @@ Consumes:
 - `SessionManager` (Task 8): `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`
 - `SessionManaging` (Task 8): `func createSession(profile:workingDirectory:) -> TerminalSession`, `func session(id:) -> TerminalSession?`, `func terminateSession(id:)`, `func hasRunningProcess(sessionID:) -> Bool`
 - `MainWindowView` (M2 görevi), `AppCommands` + `@FocusedValue(\.workspace)` (Task 13)
-- SwiftTerm: `TerminalView.findNext(_:options:scrollToResult:) -> Bool`, `findPrevious(_:options:scrollToResult:) -> Bool`, `searchMatchSummary(_:options:limit:) -> (index: Int, total: Int)`, `clearSearch()`, `SearchOptions(caseSensitive:regex:wholeWord:)`
+- SwiftTerm: `TerminalView.findNext(_:options:scrollToResult:) -> Bool`, `findPrevious(_:options:scrollToResult:) -> Bool`, `searchMatchSummary(_:options:limit:) -> (index: Int, total: Int)`, `clearSearch()`, `SearchOptions(caseSensitive:regex:wholeWord:)` — **bu beş sembol planın "Ek: Kaynak Kodda Doğrulanmış SwiftTerm Sembolleri" listesinde YOK; imzaları Step 13'ün başındaki doğrulama alt adımında kaynaktan okunur ve gerekiyorsa kod ona uydurulur.**
 
 Produces:
 ```swift
@@ -8702,6 +9609,7 @@ import Testing
 @testable import Termora
 
 @Suite("SearchSummaryFormatter")
+@MainActor
 struct SearchSummaryFormatterTests {
 
     @Test func formatsActiveMatchOverTotal() {
@@ -8780,6 +9688,7 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/Models/SearchSummary.swift 
 
 ```swift
 @Suite("TerminalTab search state")
+@MainActor
 struct TerminalTabSearchStateTests {
 
     @Test func newTabStartsWithEmptySearchState() {
@@ -8992,7 +9901,20 @@ Beklenen: `error: cannot find type 'TerminalSearchRunner' in scope` ve `error: v
 
 - [ ] **Step 13: TerminalSearchRunner protokolünü ve SessionManager uyumunu yaz**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Services/TerminalSearchRunner.swift` oluştur:
+**(a) Önce SwiftTerm arama API'sinin imzalarını kaynaktan doğrula.** Planın diğer SwiftTerm çağrılarının aksine bu beş sembol "Ek: Kaynak Kodda Doğrulanmış SwiftTerm Sembolleri" listesinde yok:
+
+```bash
+CHECKOUT=$(ls -d ~/Library/Developer/Xcode/DerivedData/Termora-*/SourcePackages/checkouts/SwiftTerm 2>/dev/null | head -1)
+grep -rn "func findNext\|func findPrevious\|func searchMatchSummary\|func clearSearch\|struct SearchOptions\|public init(caseSensitive" "$CHECKOUT/Sources/SwiftTerm" | head -20
+```
+
+Çıktıya göre aşağıdaki kodu düzelt:
+- `scrollToResult` parametresinin **varsayılan değeri yoksa** `findNext` / `findPrevious` çağrılarını `view.findNext(query.term, options: query.swiftTermOptions, scrollToResult: true)` biçimine çevir.
+- `searchMatchSummary` dönüş etiketleri `(index:total:)` değilse `SearchSummary(index:total:)` dönüşümünü gerçek etiketlerle yaz; metot yoksa `matchSummary` gövdesini `findNext` sonucundan türetilen `SearchSummary(index: found ? 1 : 0, total: found ? 1 : 0)` ile doldurmak yerine `.empty` döndür ve Step 21 elle doğrulamasının 3-5. maddelerini "sayaç gösterilmiyor" notuyla işaretle.
+- `SearchOptions` init etiketleri farklıysa `swiftTermOptions` gövdesini ona uydur.
+- Doğrulanan imzaları planın sonundaki "Ek: Kaynak Kodda Doğrulanmış SwiftTerm Sembolleri" bölümüne ekle.
+
+**(b)** `/Users/ahmetbarut/Apps/Termora/Termora/Services/TerminalSearchRunner.swift` oluştur:
 
 ```swift
 import Foundation
@@ -9273,6 +10195,8 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/SearchBarView.swift T
 
 ---
 
+---
+
 ### Task 21: Durum çubuğu + GitBranchReader (M5)
 
 **Files:**
@@ -9293,11 +10217,11 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/SearchBarView.swift T
 Consumes:
 - `TerminalSession` (Task 8): `let shellPath: String`, `var workingDirectory: String?`
 - `SessionManaging` (Task 8): `func session(id: UUID) -> TerminalSession?`, `func hasRunningProcess(sessionID: UUID) -> Bool`
-- `SessionManager` (Task 8): `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`, `LocalProcessTerminalViewDelegate.sizeChanged(source:newCols:newRows:)` gerçeklemesi
+- `SessionManager` (Task 8): `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`, sınıf gövdesindeki `nonisolated func sizeChanged(source:newCols:newRows:)` delegate metodu (minimal gövdeyle; bu görevde doldurulur — `nonisolated` + `MainActor.assumeIsolated` kalıbı korunur)
 - `TermoraTerminalView` (Task 8): `let sessionID: UUID`, SwiftTerm `process: LocalProcess!` → `process.shellPid`
 - `ProcessProbe` (Task 9): `static func currentWorkingDirectory(pid: pid_t) -> String?`
 - `SettingsStore` (Task 6): `var settings: AppSettings`, `AppSettings.showStatusBar`
-- `WorkspaceViewModel` (Task 11/16): `var activeTab`, `private let sessionManager: any SessionManaging`, `private let settings: SettingsStore` (Task 11'de bu adlarla saklandı)
+- `WorkspaceViewModel` (Task 11/16): `var activeTab`, `private let sessionManager: any SessionManaging`, `private let settings: SettingsStore` (Task 11'de bu adlarla saklandı), `func syncAutomaticTitles()` + `var sessionTitleDigest: String` — Task 11'de otomatik başlık, `session.title` boşsa `session.workingDirectory`'nin son bileşenine düşer. `session.workingDirectory`'yi canlı tutan tek yazıcı bu görevdeki `statusSnapshot()`'tır (libproc, 1 Hz) ve `sessionTitleDigest` yalnız `session.title`'ı izlediği için cwd değişimi Task 12/13'teki `.onChange(of: sessionTitleDigest)` kancasını tetiklemez; bu yüzden `statusSnapshot()` cwd'yi tazeledikten sonra `syncAutomaticTitles()`'ı kendisi çağırır (Step 15) ve sonuç Step 21 madde 4'te doğrulanır.
 - `PaneNode.sessionID(ofPane:)` (Task 14), `TerminalTab.root/activePaneID` (Task 11), `MainWindowView`
 
 Produces:
@@ -9328,6 +10252,7 @@ import Testing
 @testable import Termora
 
 @Suite("GitBranchReader")
+@MainActor
 struct GitBranchReaderTests {
 
     private func makeTempDirectory() throws -> URL {
@@ -9507,6 +10432,7 @@ import Testing
 @testable import Termora
 
 @Suite("PathDisplay")
+@MainActor
 struct PathDisplayTests {
 
     @Test func replacesHomePrefixWithTilde() {
@@ -9699,13 +10625,15 @@ Beklenen: `error: value of type 'TerminalSession' has no member 'terminalSize'` 
     var terminalSize: (cols: Int, rows: Int)?
 ```
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içindeki `sizeChanged` delegate gerçeklemesinin gövdesini şu hâle getir (Task 8'de boş bırakılmıştı):
+`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içindeki `sizeChanged` delegate metodunu **tamamen** şununla değiştir (Task 8 Step 18'de minimal gövdeyle yazılmıştı; `nonisolated` işareti ve `MainActor.assumeIsolated` sarmalayıcısı Task 8'in dört delegate metodunda kullanılan kalıptır — proje `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ile derlendiği için `LocalProcessTerminalViewDelegate` uyumu ancak böyle sağlanır, kalıptan sapma Swift 6'da hatadır):
 
 ```swift
-    func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
-        guard let view = source as? TermoraTerminalView,
-              let session = session(id: view.sessionID) else { return }
-        session.terminalSize = (cols: newCols, rows: newRows)
+    nonisolated func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
+        MainActor.assumeIsolated {
+            guard let view = source as? TermoraTerminalView,
+                  let session = self.session(id: view.sessionID) else { return }
+            session.terminalSize = (cols: newCols, rows: newRows)
+        }
     }
 ```
 
@@ -9766,8 +10694,13 @@ extension SessionManager: TerminalProcessInfoProviding {
         let probedDirectory = processInfoProvider
             .flatMap { $0.shellPID(sessionID: sessionID) }
             .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
-        if let probedDirectory {
+        if let probedDirectory, probedDirectory != session.workingDirectory {
             session.workingDirectory = probedDirectory
+            // Sekme başlığı da cwd'ye düşebiliyor (Task 11 `syncAutomaticTitles`), ama onu
+            // tetikleyen `sessionTitleDigest` yalnız `session.title`'ı izler — cwd değişimi
+            // MainWindowView'ın .onChange kancasını uyandırmaz. cwd'yi tazeleyen tek okuma
+            // burası olduğu için başlıkları da burada eşitliyoruz (aynı 1 Hz bütçesi içinde).
+            syncAutomaticTitles()
         }
         let directory = probedDirectory ?? session.workingDirectory
         let size = session.terminalSize ?? (cols: 0, rows: 0)
@@ -9795,6 +10728,838 @@ Beklenen: `** TEST SUCCEEDED **` (4 test).
 
 ```bash
 cd /Users/ahmetbarut/Apps/Termora && git add Termora/Models/TerminalSession.swift Termora/Services/SessionManager.swift Termora/Services/TerminalProcessInfoProviding.swift Termora/ViewModels/WorkspaceViewModel.swift TermoraTests/StatusSnapshotTests.swift && git commit -m "feat: expose terminal size and status snapshot for status bar"
+```
+
+- [ ] **Step 18: StatusBarView'ı yaz**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Views/StatusBarView.swift` oluştur (Task 21'in **Files:** bloğunda ilan edilen yol; `TabBarView.swift` / `SearchBarView.swift` ile aynı klasör):
+
+```swift
+import Combine
+import SwiftUI
+
+/// Aktif sekmenin aktif panelinin durumu: shell adı, çalışma dizini (~ kısaltmalı),
+/// git dalı, terminal boyutu (cols×rows) ve işlem göstergesi.
+///
+/// Veri `WorkspaceViewModel.statusSnapshot()` ile çekilir. Spec §10 gereği en fazla 1 Hz
+/// ve yalnız görünür sekme için okunur: `statusSnapshot()` `libproc` ile cwd sorgular ve
+/// `.git/HEAD` okur — her yeniden çizimde çalıştırılamaz, bu yüzden değer `@State`'te tutulur.
+struct StatusBarView: View {
+
+    let workspace: WorkspaceViewModel
+
+    @State private var snapshot: WorkspaceViewModel.StatusSnapshot?
+
+    /// `@State` bilerek: `Timer.publish(...)` her `body` değerlendirmesinde YENİ bir publisher
+    /// üretir; `let` özellik olarak tutulsaydı `onReceive` her yeniden çizimde yeniden abone
+    /// olur ve 1 sn'lik sayaç sürekli baştan başlardı (sık çizimde hiç tetiklenmeyebilirdi).
+    /// `.common` mode: menü açıkken ya da ayraç sürüklenirken de tetiklenir.
+    /// Abonelik görünüm ağaçtan çıkınca iptal olur — çubuk kapalıyken zamanlayıcı çalışmaz.
+    @State private var ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            content
+                .padding(.horizontal, 10)
+                .frame(height: 22)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.bar)
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .onAppear { snapshot = workspace.statusSnapshot() }
+        .onReceive(ticker) { _ in snapshot = workspace.statusSnapshot() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let snapshot {
+            HStack(spacing: 8) {
+                item("terminal", snapshot.shellName)
+
+                separator
+
+                Text(snapshot.workingDirectory)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .help(snapshot.workingDirectory)
+
+                if let branch = snapshot.branchName {
+                    separator
+                    item("arrow.triangle.branch", branch)
+                }
+
+                Spacer(minLength: 8)
+
+                Text("\(snapshot.columns)×\(snapshot.rows)")
+                    .monospacedDigit()
+                    .help("Terminal boyutu (sütun × satır)")
+
+                separator
+
+                busyIndicator(isBusy: snapshot.isBusy)
+            }
+        } else {
+            Color.clear
+        }
+    }
+
+    private func item(_ systemImage: String, _ text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage)
+            Text(text).lineLimit(1)
+        }
+    }
+
+    private var separator: some View {
+        Divider().frame(height: 11)
+    }
+
+    private func busyIndicator(isBusy: Bool) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(isBusy ? Color.green : Color.secondary.opacity(0.35))
+                .frame(width: 7, height: 7)
+            Text(isBusy ? "çalışıyor" : "boşta")
+        }
+        .help(isBusy ? "Bu panelde çalışan bir işlem var" : "Bu panelde çalışan işlem yok")
+    }
+}
+```
+
+Not: Görünürlük kontrolü bilerek burada değil, `MainWindowView`'da (Step 19): `settings.showStatusBar` kapalıyken `StatusBarView` hiç kurulmaz, dolayısıyla zamanlayıcı da hiç dönmez.
+
+- [ ] **Step 19: MainWindowView'a durum çubuğunu bağla**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` içindeki kök `VStack(spacing: 0) { ... }` bloğunun **en sonuna** (panel ağacını çizen `terminalContent` / `if let tab = ...` bloğundan hemen sonra, `VStack`'in kapanış parantezinden önce) ekle:
+
+```swift
+            if workspace.isStatusBarVisible {
+                StatusBarView(workspace: workspace)
+            }
+```
+
+`MainWindowView`'ın view model özelliğinin adı plan boyunca `workspace`'tir (`private let services: AppServices` + `@State private var workspace: WorkspaceViewModel`); yukarıdaki blok bu adı olduğu gibi kullanır, arama/uyarlama gerekmez.
+
+- [ ] **Step 20: Derle**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet && echo BUILD_OK
+```
+
+Beklenen: `BUILD_OK`.
+
+- [ ] **Step 21: Elle doğrulama — durum çubuğu**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -derivedDataPath /tmp/termora-dd -quiet && open -n /tmp/termora-dd/Build/Products/Debug/Termora.app
+```
+
+Açılan pencerede sırayla doğrula:
+
+1. Pencerenin en altında ~22 pt yüksekliğinde, üstünde ince ayraç olan bir çubuk var; solda `zsh` (ya da varsayılan shell'in adı), yanında çalışma dizini, sağda `80×24` benzeri boyut ve `boşta` göstergesi görünüyor.
+2. Terminale `cd ~` yaz → dizin alanı **`~`** olur (tam yol değil). `cd /tmp` → `/tmp` yazar (ev dizini altında olmadığı için kısaltılmaz).
+3. `cd /Users/ahmetbarut/Apps/Termora` → **en geç 1 saniye içinde** dal simgesiyle birlikte `main` belirir. `cd /tmp` → dal göstergesi kaybolur.
+4. **Sekme başlığı da cwd'yi izler** (spec §7 "başlıkta aktif klasör/işlem adı"): durum çubuğu **açıkken** `cd /tmp` yaz → sekme başlığı en geç ~1 sn içinde **`tmp`** olur; `cd ~/Apps/Termora` → **`Termora`** olur. Zinciri Step 15 kurar: `statusSnapshot()` cwd'yi libproc ile tazeler ve değiştiyse Task 11'in `syncAutomaticTitles()`'ını çağırır. Başlık kalıcı olarak `Terminal` kalıyorsa Task 11 Step 21'deki cwd yedeği uygulanmamıştır (stok zsh yalnız `TERM_PROGRAM=Apple_Terminal` iken OSC başlık yayar) — oraya dön. Sekmeyi elle adlandırdıysan otomatik başlık ezilmez; maddeyi adı sıfırlanmış bir sekmede dene. **Bilinen sınır:** durum çubuğu kapalıyken cwd'yi okuyan başka bir yer yoktur; başlık o sırada shell adında (`zsh`) kalır ve `showStatusBar` tekrar açılınca güncellenir.
+5. `git checkout -b durum-cubugu-deneme` → gösterge `durum-cubugu-deneme` olur; `git checkout main && git branch -D durum-cubugu-deneme` → geri `main` olur.
+6. Terminalde `tput cols; tput lines` çalıştır → çıktı, çubuktaki `cols×rows` ile birebir aynı olmalı. Pencereyi fareyle genişlet/daralt → sayılar değişir (SwiftTerm `sizeChanged` → `TerminalSession.terminalSize`).
+7. `sleep 5` çalıştır → nokta yeşile döner ve yazı `çalışıyor` olur; komut bitince en geç 1 sn içinde `boşta`ya döner.
+8. ⌘D ile paneli böl, sağ panelde `cd /` çalıştır → çubuk **aktif** panelin durumunu gösterir; ⌘⌥← ile sol panele geç → çubuk sol panelin dizinine döner.
+9. ⌘, ile Ayarlar ▸ Genel'den durum çubuğunu kapat → çubuk anında kaybolur; tekrar aç → geri gelir (`isStatusBarVisible` @Observable okuması).
+10. Boştaki uygulamanın CPU'sunu ölç — 1 Hz'lik zamanlayıcı sistemi yormamalı:
+
+```bash
+top -pid "$(pgrep -x Termora)" -l 6 -s 1 -stats pid,cpu,mem | awk '/^[0-9]+/ {print "cpu=" $2 "  mem=" $3}' | tail -5
+```
+
+Beklenen: `cpu` değerleri **%2'nin altında** (ilk örnek yok sayılır).
+
+Uygulamayı kapat.
+
+- [ ] **Step 22: Commit**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/StatusBarView.swift Termora/Views/MainWindowView.swift && git commit -m "feat: show shell, directory, git branch and terminal size in a status bar"
+```
+
+---
+
+---
+
+### Task 22: Kapanış onayları + performans doğrulaması + cila (M5)
+
+**Files:**
+- Create: `/Users/ahmetbarut/Apps/Termora/Termora/App/WindowCloseCoordinator.swift`
+- Create: `/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraAppDelegate.swift`
+- Create: `/Users/ahmetbarut/Apps/Termora/README.md`
+- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/ViewModels/WorkspaceViewModel.swift`
+- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift`
+- Modify: `/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift`
+- Delete: `/Users/ahmetbarut/Apps/Termora/TermoraTests/TermoraTests.swift` (Xcode şablonu)
+- Test (Modify): `/Users/ahmetbarut/Apps/Termora/TermoraTests/WorkspaceViewModelTests.swift`
+
+**Interfaces:**
+
+Consumes:
+- Task 11 — `WorkspaceViewModel`: `var pendingClose: PendingClose?`, `struct PendingClose: Identifiable, Equatable { let id: UUID; let target: Target; enum Target: Equatable { case tab(UUID); case pane(paneID: UUID); case window } }` (kurulum her yerde `PendingClose(id: UUID(), target: …)`), `func confirmPendingClose()`, `func cancelPendingClose()`, `func closeAllTabs()` (internal — pencere kapatılırken `WindowCloseCoordinator` dışarıdan çağırır), `func hasAnyRunningProcess() -> Bool`, `private func closeTab(id: UUID)`
+- Task 16 — `confirmPendingClose()`'un `.pane` dalı: `closePane(paneID:in:)` (tek argümanlı `closePane(paneID:)` Task 16 Step 8'de silindi)
+- Task 11 test desteği — `@MainActor final class MockSessionManager: SessionManaging` (**tek dosya**: `/Users/ahmetbarut/Apps/Termora/TermoraTests/MockSessionManager.swift`; `Support/` alt klasörü yoktur): `var busySessionIDs: Set<UUID>`, `private(set) var terminatedSessionIDs: [UUID]`, `func terminateSession(id:)`
+- Task 12/13 — `MainWindowView`: `private let services: AppServices` + `@State private var workspace: WorkspaceViewModel`, kök `VStack`, `.confirmationDialog(..., isPresented: pendingCloseBinding)`, `private var pendingCloseBinding: Binding<Bool>`
+- Task 13/18/19 — `TermoraApp`: `@State private var services = AppServices()` + `WindowGroup { MainWindowView(services: services) }` + `.commands { AppCommands(); ProfileCommands(profiles: services.profiles) }` + `Settings { SettingsWindowView(settings: services.settings, themes: services.themes, profiles: services.profiles) }` (servislere yalnız `services.` önekiyle erişilir; çıplak `settings` / `themes` / `profiles` / `sessionManager` adları TermoraApp kapsamında yoktur)
+- Task 18 — `struct WindowAccessor: NSViewRepresentable { let onWindow: (NSWindow) -> Void }` (`Termora/Views/Support/WindowChrome.swift`)
+
+Produces:
+```swift
+// WorkspaceViewModel'e eklenir:
+//   func requestCloseWindow(onApproved: @escaping @MainActor () -> Void) -> Bool
+//   var pendingCloseMessage: String { get }
+//   confirmPendingClose(): .window dalı closeAllTabs() sonrası onay callback'ini çağırır
+//   cancelPendingClose(): bekleyen onay callback'ini düşürür
+@MainActor
+final class WindowCloseCoordinator: NSObject, NSWindowDelegate {
+    static var live: [WindowCloseCoordinator] { get }
+    static var firstBusy: WindowCloseCoordinator? { get }
+    var hasRunningProcess: Bool { get }
+    func attach(window: NSWindow, workspace: WorkspaceViewModel)
+    func bringWindowForward()
+    func requestTermination(onApproved: @escaping @MainActor () -> Void) -> Bool
+}
+@MainActor
+final class TermoraAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply
+}
+```
+
+---
+
+- [ ] **Step 1: Pencere kapatma akışının testlerini yaz**
+
+`/Users/ahmetbarut/Apps/Termora/TermoraTests/WorkspaceViewModelTests.swift` içine, `hasAnyRunningProcessReflectsSessionState` testinden sonra ekle:
+
+```swift
+    // MARK: - Pencere / uygulama kapatma
+
+    @Test func hasAnyRunningProcessScansEveryTab() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        workspace.newTab()
+        #expect(workspace.hasAnyRunningProcess() == false)
+
+        let busySessionID = workspace.tabs[1].root.leaves[0].sessionID
+        manager.busySessionIDs.insert(busySessionID)
+        #expect(workspace.hasAnyRunningProcess())
+
+        manager.terminateSession(id: busySessionID)
+        #expect(workspace.hasAnyRunningProcess() == false)
+    }
+
+    @Test func requestCloseWindowAllowsClosingWhenNothingIsRunning() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        var approvedCount = 0
+
+        let canCloseNow = workspace.requestCloseWindow { approvedCount += 1 }
+
+        #expect(canCloseNow)
+        #expect(workspace.pendingClose == nil)
+        // Onay istenmediği için callback de çalışmaz; oturumları çağıran kapatır.
+        #expect(approvedCount == 0)
+        #expect(manager.terminatedSessionIDs.isEmpty)
+    }
+
+    @Test func requestCloseWindowAsksForConfirmationWhenSomethingIsRunning() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        manager.busySessionIDs.insert(workspace.tabs[1].root.leaves[0].sessionID)
+        var approvedCount = 0
+
+        let canCloseNow = workspace.requestCloseWindow { approvedCount += 1 }
+
+        #expect(canCloseNow == false)
+        #expect(workspace.pendingClose?.target == .window)
+        #expect(approvedCount == 0)
+        #expect(manager.terminatedSessionIDs.isEmpty)
+        #expect(workspace.tabs.count == 2)
+    }
+
+    @Test func confirmingWindowCloseTerminatesSessionsThenRunsTheApproval() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        let sessionIDs = workspace.tabs.map { $0.root.leaves[0].sessionID }
+        manager.busySessionIDs.insert(sessionIDs[0])
+        var terminatedCountAtApproval = -1
+        _ = workspace.requestCloseWindow { terminatedCountAtApproval = manager.terminatedSessionIDs.count }
+
+        workspace.confirmPendingClose()
+
+        // Onay callback'i, oturumlar kapatıldıktan SONRA çağrılmalı: pencere kapanırken
+        // arkada canlı shell kalmamalı.
+        #expect(terminatedCountAtApproval == 2)
+        #expect(Set(manager.terminatedSessionIDs) == Set(sessionIDs))
+        #expect(workspace.tabs.isEmpty)
+        #expect(workspace.activeTabID == nil)
+        #expect(workspace.pendingClose == nil)
+    }
+
+    @Test func cancellingWindowCloseKeepsSessionsAndDropsTheApproval() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        manager.busySessionIDs.insert(workspace.tabs[0].root.leaves[0].sessionID)
+        var approvedCount = 0
+        _ = workspace.requestCloseWindow { approvedCount += 1 }
+
+        workspace.cancelPendingClose()
+
+        #expect(workspace.pendingClose == nil)
+        #expect(workspace.tabs.count == 1)
+        #expect(manager.terminatedSessionIDs.isEmpty)
+        #expect(approvedCount == 0)
+
+        // Vazgeçilen onay unutulur: yeni bir istek olmadan callback bir daha çalışamaz.
+        workspace.confirmPendingClose()
+        #expect(approvedCount == 0)
+    }
+
+    @Test func pendingCloseMessageDescribesTheTarget() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let tab = workspace.tabs[0]
+        manager.busySessionIDs.insert(tab.root.leaves[0].sessionID)
+
+        #expect(workspace.pendingCloseMessage.isEmpty)
+
+        workspace.requestCloseTab(id: tab.id)
+        #expect(workspace.pendingCloseMessage == "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?")
+
+        workspace.cancelPendingClose()
+        _ = workspace.requestCloseWindow {}
+        #expect(workspace.pendingCloseMessage == "Çalışan işlemler var. Tüm oturumlar kapatılsın mı?")
+    }
+```
+
+- [ ] **Step 2: Testi çalıştır, FAIL bekle**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspaceViewModelTests 2>&1 | tail -20
+```
+
+Beklenen: `error: value of type 'WorkspaceViewModel' has no member 'requestCloseWindow'` (ve `pendingCloseMessage` için aynısı) → `** TEST BUILD FAILED **`.
+
+- [ ] **Step 3: WorkspaceViewModel'e pencere kapatma kancasını ekle**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/ViewModels/WorkspaceViewModel.swift` içinde, `hasAnyRunningProcess()` metodunun hemen ardına ekle:
+
+```swift
+    // MARK: - Pencere / uygulama kapatma
+
+    /// `.window` hedefli onay verildiğinde çalıştırılacak eylem.
+    /// `requestCloseWindow(onApproved:)` kurar; onay ya da iptal temizler.
+    /// Kapatma kararı burada tutulduğu için akış AppKit olmadan test edilebilir.
+    private var windowCloseApproval: (@MainActor () -> Void)?
+
+    /// Pencere ya da uygulama kapatılmak isteniyor.
+    /// - Parameter onApproved: Kullanıcı onaylarsa, oturumlar sonlandırıldıktan SONRA çağrılır.
+    /// - Returns: Çalışan işlem yoksa `true` — çağıran kapanışa hemen devam edebilir.
+    ///   Çalışan işlem varsa onay diyaloğu kurulur ve `false` döner.
+    func requestCloseWindow(onApproved: @escaping @MainActor () -> Void) -> Bool {
+        guard hasAnyRunningProcess() else { return true }
+        windowCloseApproval = onApproved
+        pendingClose = PendingClose(id: UUID(), target: .window)
+        return false
+    }
+
+    /// Onay diyaloğunun başlığı; hedefe göre değişir (aynı diyalog üç akışta kullanılıyor).
+    var pendingCloseMessage: String {
+        switch pendingClose?.target {
+        case .tab:
+            return "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"
+        case .pane:
+            return "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?"
+        case .window:
+            return "Çalışan işlemler var. Tüm oturumlar kapatılsın mı?"
+        case nil:
+            return ""
+        }
+    }
+```
+
+- [ ] **Step 4: confirmPendingClose / cancelPendingClose'u onay callback'ine bağla**
+
+Aynı dosyada, Task 11'de yazılan (ve Task 16 Step 8'de `.pane` dalı eklenen) iki metodun gövdesini değiştir. **`.tab` ve `.pane` dalları Task 16'daki hâliyle aynen korunur** — özellikle `.pane` dalı iki argümanlı `closePane(paneID:in:)`'i çağırır; tek argümanlı `closePane(paneID:)` Task 16'da silindiğinden onu çağırmak `error: cannot find 'closePane(paneID:)'` verir:
+
+```swift
+    func confirmPendingClose() {
+        guard let pending = pendingClose else { return }
+        pendingClose = nil
+        let approval = windowCloseApproval
+        windowCloseApproval = nil
+        switch pending.target {
+        case let .tab(tabID):
+            closeTab(id: tabID)
+        case let .pane(paneID):
+            guard let tab = tabs.first(where: { $0.root.sessionID(ofPane: paneID) != nil }) else { return }
+            closePane(paneID: paneID, in: tab)
+        case .window:
+            // Önce oturumlar sonlandırılır, sonra pencere/uygulama kapatılır:
+            // ters sırada shell'ler SessionManager cache'inde öksüz kalırdı.
+            closeAllTabs()
+            approval?()
+        }
+    }
+
+    func cancelPendingClose() {
+        windowCloseApproval = nil
+        pendingClose = nil
+    }
+```
+
+- [ ] **Step 5: Testi çalıştır, PASS bekle**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -only-testing:TermoraTests/WorkspaceViewModelTests 2>&1 | tail -20
+```
+
+Beklenen: `** TEST SUCCEEDED **` (Task 11/13'ten gelen testler + bu görevin 6 testi).
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && git add Termora/ViewModels/WorkspaceViewModel.swift TermoraTests/WorkspaceViewModelTests.swift && git commit -m "feat: add window close approval hook to WorkspaceViewModel"
+```
+
+- [ ] **Step 7: WindowCloseCoordinator'ı yaz**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/App/WindowCloseCoordinator.swift` oluştur:
+
+```swift
+import AppKit
+import Foundation
+
+/// Pencerenin kapat düğmesini (ve ⌘Q akışını) "çalışan işlem var mı?" onayına bağlar.
+///
+/// `NSWindow.delegate` zayıf tutulur; bu nesneyi `MainWindowView` bir `@State` içinde canlı
+/// tutar. SwiftUI'nin kurduğu özgün delege korunur ve BURADA GERÇEKLENMEYEN tüm delege
+/// mesajları ObjC iletimiyle ona aktarılır — aksi hâlde çerçevenin kendi pencere davranışları
+/// (kapanış temizliği, geri yükleme) sessizce ölür.
+@MainActor
+final class WindowCloseCoordinator: NSObject, NSWindowDelegate {
+
+    /// Canlı koordinatörler (zayıf tutulur). Uygulama kapanışında hangi pencerede iş
+    /// çalıştığını bulmak için gerekir: `@FocusedValue` uygulama delegesinden okunamaz.
+    private static let liveTable = NSHashTable<WindowCloseCoordinator>.weakObjects()
+
+    static var live: [WindowCloseCoordinator] { liveTable.allObjects }
+
+    static var firstBusy: WindowCloseCoordinator? {
+        live.first { $0.hasRunningProcess }
+    }
+
+    private weak var window: NSWindow?
+    private weak var workspace: WorkspaceViewModel?
+
+    /// SwiftUI'nin kurduğu delege; işlemediğimiz mesajlar buna iletilir.
+    private weak var previousDelegate: (any NSObjectProtocol)?
+
+    /// Onay alındıktan sonraki `close()` çağrısında tekrar sormamak için bayrak.
+    private var isClosingAfterApproval = false
+
+    override init() {
+        super.init()
+        Self.liveTable.add(self)
+    }
+
+    /// Pencereyi bağlar. `WindowAccessor` her yerleşim turunda çağırabilir: idempotenttir.
+    /// SwiftUI delegeyi sonradan geri alırsa bir sonraki çağrıda yeniden devralınır.
+    func attach(window: NSWindow, workspace: WorkspaceViewModel) {
+        self.workspace = workspace
+        self.window = window
+        guard window.delegate !== self else { return }
+        if let existing = window.delegate {
+            previousDelegate = existing
+        }
+        window.delegate = self
+    }
+
+    var hasRunningProcess: Bool {
+        workspace?.hasAnyRunningProcess() ?? false
+    }
+
+    func bringWindowForward() {
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Uygulama kapanışı için onay ister; `true` dönerse beklemeden kapanılabilir.
+    func requestTermination(onApproved: @escaping @MainActor () -> Void) -> Bool {
+        guard let workspace else { return true }
+        return workspace.requestCloseWindow(onApproved: onApproved)
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if isClosingAfterApproval { return true }
+        guard let workspace else { return true }
+
+        let canCloseNow = workspace.requestCloseWindow { [weak self] in
+            self?.closeAfterApproval()
+        }
+        guard canCloseNow else { return false }
+
+        // Çalışan işlem yok: onay gerekmiyor, ama oturumlar yine de burada kapatılmalı.
+        // SessionManager view cache'i uygulama ömürlüdür; kapatmazsak pencere gitse de
+        // boştaki shell süreçleri yaşamaya devam eder.
+        workspace.closeAllTabs()
+        return true
+    }
+
+    private func closeAfterApproval() {
+        isClosingAfterApproval = true
+        // Diyalog kapanışıyla aynı run-loop turunda close() çağırmak sheet'i yarım bırakır.
+        DispatchQueue.main.async { [weak self] in
+            self?.window?.close()
+        }
+    }
+
+    // MARK: - Delege iletimi
+
+    // AppKit bu iki mesajı her zaman ana iş parçacığında gönderir; `assumeIsolated`
+    // Task 8'de SwiftTerm delegeleri için kullanılan kalıbın aynısıdır.
+    nonisolated override func responds(to aSelector: Selector!) -> Bool {
+        if super.responds(to: aSelector) { return true }
+        return MainActor.assumeIsolated {
+            previousDelegate?.responds(to: aSelector) ?? false
+        }
+    }
+
+    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        MainActor.assumeIsolated { () -> (any NSObjectProtocol)? in
+            guard previousDelegate?.responds(to: aSelector) == true else { return nil }
+            return previousDelegate
+        }
+    }
+}
+```
+
+- [ ] **Step 8: MainWindowView'a koordinatörü ve hedefe göre diyalog metnini bağla**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/Views/MainWindowView.swift` üzerinde üç düzenleme:
+
+**(a)** `@State private var workspace: WorkspaceViewModel` satırının altına ekle:
+
+```swift
+    /// Pencere kapatma delegesi. `@State` tutulur çünkü `NSWindow.delegate` zayıftır;
+    /// başka bir sahibi olmazsa ilk yerleşimden hemen sonra yok olur.
+    @State private var closeCoordinator = WindowCloseCoordinator()
+```
+
+**(b)** `body` içindeki `.focusedSceneValue(\.workspace, workspace)` satırının hemen altına ekle:
+
+```swift
+        .background(
+            WindowAccessor { window in
+                closeCoordinator.attach(window: window, workspace: workspace)
+            }
+        )
+```
+
+**(c)** `.confirmationDialog(...)` çağrısının sabit başlığını hedefe göre değişen metinle değiştir (⌘Q ve panel kapatma akışlarında "Bu sekmede…" metni yanlıştı):
+
+```swift
+        .confirmationDialog(
+            workspace.pendingCloseMessage,
+            isPresented: pendingCloseBinding
+        ) {
+            Button("Kapat", role: .destructive) { workspace.confirmPendingClose() }
+            Button("Vazgeç", role: .cancel) { workspace.cancelPendingClose() }
+        }
+```
+
+- [ ] **Step 9: TermoraAppDelegate'i yaz ve TermoraApp'e bağla**
+
+`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraAppDelegate.swift` oluştur:
+
+```swift
+import AppKit
+
+/// ⌘Q akışı: herhangi bir pencerede çalışan işlem varsa önce onay ister.
+///
+/// `.terminateLater` BİLEREK kullanılmadı: AppKit o yanıtta run loop'u
+/// `NSModalPanelRunLoopMode`'a alıp `reply(toApplicationShouldTerminate:)` bekler ve
+/// SwiftUI'nin `confirmationDialog`'u bu modda güvenilir biçimde çizilmez (uygulama
+/// diyalog görünmeden asılı kalır). Bunun yerine `.terminateCancel` dönülür; onay gelince
+/// kapanış `NSApp.terminate(nil)` ile yeniden başlatılır. Onaylanan pencerenin oturumları
+/// kapandığı için o pencere artık meşgul değildir; sırada başka meşgul pencere varsa onun
+/// için de onay istenir, hiçbiri kalmayınca `.terminateNow` dönülür (sonsuz döngü yok).
+@MainActor
+final class TermoraAppDelegate: NSObject, NSApplicationDelegate {
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let coordinator = WindowCloseCoordinator.firstBusy else { return .terminateNow }
+
+        // Onay sheet'i o pencereye iliştiği için pencere öne getirilir.
+        coordinator.bringWindowForward()
+
+        let canTerminateNow = coordinator.requestTermination {
+            // Diyalog kapanırken terminate() çağırmak sheet'i yarım bırakır.
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+        return canTerminateNow ? .terminateNow : .terminateCancel
+    }
+}
+```
+
+`/Users/ahmetbarut/Apps/Termora/Termora/App/TermoraApp.swift` içinde, `struct TermoraApp: App {` satırının hemen altına ekle (mevcut `@State private var services = AppServices()` özelliği ve sahneler aynen kalır; başka özellik eklenmez):
+
+```swift
+    @NSApplicationDelegateAdaptor(TermoraAppDelegate.self) private var appDelegate
+```
+
+- [ ] **Step 10: Derle**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet && echo BUILD_OK
+```
+
+Beklenen: `BUILD_OK`.
+
+- [ ] **Step 11: Elle doğrulama — kapanış onayları**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -derivedDataPath /tmp/termora-dd -quiet && open -n /tmp/termora-dd/Build/Products/Debug/Termora.app
+```
+
+Her maddeyi gözle doğrula (kontrol komutlarını **başka bir terminal uygulamasında**, örneğin Terminal.app'te çalıştır):
+
+1. Termora'da `sleep 300` başlat → pencerenin kırmızı kapat düğmesine tıkla → **"Çalışan işlemler var. Tüm oturumlar kapatılsın mı?"** diyaloğu çıkar (eski "Bu sekmede…" metni değil).
+2. **Vazgeç** → pencere açık kalır; kontrol: `pgrep -f "sleep 300"` **dolu**.
+3. Tekrar kapat düğmesi → **Kapat** → pencere kapanır; kontrol: `pgrep -f "sleep 300"` **boş** (çıkış kodu 1).
+4. `File ▸ New Window` (⌘N) ile yeni pencere aç, hiçbir komut çalıştırmadan kapat düğmesine bas → onay **sorulmaz**, pencere hemen kapanır. Kontrol: `pgrep -P "$(pgrep -x Termora)"` → **boş** (boştaki shell'ler de kapandı, sızıntı yok).
+5. Yeni pencerede `sleep 300` başlat → **⌘Q** → aynı onay diyaloğu çıkar; **Vazgeç** → uygulama açık kalır ve `sleep` sürer.
+6. Tekrar **⌘Q** → **Kapat** → uygulama kapanır. Kontrol: `pgrep -x Termora` ve `pgrep -f "sleep 300"` **boş**.
+7. Uygulamayı yeniden aç, hiçbir komut çalıştırmadan **⌘Q** → onaysız kapanır.
+8. Uygulamayı aç, iki pencere aç (⌘N), yalnız ikinci pencerede `sleep 300` çalıştır, sonra birinci pencereye geç ve **⌘Q** → **meşgul pencere öne gelir** ve onayı o sorar; **Kapat** → uygulama kapanır, `pgrep -f "sleep 300"` boş.
+9. Sekme kapatma onayının metni bozulmamış: bir sekmede `sleep 300` çalıştır → **⌘W** → "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"; bir panelde `sleep 300` + **⌘⇧W** → "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?".
+
+- [ ] **Step 12: Commit**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && git add Termora/App/WindowCloseCoordinator.swift Termora/App/TermoraAppDelegate.swift Termora/App/TermoraApp.swift Termora/Views/MainWindowView.swift && git commit -m "feat: confirm window and app close while processes are running"
+```
+
+- [ ] **Step 13: Performans doğrulaması — açılış süresi (<1 sn)**
+
+Spec §10 hedefi: **<1 sn açılış**. Ölçüm "uygulama başlatıldı → ilk canlı shell doğdu" arası; shell süreci Termora'nın çocuğu olarak ancak ilk terminal paneli kurulunca oluşur, dolayısıyla ilk kullanılabilir pencere için iyi bir vekildir.
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -configuration Release -derivedDataPath /tmp/termora-dd -quiet && echo BUILD_OK
+pkill -x Termora 2>/dev/null
+python3 - /tmp/termora-dd/Build/Products/Release/Termora.app <<'PY'
+import subprocess, sys, time
+
+app = sys.argv[1]
+def measure():
+    t0 = time.monotonic()
+    subprocess.run(["open", "-n", app], check=True)
+    deadline = t0 + 20
+    while time.monotonic() < deadline:
+        pids = subprocess.run(["pgrep", "-x", "Termora"],
+                              capture_output=True, text=True).stdout.split()
+        if pids:
+            kids = subprocess.run(["pgrep", "-P", pids[0]],
+                                  capture_output=True, text=True).stdout.split()
+            if kids:
+                return time.monotonic() - t0
+        time.sleep(0.01)
+    return None
+
+cold = measure()
+print(f"cold : {cold:.2f} s" if cold else "cold : TIMEOUT")
+subprocess.run(["pkill", "-x", "Termora"])
+time.sleep(1.0)
+warm = measure()
+print(f"warm : {warm:.2f} s" if warm else "warm : TIMEOUT")
+PY
+```
+
+Ölçüt: **warm < 1.00 s**. (cold ölçüm Launch Services/dyld ısınmasını da içerir; 1 sn'yi aşabilir, kabul.) Hedef tutmuyorsa `AppServices.init` içindeki store/tema yüklemeleri profillenir. Ölçülen değerleri commit mesajına ya da bu adımın altına not düş.
+
+- [ ] **Step 14: Performans doğrulaması — ≥10 eşzamanlı oturum + yoğun çıktıda tuş gecikmesi**
+
+Spec §10'un kalan iki hedefi burada ölçülür: **≥10 eşzamanlı oturum** (madde 1-2) ve **yoğun çıktı altında yazarken fark edilir gecikme yok** (madde 3-5). Uygulama açıkken:
+
+1. **⌘T** ile toplam **10 sekme** aç, sonra 10. sekmede **⌘D** ile bir kez böl (toplam **11 oturum** — hedef ≥10). Her panelde prompt gelmeli, hiçbiri boş/siyah kalmamalı.
+2. Oturum sayısını ve kaynak kullanımını ölç:
+
+```bash
+PID=$(pgrep -x Termora)
+echo "shell sayısı: $(pgrep -P "$PID" | wc -l | tr -d ' ')"
+top -pid "$PID" -l 6 -s 1 -stats pid,cpu,mem | awk '/^[0-9]+/ {print "cpu=" $2 "  mem=" $3}' | tail -5
+```
+
+Ölçüt: `shell sayısı: 11` (**≥10**), boştaki `cpu` **%3'ün altında**.
+
+3. **Tuş gecikmesi için önce boştaki taban değeri ölç.** 1. sekmedeki panele odaklan ve orada şunu başlat (yazdığın satırı dosyaya akıtır):
+
+```
+cat > /tmp/termora-key.log
+```
+
+Ardından **başka bir terminal uygulamasında** (Terminal.app) ölçüm betiğini çalıştır — betik Termora'yı öne getirir, bir tuş + Enter gönderir ve karakterin PTY'nin öbür ucuna ulaşmasını bekler. (İlk çalıştırmada macOS, kontrol eden terminal için Erişilebilirlik izni ister; onayla.)
+
+```bash
+cat > /tmp/termora-keylatency.py <<'PY'
+import os, subprocess, sys, time
+log = "/tmp/termora-key.log"
+open(log, "w").close()
+subprocess.run(["osascript", "-e", 'tell application "Termora" to activate'], check=True)
+time.sleep(0.5)
+t0 = time.monotonic()
+subprocess.run(["osascript",
+                "-e", 'tell application "System Events" to keystroke "x"',
+                "-e", 'tell application "System Events" to key code 36'], check=True)
+while os.path.getsize(log) == 0 and time.monotonic() - t0 < 5:
+    time.sleep(0.005)
+size = os.path.getsize(log)
+print(f"{sys.argv[1]}: {(time.monotonic()-t0)*1000:.0f} ms" if size else f"{sys.argv[1]}: TIMEOUT")
+PY
+python3 /tmp/termora-keylatency.py bosta
+```
+
+Taban değeri not et (AppleScript'in kendi ek yükü dahil, tipik olarak 100-200 ms).
+
+4. 10. sekmede yoğun çıktı üret ve **çalışırken** aynı ölçümü yinele:
+
+```
+yes "termora stress test satiri" | head -n 3000000
+```
+
+Komut sürerken (yaklaşık 10 sn) 1. sekmeye dön (`cat` hâlâ çalışıyor) ve diğer terminalde:
+
+```bash
+python3 /tmp/termora-keylatency.py yogun-cikti
+```
+
+Ölçüt: **yoğun çıktı altındaki değer, boştaki tabanı en fazla 100 ms aşar ve mutlak olarak 400 ms'nin altındadır** (TIMEOUT = başarısız). Aynı sırada elle de sına: ⌘⇧] / ⌘⇧[ ile sekmeler arasında geç, başka bir sekmeye `echo merhaba` yaz, ⌘D ile böl ve ayracı sürükle, durum çubuğunda göstergenin `çalışıyor` olduğunu gör — **hiçbir aşamada donma yok**, kaydırma akıcı (PTY okuması SwiftTerm'de DispatchIO ile arka planda). Ölçülen iki değeri Step 19'daki kapanış commit'inin mesajına ya da bu adımın altına not düş. Bitince 1. sekmedeki `cat`'i Ctrl-D ile kapat.
+
+5. Aynı anda ikinci bir terminalde CPU'yu örnekle:
+
+```bash
+top -pid "$(pgrep -x Termora)" -l 11 -s 1 -stats pid,cpu,mem | awk '/^[0-9]+/ {print "cpu=" $2 "  mem=" $3}' | tail -10
+```
+
+Ölçüt: çıktı akarken `cpu` tek çekirdeği doyurabilir ama komut bittikten sonra en geç 2 sn içinde **%3'ün altına** düşer; `mem` sürekli büyümez (scrollback sınırı iş görüyor).
+
+6. Sekmeleri kapatıp uygulamayı kapat; `pgrep -P "$(pgrep -x Termora)"` boş, ardından `pgrep -x Termora` boş olmalı (artık süreç sızıntısı yok). Geçici ölçüm dosyalarını temizle: `rm -f /tmp/termora-key.log /tmp/termora-keylatency.py`.
+
+- [ ] **Step 15: Cila — şablon dosyasını sil**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+git rm TermoraTests/TermoraTests.swift
+ls Termora/Services/SwiftTermLinkCheck.swift 2>/dev/null && echo "UYARI: Task 8 Step 10 bu dosyayı silmemiş" || echo "SwiftTermLinkCheck zaten silinmiş (Task 8)"
+xcodebuild build -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' -quiet && echo BUILD_OK
+```
+
+Beklenen: `SwiftTermLinkCheck zaten silinmiş (Task 8)` ve `BUILD_OK`. `Termora/Services/SwiftTermLinkCheck.swift` **bu görevde silinmez** — Task 1'in geçici link doğrulaması Task 8'in commit adımında (`git rm`) kaldırılmıştır; burada yalnız gerçekten gittiği doğrulanır. Uyarı görürsen `git rm Termora/Services/SwiftTermLinkCheck.swift` ile temizle. `TermoraUITests` hedefindeki Xcode şablon testleri **kalır** (spec §11'deki açılış smoke testinin karşılığıdır; Task 13'ün `TabSmokeUITests`'i de aynı hedefte yaşar).
+
+- [ ] **Step 16: README.md'yi yaz**
+
+`/Users/ahmetbarut/Apps/Termora/README.md` oluştur:
+
+````markdown
+# Termora
+
+macOS için native terminal uygulaması: sekmeler, bölünebilir paneller, arama, temalar ve
+profiller. SwiftUI kabuğu + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.15.0.
+
+- Gereksinim: macOS 14.0+, Xcode 16+ (Swift 5, Swift Testing)
+- Bağımlılık: SwiftTerm (SPM, ilk açılışta Xcode kendisi çözer)
+
+## Çalıştırma
+
+Xcode: `Termora.xcodeproj` → `Termora` şeması → ⌘R.
+
+Terminalden:
+
+```bash
+xcodebuild build -project Termora.xcodeproj -scheme Termora \
+  -destination 'platform=macOS' -derivedDataPath /tmp/termora-dd -quiet
+open -n /tmp/termora-dd/Build/Products/Debug/Termora.app
+```
+
+## Test
+
+Tüm paket (birim + UI testleri):
+
+```bash
+xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS'
+```
+
+Yalnız birim testleri (hızlı):
+
+```bash
+xcodebuild test -project Termora.xcodeproj -scheme Termora \
+  -destination 'platform=macOS' -only-testing:TermoraTests
+```
+
+Tek bir suite:
+
+```bash
+xcodebuild test -project Termora.xcodeproj -scheme Termora \
+  -destination 'platform=macOS' -only-testing:TermoraTests/WorkspaceViewModelTests
+```
+
+## Kısayollar
+
+| Kısayol | İşlev |
+|---|---|
+| ⌘T / ⌘W | Yeni sekme / sekmeyi kapat |
+| ⌘1…⌘9, ⌘⇧] , ⌘⇧[ | Sekmeye geç / sonraki / önceki |
+| ⌘D / ⌘⇧D / ⌘⇧W | Dikey böl / yatay böl / paneli kapat |
+| ⌘⌥ ok tuşları | Komşu panele odaklan |
+| ⌘F / ⌘G / ⌘⇧G | Bul / sonraki / önceki eşleşme |
+| ⌘, | Ayarlar (Genel, Görünüm, Profiller) |
+
+## Klasör düzeni
+
+`Termora/App` uygulama girişi ve menüler · `Termora/Models` saf modeller ·
+`Termora/ViewModels` pencere durumu · `Termora/Services` shell, oturum, tema, süreç
+sorgulama · `Termora/Views` SwiftUI arayüzü · `TermoraTests` Swift Testing birim testleri.
+
+Not: Uygulama sandbox'sız çalışır (yerel shell başlatabilmesi için) ve hiçbir ağ erişimi
+yapmaz.
+````
+
+- [ ] **Step 17: Tüm test paketini çalıştır**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && xcodebuild test -project Termora.xcodeproj -scheme Termora -destination 'platform=macOS' 2>&1 | tail -25
+```
+
+Beklenen: `** TEST SUCCEEDED **`. Bu çağrıda `-only-testing` yok: `TermoraTests` (tüm suite'ler) **ve** `TermoraUITests` şablon testleri koşar; UI testleri uygulamayı açıp kapattığı için toplam süre birkaç dakikayı bulabilir ve macOS ilk kez otomasyon izni sorabilir — sorarsa onayla. Bir birim testi kırıldıysa `-only-testing:TermoraTests/<Suite>` ile daraltıp düzelt; bu adım yeşil olmadan görev bitmez.
+
+- [ ] **Step 18: Commit**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "chore: drop template files, add README with run and test instructions"
+```
+
+- [ ] **Step 19: M5 kapanış commit'i**
+
+```bash
+cd /Users/ahmetbarut/Apps/Termora
+git status --short
+git commit --allow-empty -m "chore: close milestone M5 after manual performance verification"
+```
+
+Beklenen: `git status --short` temiz; boş commit, spec §10'un üç ölçütünün de elle onaylandığını tarihçeye işaretler: **açılış (warm) < 1 sn** (Step 13), **≥10 eşzamanlı oturum** (Step 14 madde 1-2), **yoğun çıktı altında tuş gecikmesi tabanın en fazla 100 ms üstünde ve < 400 ms** (Step 14 madde 3-4). Üçünden biri tutmuyorsa bu commit atılmaz; önce ilgili adımın altındaki iyileştirme notu uygulanır.
+
+---
 
 ---
 
