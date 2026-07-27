@@ -37,4 +37,46 @@ struct ProcessProbeTests {
         #expect(ProcessProbe.currentWorkingDirectory(pid: 0) == nil)
         #expect(ProcessProbe.currentWorkingDirectory(pid: -1) == nil)
     }
+
+    @Test func anIdleShellIsIdleAndAForegroundCommandIsNot() {
+        let child = PTYTestHarness.spawn(executable: "/bin/zsh", args: ["-f", "-i"])
+        defer { PTYTestHarness.kill(child) }
+
+        PTYTestHarness.drain(child, seconds: 1.0)
+        #expect(ProcessProbe.hasForegroundJob(masterFD: child.master, shellPID: child.pid) == false)
+
+        PTYTestHarness.write(child, "sleep 5\n")
+        let busy = PTYTestHarness.waitUntil(child, timeout: 5) {
+            ProcessProbe.hasForegroundJob(masterFD: child.master, shellPID: child.pid)
+        }
+        #expect(busy, "zsh puts `sleep` in its own process group and tcsetpgrp's it to the front")
+    }
+
+    @Test func theForegroundGroupIsComparedAgainstTheShellPid() {
+        // /bin/sleep is the session leader here, so the foreground group *is* the child pid.
+        let child = PTYTestHarness.spawn(executable: "/bin/sleep", args: ["5"])
+        defer { PTYTestHarness.kill(child) }
+        PTYTestHarness.drain(child, seconds: 0.3)
+
+        #expect(ProcessProbe.hasForegroundJob(masterFD: child.master, shellPID: child.pid) == false)
+        #expect(ProcessProbe.hasForegroundJob(masterFD: child.master, shellPID: getpid()) == true)
+    }
+
+    @Test func aKilledChildIsDeadAndItsClosedDescriptorIsIdle() {
+        let child = PTYTestHarness.spawn(executable: "/bin/sleep", args: ["30"])
+        #expect(ProcessProbe.isAlive(pid: child.pid) == true)
+
+        PTYTestHarness.kill(child) // SIGKILL + waitpid + close(master)
+
+        #expect(ProcessProbe.isAlive(pid: child.pid) == false)
+        #expect(ProcessProbe.hasForegroundJob(masterFD: child.master, shellPID: child.pid) == false)
+    }
+
+    @Test func aChildSeesTheWorkingDirectoryItWasStartedIn() {
+        let child = PTYTestHarness.spawn(executable: "/bin/sleep", args: ["5"])
+        defer { PTYTestHarness.kill(child) }
+        PTYTestHarness.drain(child, seconds: 0.3)
+
+        #expect(ProcessProbe.currentWorkingDirectory(pid: child.pid) == FileManager.default.currentDirectoryPath)
+    }
 }
