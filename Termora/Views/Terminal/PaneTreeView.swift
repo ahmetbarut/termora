@@ -26,6 +26,9 @@ struct PaneTreeView: View {
     let activePaneID: UUID
     let viewModel: WorkspaceViewModel
     let sessionManager: SessionManager
+    /// True for every pane that has at least one sibling. A window with a single pane needs
+    /// no "which pane is active?" marker, so the accent border would only be noise there.
+    var isInsideSplit: Bool = false
 
     @ViewBuilder
     var body: some View {
@@ -34,6 +37,7 @@ struct PaneTreeView: View {
             PaneLeafView(paneID: paneID,
                          sessionID: sessionID,
                          isActive: paneID == activePaneID,
+                         showsActiveIndicator: isInsideSplit,
                          viewModel: viewModel,
                          sessionManager: sessionManager)
 
@@ -51,18 +55,95 @@ struct PaneTreeView: View {
     }
 }
 
+// MARK: - Exit banner content
+
+/// Brief 3 "Error State": the banner answers four questions — what failed (`title`),
+/// why it probably failed plus the technical detail (`detail`), and what the user can do
+/// next (`actions`). Pure data, so the wording is covered by tests.
+struct PaneExitBanner: Equatable {
+
+    enum Action: Equatable {
+        case openSettings, useDefaultShell, retry, restart
+
+        /// Brief 3: no vague `OK` / `Yes` — every button names its effect.
+        var title: String {
+            switch self {
+            case .openSettings: return "Open Settings"
+            case .useDefaultShell: return "Use Default Shell"
+            case .retry: return "Try Again"
+            case .restart: return "Restart Shell"
+            }
+        }
+    }
+
+    let title: String
+    let detail: String
+    let actions: [Action]
+    /// Whether this is a failure the user is expected to act on (drives the icon/tint).
+    let isFailure: Bool
+
+    var accessibilityLabel: String { "\(title). \(detail)" }
+
+    static func make(exitStatus: ExitStatus, launchFailure: String?) -> PaneExitBanner {
+        if let path = launchFailure {
+            return PaneExitBanner(
+                title: "Shell failed to start",
+                detail: "'\(path)' could not be launched — the file is missing or not executable. "
+                    + "Check the shell path in Settings, or start the default shell instead.",
+                actions: [.openSettings, .useDefaultShell, .retry],
+                isFailure: true)
+        }
+
+        if let code = exitStatus.exitCode {
+            if code == 0 {
+                return PaneExitBanner(
+                    title: "Shell exited",
+                    detail: "The process finished normally (exit code 0). "
+                        + "Start a new shell to keep using this pane.",
+                    actions: [.restart],
+                    isFailure: false)
+            }
+            return PaneExitBanner(
+                title: "Shell exited with an error",
+                detail: "The process ended with exit code \(code). "
+                    + "The output above usually explains why.",
+                actions: [.restart],
+                isFailure: true)
+        }
+
+        if exitStatus.signal != nil {
+            return PaneExitBanner(
+                title: "Shell was terminated",
+                detail: "The process was \(exitStatus.localizedSummary) — something outside this pane stopped it.",
+                actions: [.restart],
+                isFailure: true)
+        }
+
+        return PaneExitBanner(
+            title: "Shell stopped",
+            detail: "The process is no longer running. Raw wait status: \(exitStatus.rawStatus).",
+            actions: [.restart],
+            isFailure: true)
+    }
+}
+
 // MARK: - Leaf
 
 private struct PaneLeafView: View {
     let paneID: UUID
     let sessionID: UUID
     let isActive: Bool
+    let showsActiveIndicator: Bool
     let viewModel: WorkspaceViewModel
     let sessionManager: SessionManager
 
     /// The banner takes key focus when it appears, so Enter restarts the session
     /// without the user having to click first.
     @FocusState private var isBannerFocused: Bool
+
+    /// Brief 3 "Error State" offers `Open Settings` as a recovery action; the app declares a
+    /// `Settings` scene, so this opens the real window instead of a dead end.
+    @Environment(\.openSettings) private var openSettings
 
     /// Reading the @Observable session here makes the leaf redraw when the shell exits.
     private var session: TerminalSession? { sessionManager.session(id: sessionID) }
@@ -72,10 +153,20 @@ private struct PaneLeafView: View {
         return status
     }
 
+    /// Brief 3 "Ana Renkler": accent blue #169CFF → accent violet #7A3CFF. Kept local to this
+    /// file on purpose — the pane border is the only place that needs it today.
+    private static let accentGradient = LinearGradient(
+        colors: [Color(red: 0.086, green: 0.612, blue: 1.0),
+                 Color(red: 0.478, green: 0.235, blue: 1.0)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing)
+
     var body: some View {
         TerminalHostView(sessionID: sessionID,
                          sessionManager: sessionManager,
-                         isActive: isActive)
+                         isActive: isActive,
+                         onSplitRight: { split(axis: .vertical) },
+                         onSplitDown: { split(axis: .horizontal) })
             // Kimlik HEM oturumu HEM de yeniden başlatma kuşağını içerir:
             // - sessionID: iki sekmenin kök paneli aynı yapısal konumdadır; kimlik yalnız
             //   kuşak olursa (taze oturumlarda hep 0) SwiftUI makeNSView'i çağırmaz ve
@@ -90,13 +181,24 @@ private struct PaneLeafView: View {
                 }
             }
             .overlay {
-                // The dimming layer only exists while inactive, so an active pane
-                // never intercepts clicks meant for the terminal (selection, links).
-                // It sits above the banner: clicking an inactive pane focuses it first.
+                // Brief 3 "Split Terminal Deneyimi": the inactive pane only gets a *slight*
+                // background difference — the old 15% black scrim made its text hard to read.
+                // The layer only exists while inactive, so an active pane never intercepts
+                // clicks meant for the terminal (selection, links). It sits above the banner:
+                // clicking an inactive pane focuses it first.
                 if !isActive {
-                    Color.black.opacity(0.15)
+                    Color.black.opacity(0.04)
                         .contentShape(Rectangle())
                         .onTapGesture { viewModel.activatePane(paneID: paneID) }
+                }
+            }
+            .overlay {
+                // Brief 3: the active pane is marked with a thin accent border. Hit testing is
+                // off so the border never eats a click at the edge of the terminal.
+                if isActive && showsActiveIndicator {
+                    Rectangle()
+                        .strokeBorder(Self.accentGradient, lineWidth: 1)
+                        .allowsHitTesting(false)
                 }
             }
             .background(
@@ -109,32 +211,44 @@ private struct PaneLeafView: View {
             )
     }
 
-    /// Spec §8: the pane stays open after the process exits and offers a way back.
+    /// Splits this pane from its own context menu. The pane is focused first because the view
+    /// model splits whichever pane is active, and a right-click does not move focus by itself.
+    private func split(axis: SplitAxis) {
+        viewModel.activatePane(paneID: paneID)
+        viewModel.splitActivePane(axis: axis)
+    }
+
+    /// Spec §8 + brief 3 "Error State": the pane stays open after the process exits and states
+    /// what failed, why, and what to do next.
     @ViewBuilder
     private func banner(exitStatus: ExitStatus, failedPath: String?) -> some View {
-        HStack(spacing: 8) {
-            if let failedPath {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                Text("'\(failedPath)' çalıştırılamadı")
-                Spacer(minLength: 8)
-                Button("Yeniden dene") {
-                    viewModel.restartPaneSession(paneID: paneID)
-                }
-                Button("Varsayılan shell ile dene") {
-                    viewModel.restartPaneSession(paneID: paneID, forceDefaultShell: true)
-                }
-            } else {
-                Text("İşlem sonlandı (\(exitStatus.localizedSummary))")
-                Spacer(minLength: 8)
-                Button("Yeniden başlat") {
-                    viewModel.restartPaneSession(paneID: paneID)
+        let content = PaneExitBanner.make(exitStatus: exitStatus, launchFailure: failedPath)
+
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: content.isFailure ? "exclamationmark.triangle.fill" : "power")
+                .foregroundStyle(content.isFailure ? Color.orange : Color.secondary)
+                .font(.system(size: 12))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(content.title)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(content.detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 6) {
+                ForEach(content.actions, id: \.self) { action in
+                    Button(action.title) { perform(action) }
                 }
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .font(.system(size: 11))
         }
-        .font(.system(size: 11))
-        .buttonStyle(.bordered)
-        .controlSize(.small)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,9 +264,18 @@ private struct PaneLeafView: View {
         .onChange(of: isActive) { _, active in
             if active { isBannerFocused = true }
         }
-        .accessibilityLabel(failedPath == nil
-                            ? "İşlem sonlandı: \(exitStatus.localizedSummary)"
-                            : "Shell çalıştırılamadı: \(failedPath ?? "")")
+        .accessibilityLabel(content.accessibilityLabel)
+    }
+
+    private func perform(_ action: PaneExitBanner.Action) {
+        switch action {
+        case .openSettings:
+            openSettings()
+        case .useDefaultShell:
+            viewModel.restartPaneSession(paneID: paneID, forceDefaultShell: true)
+        case .retry, .restart:
+            viewModel.restartPaneSession(paneID: paneID)
+        }
     }
 }
 
@@ -200,7 +323,8 @@ private struct SplitContainerView: View {
                              tabID: tabID,
                              activePaneID: activePaneID,
                              viewModel: viewModel,
-                             sessionManager: sessionManager))
+                             sessionManager: sessionManager,
+                             isInsideSplit: true))
     }
 
     private func divider(total: CGFloat, firstLength: CGFloat) -> some View {
