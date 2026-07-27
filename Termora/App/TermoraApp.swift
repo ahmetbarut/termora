@@ -15,6 +15,11 @@ struct TermoraApp: App {
     var body: some Scene {
         WindowGroup {
             MainWindowView(services: services)
+                .termoraWindowChrome(
+                    opacity: SettingsLimits.clampOpacity(services.settings.settings.windowOpacity),
+                    backgroundColor: services.themes.theme(id: services.settings.settings.themeID).backgroundNSColor
+                )
+                .syncingTerminalAppearance(settings: services.settings, sessionManager: services.sessionManager)
         }
         .defaultSize(width: 900, height: 560)
         .commands {
@@ -22,7 +27,9 @@ struct TermoraApp: App {
         }
 
         Settings {
-            SettingsPlaceholderView()
+            SettingsWindowView(settings: services.settings,
+                               themes: services.themes,
+                               profiles: services.profiles)
         }
     }
 }

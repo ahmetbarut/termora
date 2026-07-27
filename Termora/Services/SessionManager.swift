@@ -236,7 +236,7 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         let current = settings.settings
         let theme = themes.theme(id: current.themeID)
 
-        view.font = Self.resolveFont(name: current.fontName, size: current.fontSize)
+        view.font = FontCatalog.resolvedFont(name: current.fontName, size: current.fontSize)
         view.lineSpacing = CGFloat(current.lineSpacing)
         view.nativeForegroundColor = theme.foregroundNSColor
 
@@ -251,14 +251,6 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         view.changeScrollback(current.scrollbackLines)
     }
 
-    /// Pure: a missing, empty or unknown font name falls back to the system monospaced face.
-    static func resolveFont(name: String?, size: Double) -> NSFont {
-        let pointSize = CGFloat(size)
-        guard let name, !name.isEmpty, let font = NSFont(name: name, size: pointSize) else {
-            return NSFont.monospacedSystemFont(ofSize: pointSize, weight: .regular)
-        }
-        return font
-    }
 
     /// Pure: OSC 7 payloads arrive as `file:///path`, but some shells emit a bare path.
     static func workingDirectory(fromHostReport report: String?) -> String? {
