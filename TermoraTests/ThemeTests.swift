@@ -46,6 +46,53 @@ import Testing
         #expect(colors[8].blue == 32896)
     }
 
+    // MARK: - brief 3 "Tema Sistemi"
+
+    /// Brief 8 temel renk veriyor, model 16 istiyor: parlak renkler bu kuralla türetilir.
+    @Test func brightenLiftsChannelsTowardsWhite() {
+        #expect(ThemeColorDerivation.brightened("#169CFF") == "#50B5FF")
+        #expect(ThemeColorDerivation.brightened("#141827") == "#4F525D")
+        #expect(ThemeColorDerivation.brightened("#FFFFFF") == "#FFFFFF")
+        #expect(ThemeColorDerivation.brightened("#000000") == "#404040")
+        // "#" olmadan ve alfa kanalıyla da ayrıştırılır, alfa yok sayılır.
+        #expect(ThemeColorDerivation.brightened("169CFFFF") == "#50B5FF")
+        #expect(ThemeColorDerivation.brightened("nope") == nil)
+        #expect(ThemeColorDerivation.brightened("#12345") == nil)
+    }
+
+    @Test func brightenIsClampedAndMonotonic() {
+        #expect(ThemeColorDerivation.brightened("#808080", lift: 0) == "#808080")
+        #expect(ThemeColorDerivation.brightened("#808080", lift: 1) == "#FFFFFF")
+        // Aralık dışı lift değerleri kırpılır (renk asla kararmaz).
+        #expect(ThemeColorDerivation.brightened("#808080", lift: -1) == "#808080")
+        #expect(ThemeColorDerivation.brightened("#808080", lift: 5) == "#FFFFFF")
+    }
+
+    @Test func bundledTermoraDarkMatchesTheBrief() throws {
+        let store = ThemeStore(bundle: .main)
+        let theme = store.theme(id: "termora-dark")
+        #expect(theme.name == "Termora Dark")
+        #expect(theme.background == DesignTokens.backgroundPrimary.hex)
+        #expect(theme.foreground == DesignTokens.textPrimary.hex)
+        #expect(theme.cursor == DesignTokens.accentBlue.hex)
+        #expect(theme.selection == "#263B70")
+
+        let normal = Array(theme.ansi.prefix(8))
+        #expect(normal == ["#141827", DesignTokens.danger.hex, DesignTokens.success.hex,
+                           DesignTokens.warning.hex, DesignTokens.accentBlue.hex,
+                           "#A66BFF", "#42D9E8", "#E8ECF8"])
+    }
+
+    @Test func bundledTermoraDarkBrightColorsFollowTheDerivationRule() {
+        let theme = ThemeStore(bundle: .main).theme(id: "termora-dark")
+        #expect(theme.ansi.count == 16)
+        for index in 0..<8 {
+            guard theme.ansi.indices.contains(index + 8) else { continue }
+            #expect(ThemeColorDerivation.brightened(theme.ansi[index]) == theme.ansi[index + 8],
+                    "ansi[\(index + 8)] türetme kuralına uymuyor")
+        }
+    }
+
     @Test func nsColorAccessorsParseThemeColors() throws {
         let theme = try JSONDecoder().decode(Theme.self, from: Data(Self.sampleJSON.utf8))
         let cursor = try #require(theme.cursorNSColor.usingColorSpace(.sRGB))

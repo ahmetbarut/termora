@@ -7,9 +7,10 @@ import Testing
 @Suite struct AppSettingsTests {
     @Test func defaultValuesMatchContract() {
         let settings = AppSettings()
-        #expect(settings.fontName == nil)
+        // brief 3 "Tipografi": SF Mono — 13 pt, satır yüksekliği 1.25.
+        #expect(settings.fontName == "SF Mono")
         #expect(settings.fontSize == 13)
-        #expect(settings.lineSpacing == 1.0)
+        #expect(settings.lineSpacing == 1.25)
         #expect(settings.cursorStyle == .blinkBlock)
         #expect(settings.themeID == "termora-dark")
         #expect(settings.windowOpacity == 1.0)
@@ -44,6 +45,15 @@ import Testing
         #expect(CursorStyleSetting.steadyUnderline.swiftTermStyle == .steadyUnderline)
         #expect(CursorStyleSetting.blinkBar.swiftTermStyle == .blinkBar)
         #expect(CursorStyleSetting.steadyBar.swiftTermStyle == .steadyBar)
+    }
+
+    /// Varsayılanlar tek kaynaktan (DesignTokens) gelmeli; kopyalar sürüklenmesin.
+    @Test func defaultsComeFromTheDesignTokens() {
+        let settings = AppSettings()
+        #expect(settings.fontName == DesignTokens.Typography.terminalFontFamily)
+        #expect(settings.fontSize == DesignTokens.Typography.terminalFontSize)
+        #expect(settings.lineSpacing == DesignTokens.Typography.terminalLineHeight)
+        #expect(FontCatalog.defaultFamily == DesignTokens.Typography.terminalFontFamily)
     }
 
     @Test func cursorStyleRawValuesAreStableForPersistence() {

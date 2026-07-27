@@ -21,7 +21,7 @@ struct ProfilesSettingsView: View {
             VStack(spacing: 0) {
                 List(selection: $selection) {
                     ForEach(profiles.profiles) { profile in
-                        Text(profile.name.isEmpty ? "Adsız profil" : profile.name)
+                        Text(profile.name.isEmpty ? "Untitled Profile" : profile.name)
                             .tag(profile.id)
                     }
                 }
@@ -34,14 +34,14 @@ struct ProfilesSettingsView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .help("Yeni profil ekle")
+                    .help("Add profile")
 
                     Button {
                         removeSelectedProfile()
                     } label: {
                         Image(systemName: "minus")
                     }
-                    .help("Seçili profili sil")
+                    .help("Delete selected profile")
                     .disabled(selection == nil)
 
                     Spacer()
@@ -59,13 +59,14 @@ struct ProfilesSettingsView: View {
                         profile: editorBinding,
                         shells: shells,
                         themes: themes,
-                        fontFamilies: fontFamilies
+                        fontFamilies: fontFamilies,
+                        onDelete: { removeSelectedProfile() }
                     )
                 } else {
                     VStack(spacing: 6) {
-                        Text("Profil seçilmedi")
+                        Text("No profile selected")
                             .font(.headline)
-                        Text("Soldaki listeden bir profil seçin veya + ile yeni profil ekleyin.")
+                        Text("Select a profile on the left, or press + to add one.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -76,7 +77,7 @@ struct ProfilesSettingsView: View {
         }
         .onAppear {
             shells = ShellService.availableShells()
-            fontFamilies = FontCatalog.availableMonospacedFamilies()
+            fontFamilies = FontCatalog.availableFontMenu().allFamilies
             if selection == nil {
                 selection = profiles.profiles.first?.id
             }
@@ -96,7 +97,7 @@ struct ProfilesSettingsView: View {
     }
 
     private func addProfile() {
-        let profile = TerminalProfile(name: "Yeni Profil")
+        let profile = TerminalProfile(name: "New Profile")
         profiles.profiles.append(profile)
         selection = profile.id
     }

@@ -27,9 +27,12 @@ enum CursorStyleSetting: String, Codable, CaseIterable {
 /// JSON olarak yazilir; yeni alanlar varsayilan degerle eklenmelidir ki eski bloblar
 /// cozulmeye devam etsin.
 struct AppSettings: Codable, Equatable {
-    var fontName: String? = nil
-    var fontSize: Double = 13
-    var lineSpacing: Double = 1.0
+    /// brief 3 "Tipografi": varsayilan terminal fontu SF Mono 13 pt, satir yuksekligi 1.25.
+    /// SF Mono kurulu degilse `FontCatalog.resolvedFont` sistem monospace fontuna,
+    /// o da yoksa Menlo'ya duser — geri dusus zinciri korunur.
+    var fontName: String? = DesignTokens.Typography.terminalFontFamily
+    var fontSize: Double = DesignTokens.Typography.terminalFontSize
+    var lineSpacing: Double = DesignTokens.Typography.terminalLineHeight
     var cursorStyle: CursorStyleSetting = .blinkBlock
     var themeID: String = "termora-dark"
     var windowOpacity: Double = 1.0

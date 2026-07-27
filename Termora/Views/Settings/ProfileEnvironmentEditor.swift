@@ -10,18 +10,18 @@ struct ProfileEnvironmentEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text("Anahtar")
+                Text("Key")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(width: 150, alignment: .leading)
-                Text("Değer")
+                Text("Value")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
 
             if entries.isEmpty {
-                Text("Bu profil için ek ortam değişkeni yok.")
+                Text("No extra environment variables for this profile.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -37,7 +37,7 @@ struct ProfileEnvironmentEditor: View {
                         Image(systemName: "minus.circle")
                     }
                     .buttonStyle(.borderless)
-                    .help("Bu değişkeni sil")
+                    .help("Remove this variable")
                 }
             }
 
@@ -45,15 +45,18 @@ struct ProfileEnvironmentEditor: View {
                 Button {
                     entries.append(EnvironmentEntry(key: "", value: ""))
                 } label: {
-                    Label("Değişken ekle", systemImage: "plus")
+                    Label("Add Variable", systemImage: "plus")
                 }
                 .buttonStyle(.borderless)
                 Spacer()
             }
 
-            Text("⚠️ Hassas değerleri (API anahtarı, parola) buraya koymayın — profiller UserDefaults'a düz metin olarak yazılır.")
+            Label(
+                "Do not store secrets (API keys, passwords) here — profiles are written to UserDefaults in plain text.",
+                systemImage: "exclamationmark.triangle"
+            )
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(DesignTokens.warning.color)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear {

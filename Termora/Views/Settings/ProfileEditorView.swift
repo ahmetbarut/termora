@@ -6,70 +6,100 @@ struct ProfileEditorView: View {
     let shells: [ShellInfo]
     let themes: ThemeStore
     let fontFamilies: [String]
+    /// brief 3 "Settings Tasarımı": tehlikeli işlem Danger Zone'dan çağrılır.
+    let onDelete: () -> Void
+
+    @State private var isConfirmingDelete = false
 
     var body: some View {
         Form {
-            Section("Kimlik") {
-                TextField("Ad", text: $profile.name)
+            Section("Identity") {
+                TextField("Name", text: $profile.name)
             }
 
-            Section("Başlatma") {
-                Picker("Kabuk", selection: $profile.shellPath) {
-                    Text("Genel ayarı kullan").tag(nil as String?)
+            Section("Launch") {
+                Picker("Shell", selection: $profile.shellPath) {
+                    Text("Use global setting").tag(nil as String?)
                     ForEach(shells) { shell in
                         Text(shell.displayName).tag(shell.path as String?)
                     }
                 }
 
                 HStack(spacing: 8) {
-                    Text("Başlangıç klasörü")
+                    Text("Startup directory")
                     Spacer()
-                    Text(profile.startupDirectory ?? "Genel ayarı kullan")
+                    Text(profile.startupDirectory ?? "Use global setting")
                         .lineLimit(1)
                         .truncationMode(.head)
                         .foregroundStyle(.secondary)
-                    Button("Seç…") { chooseStartupDirectory() }
-                    Button("Temizle") { profile.startupDirectory = nil }
+                    Button("Choose…") { chooseStartupDirectory() }
+                    Button("Clear") { profile.startupDirectory = nil }
                         .disabled(profile.startupDirectory == nil)
                 }
 
                 TextField(
-                    "Başlangıç komutu",
+                    "Startup command",
                     text: startupCommandBinding,
-                    prompt: Text("örn. tmux attach")
+                    prompt: Text("e.g. tmux attach")
                 )
             }
 
-            Section("Görünüm geçersiz kılmaları") {
-                Picker("Yazı tipi", selection: $profile.fontName) {
-                    Text("Genel ayarı kullan").tag(nil as String?)
+            Section("Appearance Overrides") {
+                Picker("Font", selection: $profile.fontName) {
+                    Text("Use global setting").tag(nil as String?)
                     ForEach(fontFamilies, id: \.self) { family in
                         Text(family).tag(family as String?)
                     }
                 }
 
                 HStack(spacing: 8) {
-                    Text("Yazı boyutu")
+                    Text("Font size")
                     Spacer()
-                    Text(profile.fontSize.map { "\(Int($0)) pt" } ?? "Genel ayar")
+                    Text(profile.fontSize.map { "\(Int($0)) pt" } ?? "Global setting")
                         .foregroundStyle(.secondary)
                     Stepper("", value: fontSizeBinding, in: SettingsLimits.fontSizeRange, step: 1)
                         .labelsHidden()
-                    Button("Temizle") { profile.fontSize = nil }
+                    Button("Clear") { profile.fontSize = nil }
                         .disabled(profile.fontSize == nil)
                 }
 
-                Picker("Tema", selection: $profile.themeID) {
-                    Text("Genel ayarı kullan").tag(nil as String?)
+                Picker("Theme", selection: $profile.themeID) {
+                    Text("Use global setting").tag(nil as String?)
                     ForEach(themes.themes) { theme in
                         Text(theme.name).tag(theme.id as String?)
                     }
                 }
             }
 
-            Section("Ortam değişkenleri") {
+            Section("Environment Variables") {
                 ProfileEnvironmentEditor(environment: $profile.environment)
                     .id(profile.id)
+            }
+
+            Section {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete this profile")
+                        Text("Open terminals keep running and fall back to the global settings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button("Delete Profile…", role: .destructive) { isConfirmingDelete = true }
+                }
+            } header: {
+                Label("Danger Zone", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(DesignTokens.danger.color)
+            }
+            .confirmationDialog(
+                "Delete the profile “\(profile.name.isEmpty ? "Untitled Profile" : profile.name)”?",
+                isPresented: $isConfirmingDelete
+            ) {
+                Button("Delete Profile", role: .destructive) { onDelete() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This cannot be undone. Terminals launched from this profile keep running.")
             }
         }
         .formStyle(.grouped)
@@ -97,8 +127,8 @@ struct ProfileEditorView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Seç"
-        panel.message = "Bu profille açılan terminallerin başlangıç klasörünü seçin."
+        panel.prompt = "Choose"
+        panel.message = "Select the startup folder for terminals launched from this profile."
         if let current = profile.startupDirectory {
             panel.directoryURL = URL(fileURLWithPath: current)
         }

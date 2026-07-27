@@ -9,31 +9,31 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Kabuk") {
-                Picker("Varsayılan kabuk", selection: $settings.settings.defaultShellPath) {
-                    Text("Sistem varsayılanı").tag(nil as String?)
+            Section("Shell") {
+                Picker("Default shell", selection: $settings.settings.defaultShellPath) {
+                    Text("System default").tag(nil as String?)
                     ForEach(shells) { shell in
                         Text(shell.displayName).tag(shell.path as String?)
                     }
                 }
             }
 
-            Section("Başlangıç klasörü") {
+            Section("Startup Directory") {
                 HStack(spacing: 8) {
-                    Text(settings.settings.startupDirectory ?? "Ana klasör (~)")
+                    Text(settings.settings.startupDirectory ?? "Home folder (~)")
                         .lineLimit(1)
                         .truncationMode(.head)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Seç…") { chooseStartupDirectory() }
-                    Button("Temizle") { settings.settings.startupDirectory = nil }
+                    Button("Choose…") { chooseStartupDirectory() }
+                    Button("Clear") { settings.settings.startupDirectory = nil }
                         .disabled(settings.settings.startupDirectory == nil)
                 }
             }
 
             Section("Terminal") {
                 HStack(spacing: 8) {
-                    Text("Kaydırma geçmişi (satır)")
+                    Text("Scrollback (lines)")
                     Spacer()
                     TextField("", text: $scrollbackText)
                         .frame(width: 90)
@@ -42,11 +42,11 @@ struct GeneralSettingsView: View {
                     Stepper("", value: scrollbackBinding, in: SettingsLimits.scrollbackRange, step: 500)
                         .labelsHidden()
                 }
-                Text("100 – 100.000 arası. Aralık dışı değerler kırpılır.")
+                Text("100 – 100,000. Values outside the range are clamped.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Toggle("Durum çubuğunu göster", isOn: $settings.settings.showStatusBar)
+                Toggle("Show status bar", isOn: $settings.settings.showStatusBar)
             }
         }
         .formStyle(.grouped)
@@ -80,8 +80,8 @@ struct GeneralSettingsView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Seç"
-        panel.message = "Yeni terminallerin açılacağı klasörü seçin."
+        panel.prompt = "Choose"
+        panel.message = "Select the folder new terminals open in."
         if let current = settings.settings.startupDirectory {
             panel.directoryURL = URL(fileURLWithPath: current)
         }
