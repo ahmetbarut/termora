@@ -13,6 +13,9 @@ struct SettingsWindowView: View {
 
             AppearanceSettingsView(settings: settings, themes: themes)
                 .tabItem { Label("Görünüm", systemImage: "paintpalette") }
+
+            ProfilesSettingsView(profiles: profiles, themes: themes)
+                .tabItem { Label("Profiller", systemImage: "person.crop.rectangle.stack") }
         }
         .frame(width: 560, height: 480)
     }
