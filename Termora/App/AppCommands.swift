@@ -26,13 +26,17 @@ struct AppCommands: Commands {
 
         // ⌘W standart "Close Window" öğesinin yerine geçer: önce sekme kapanır.
         CommandGroup(replacing: .saveItem) {
-            Button("Sekmeyi Kapat") {
+            Button(workspace?.activeTabID == nil ? "Pencereyi Kapat" : "Sekmeyi Kapat") {
                 if let workspace, let activeTabID = workspace.activeTabID {
                     workspace.requestCloseTab(id: activeTabID)
+                } else {
+                    // Bu grup standart "Close Window" öğesinin yerine geçtiği için, terminal
+                    // penceresi dışındaki pencerelerde (Ayarlar) ⌘W'nin karşılığı kalmaz.
+                    // Devre dışı bırakılırsa Ayarlar penceresi klavyeyle HİÇ kapatılamaz.
+                    NSApp.keyWindow?.performClose(nil)
                 }
             }
             .keyboardShortcut("w", modifiers: .command)
-            .disabled(workspace?.activeTabID == nil)
         }
 
         CommandGroup(after: .textEditing) {
