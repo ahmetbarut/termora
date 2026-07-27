@@ -60,13 +60,15 @@ import Testing
     @Test func requestCloseTabClosesIdleTabAndTerminatesItsSessions() {
         let (workspace, manager) = makeWorkspace()
         workspace.newTab()
-        let tab = workspace.tabs[0]
+        workspace.newTab()
+        let tab = workspace.tabs[1]
         let sessionID = tab.root.leaves[0].sessionID
 
         workspace.requestCloseTab(id: tab.id)
 
         #expect(workspace.pendingClose == nil)
-        #expect(workspace.tabs.isEmpty)
+        #expect(workspace.tabs.count == 1)
+        #expect(workspace.tabs.contains { $0.id == tab.id } == false)
         #expect(manager.terminatedSessionIDs == [sessionID])
     }
 
@@ -113,14 +115,36 @@ import Testing
         #expect(manager.terminatedSessionIDs.isEmpty)
     }
 
-    @Test func closingLastTabClearsActiveTabID() {
-        let (workspace, _) = makeWorkspace()
+    @Test func closingLastTabOpensAReplacementTab() {
+        let (workspace, manager) = makeWorkspace()
         workspace.newTab()
+        let firstTabID = workspace.tabs[0].id
+        let firstSessionID = workspace.tabs[0].root.leaves[0].sessionID
 
-        workspace.requestCloseTab(id: workspace.tabs[0].id)
+        workspace.requestCloseTab(id: firstTabID)
 
-        #expect(workspace.tabs.isEmpty)
-        #expect(workspace.activeTabID == nil)
+        // `first` (indeks değil): kırmızı fazda sekme listesi boş kalırsa `tabs[0]` dizi
+        // tuzağına düşüp TÜM test sürecini öldürür ve paralel testlerin sinyalini yok eder.
+        #expect(workspace.tabs.count == 1)
+        #expect(workspace.tabs.first?.id != firstTabID)
+        #expect(workspace.activeTabID == workspace.tabs.first?.id)
+        #expect(manager.terminatedSessionIDs == [firstSessionID])
+        #expect(manager.sessions.count == 1)
+    }
+
+    @Test func confirmingCloseOfTheLastBusyTabAlsoOpensAReplacementTab() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let tab = workspace.tabs[0]
+        manager.busySessionIDs.insert(tab.root.leaves[0].sessionID)
+        workspace.requestCloseTab(id: tab.id)
+        #expect(workspace.tabs.count == 1)
+
+        workspace.confirmPendingClose()
+
+        #expect(workspace.tabs.count == 1)
+        #expect(workspace.tabs.first?.id != tab.id)
+        #expect(workspace.pendingClose == nil)
     }
 
     @Test func closingActiveTabActivatesTheNeighbourAtTheSameIndex() {

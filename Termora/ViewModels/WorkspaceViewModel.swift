@@ -111,8 +111,12 @@ final class WorkspaceViewModel {
             sessionManager.terminateSession(id: leaf.sessionID)
         }
         tabs.remove(at: index)
-        if activeTabID == id {
-            activeTabID = tabs.isEmpty ? nil : tabs[min(index, tabs.count - 1)].id
+
+        if tabs.isEmpty {
+            // Terminal uygulaması konvansiyonu: pencere boş kalmaz, yeni oturum açılır.
+            newTab()
+        } else if activeTabID == id {
+            activeTabID = tabs[min(index, tabs.count - 1)].id
         }
     }
 

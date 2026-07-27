@@ -31,6 +31,35 @@ struct MainWindowView: View {
         .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
             workspace.syncAutomaticTitles()
         }
+        .focusedSceneValue(\.workspace, workspace)
+        .confirmationDialog(
+            pendingCloseMessage,
+            isPresented: pendingCloseBinding
+        ) {
+            Button("Kapat", role: .destructive) { workspace.confirmPendingClose() }
+            Button("Vazgeç", role: .cancel) { workspace.cancelPendingClose() }
+        }
+    }
+
+    private var pendingCloseBinding: Binding<Bool> {
+        Binding(
+            get: { workspace.pendingClose != nil },
+            set: { isPresented in
+                if !isPresented { workspace.cancelPendingClose() }
+            }
+        )
+    }
+
+    /// Onay metni hedefe göre değişir; M3'te panel (Task 17), M5'te pencere (Task 22) dalı da kullanılır.
+    private var pendingCloseMessage: String {
+        switch workspace.pendingClose?.target {
+        case .pane:
+            return "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?"
+        case .window:
+            return "Çalışan işlemler var. Pencere kapatılsın mı?"
+        case .tab, .none:
+            return "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"
+        }
     }
 
     @ViewBuilder

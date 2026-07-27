@@ -17,6 +17,9 @@ struct TermoraApp: App {
             MainWindowView(services: services)
         }
         .defaultSize(width: 900, height: 560)
+        .commands {
+            AppCommands()
+        }
 
         Settings {
             SettingsPlaceholderView()
