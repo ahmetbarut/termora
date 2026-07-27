@@ -76,6 +76,23 @@ struct WorkspaceSearchTests {
         #expect(stub.focusCalls.count == 1)
     }
 
+    /// Çubuk kapanırken sayaç sıfırlanır ama terim korunur. Yeniden açıldığında sayacın
+    /// "0/0" yalanını söylememesi için oturumdan tazelenmesi gerekir (elle doğrulamada
+    /// çubuk `line [0-9]+9` terimiyle açılıp 3 eşleşme varken "0/0" gösteriyordu).
+    @Test func reopeningSearchRecomputesSummaryForPreservedTerm() {
+        let (workspace, stub) = makeWorkspace()
+        workspace.toggleSearchBar()
+        workspace.activeTab?.searchQuery = TerminalSearchQuery(term: "error")
+        workspace.closeSearch()
+        #expect(workspace.activeTab?.searchSummary == .empty)
+
+        stub.summaryToReturn = SearchSummary(index: 0, total: 40)
+        workspace.toggleSearchBar()
+
+        #expect(workspace.activeTab?.isSearchVisible == true)
+        #expect(workspace.activeTab?.searchSummary == SearchSummary(index: 0, total: 40))
+    }
+
     @Test func findNextForwardsQueryOfActivePaneAndStoresSummary() throws {
         let (workspace, stub) = makeWorkspace()
         let sessionID = try activeSessionID(workspace)

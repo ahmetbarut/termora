@@ -11615,3 +11615,9 @@ Beklenen: `git status --short` temiz; boş commit, spec §10'un üç ölçütün
 - LocalProcess.processTerminated() — waitpid(shellPid, &n, WNOHANG) sonucu HAM status olarak delegate'e geçer (LocalProcess.swift:365-369)
 - Terminal.setCursorStyle(_ style: CursorStyle) — public, Terminal.swift:3235
 - Terminal.changeScrollback(_ newScrollback: Int?) — public, Terminal.swift:5550
+- SearchOptions — public struct, Equatable; `public init(caseSensitive: Bool = false, regex: Bool = false, wholeWord: Bool = false)` (Sources/SwiftTerm/SearchOptions.swift:11-24). DİKKAT: alan adı `regex`, `usesRegex` DEĞİL (Task 20'de doğrulandı)
+- TerminalView.findNext(_ term: String, options: SearchOptions = SearchOptions(), scrollToResult: Bool = true) -> Bool — @discardableResult public, TerminalViewSearch.swift:19. Üç parametrenin ikisi varsayılanlı; eşleşme yoksa seçimi temizler ve false döner
+- TerminalView.findPrevious(_ term: String, options: SearchOptions = SearchOptions(), scrollToResult: Bool = true) -> Bool — @discardableResult public, TerminalViewSearch.swift:40
+- TerminalView.searchMatchSummary(_ term: String, options: SearchOptions = SearchOptions(), limit: Int = 1000) -> (index: Int, total: Int) — public, TerminalViewSearch.swift:58. `index` 1 tabanlı, aktif eşleşme yoksa 0. İçeride `SearchService.findAll` çağırır (tüm tamponu tarar) ama `lastResult`'ı DEĞİŞTİRMEZ, dolayısıyla findNext'in hemen ardından çağrılabilir
+- TerminalView.clearSearch() — public, TerminalViewSearch.swift:71; `search?.reset()` + `selection?.selectNone()`
+- Not: alternatif ekranda (`isDisplayBufferAlternate`) `scrollToReveal` erken döner — vim/less içindeyken eşleşmeye kaydırma yapılmaz (TerminalViewSearch.swift:106)

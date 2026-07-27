@@ -35,6 +35,27 @@ struct AppCommands: Commands {
             .disabled(workspace?.activeTabID == nil)
         }
 
+        CommandGroup(after: .textEditing) {
+            Divider()
+            Button("Bul…") {
+                workspace?.toggleSearchBar()
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(workspace == nil)
+
+            Button("Sonrakini Bul") {
+                workspace?.findNextMatch()
+            }
+            .keyboardShortcut("g", modifiers: .command)
+            .disabled(workspace == nil)
+
+            Button("Öncekini Bul") {
+                workspace?.findPreviousMatch()
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(workspace == nil)
+        }
+
         // DİKKAT: `Commands` protokolünde `disabled` YOKTUR (yalnız `View` üzerinde vardır);
         // `CommandMenu { … }.disabled(…)` derlenmez. Etkinlik her Button'a tek tek verilir.
         CommandMenu("Pane") {

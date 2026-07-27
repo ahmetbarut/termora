@@ -19,6 +19,10 @@ struct MainWindowView: View {
         VStack(spacing: 0) {
             TabBarView(workspace: workspace)
             Divider()
+            if let tab = workspace.activeTab, tab.isSearchVisible {
+                SearchBarView(tab: tab, workspace: workspace)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             terminalContent
         }
         .frame(minWidth: 480, minHeight: 320)

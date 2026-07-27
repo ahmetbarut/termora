@@ -304,6 +304,12 @@ final class WorkspaceViewModel {
             closeSearch()
         } else {
             tab.isSearchVisible = true
+            // Terim sekmede korunur ama sayaç kapanışta sıfırlanır; yeniden açılışta
+            // tazelenmezse gerçekte eşleşme varken çubuk "0/0" yalanını söyler.
+            // Boş terimde tazeleme yok: temizlenecek bir vurgu da yok.
+            if !tab.searchQuery.term.isEmpty {
+                refreshSearchSummary()
+            }
         }
     }
 
