@@ -5,6 +5,10 @@ struct MainWindowView: View {
     private let services: AppServices
     @State private var workspace: WorkspaceViewModel
 
+    /// Pencere kapatma delegesi. `@State` tutulur çünkü `NSWindow.delegate` zayıftır;
+    /// başka bir sahibi olmazsa ilk yerleşimden hemen sonra yok olur.
+    @State private var closeCoordinator = WindowCloseCoordinator()
+
     @MainActor
     init(services: AppServices) {
         self.services = services
@@ -39,8 +43,13 @@ struct MainWindowView: View {
             workspace.syncAutomaticTitles()
         }
         .focusedSceneValue(\.workspace, workspace)
+        .background(
+            WindowAccessor { window in
+                closeCoordinator.attach(window: window, workspace: workspace)
+            }
+        )
         .confirmationDialog(
-            pendingCloseMessage,
+            workspace.pendingCloseMessage,
             isPresented: pendingCloseBinding
         ) {
             Button("Kapat", role: .destructive) { workspace.confirmPendingClose() }
@@ -55,18 +64,6 @@ struct MainWindowView: View {
                 if !isPresented { workspace.cancelPendingClose() }
             }
         )
-    }
-
-    /// Onay metni hedefe göre değişir; M3'te panel (Task 17), M5'te pencere (Task 22) dalı da kullanılır.
-    private var pendingCloseMessage: String {
-        switch workspace.pendingClose?.target {
-        case .pane:
-            return "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?"
-        case .window:
-            return "Çalışan işlemler var. Pencere kapatılsın mı?"
-        case .tab, .none:
-            return "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"
-        }
     }
 
     @ViewBuilder

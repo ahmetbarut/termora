@@ -8,6 +8,8 @@ import SwiftUI
 @main
 struct TermoraApp: App {
 
+    @NSApplicationDelegateAdaptor(TermoraAppDelegate.self) private var appDelegate
+
     /// `@State`, not `let`: SwiftUI may rebuild the `App` struct, and a fresh `AppServices`
     /// on every rebuild would mean a fresh `SessionManager` — every open shell would vanish.
     @State private var services = AppServices()

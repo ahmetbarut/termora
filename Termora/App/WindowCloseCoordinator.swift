@@ -1,0 +1,106 @@
+import AppKit
+import Foundation
+
+/// Pencerenin kapat düğmesini (ve ⌘Q akışını) "çalışan işlem var mı?" onayına bağlar.
+///
+/// `NSWindow.delegate` zayıf tutulur; bu nesneyi `MainWindowView` bir `@State` içinde canlı
+/// tutar. SwiftUI'nin kurduğu özgün delege korunur ve BURADA GERÇEKLENMEYEN tüm delege
+/// mesajları ObjC iletimiyle ona aktarılır — aksi hâlde çerçevenin kendi pencere davranışları
+/// (kapanış temizliği, geri yükleme) sessizce ölür.
+@MainActor
+final class WindowCloseCoordinator: NSObject, NSWindowDelegate {
+
+    /// Canlı koordinatörler (zayıf tutulur). Uygulama kapanışında hangi pencerede iş
+    /// çalıştığını bulmak için gerekir: `@FocusedValue` uygulama delegesinden okunamaz.
+    private static let liveTable = NSHashTable<WindowCloseCoordinator>.weakObjects()
+
+    static var live: [WindowCloseCoordinator] { liveTable.allObjects }
+
+    static var firstBusy: WindowCloseCoordinator? {
+        live.first { $0.hasRunningProcess }
+    }
+
+    private weak var window: NSWindow?
+    private weak var workspace: WorkspaceViewModel?
+
+    /// SwiftUI'nin kurduğu delege; işlemediğimiz mesajlar buna iletilir.
+    private weak var previousDelegate: (any NSObjectProtocol)?
+
+    /// Onay alındıktan sonraki `close()` çağrısında tekrar sormamak için bayrak.
+    private var isClosingAfterApproval = false
+
+    override init() {
+        super.init()
+        Self.liveTable.add(self)
+    }
+
+    /// Pencereyi bağlar. `WindowAccessor` her yerleşim turunda çağırabilir: idempotenttir.
+    /// SwiftUI delegeyi sonradan geri alırsa bir sonraki çağrıda yeniden devralınır.
+    func attach(window: NSWindow, workspace: WorkspaceViewModel) {
+        self.workspace = workspace
+        self.window = window
+        guard window.delegate !== self else { return }
+        if let existing = window.delegate {
+            previousDelegate = existing
+        }
+        window.delegate = self
+    }
+
+    var hasRunningProcess: Bool {
+        workspace?.hasAnyRunningProcess() ?? false
+    }
+
+    func bringWindowForward() {
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Uygulama kapanışı için onay ister; `true` dönerse beklemeden kapanılabilir.
+    func requestTermination(onApproved: @escaping @MainActor () -> Void) -> Bool {
+        guard let workspace else { return true }
+        return workspace.requestCloseWindow(onApproved: onApproved)
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if isClosingAfterApproval { return true }
+        guard let workspace else { return true }
+
+        let canCloseNow = workspace.requestCloseWindow { [weak self] in
+            self?.closeAfterApproval()
+        }
+        guard canCloseNow else { return false }
+
+        // Çalışan işlem yok: onay gerekmiyor, ama oturumlar yine de burada kapatılmalı.
+        // SessionManager view cache'i uygulama ömürlüdür; kapatmazsak pencere gitse de
+        // boştaki shell süreçleri yaşamaya devam eder.
+        workspace.closeAllTabs()
+        return true
+    }
+
+    private func closeAfterApproval() {
+        isClosingAfterApproval = true
+        // Diyalog kapanışıyla aynı run-loop turunda close() çağırmak sheet'i yarım bırakır.
+        DispatchQueue.main.async { [weak self] in
+            self?.window?.close()
+        }
+    }
+
+    // MARK: - Delege iletimi
+
+    // AppKit bu iki mesajı her zaman ana iş parçacığında gönderir; `assumeIsolated`
+    // Task 8'de SwiftTerm delegeleri için kullanılan kalıbın aynısıdır.
+    nonisolated override func responds(to aSelector: Selector!) -> Bool {
+        if super.responds(to: aSelector) { return true }
+        return MainActor.assumeIsolated {
+            previousDelegate?.responds(to: aSelector) ?? false
+        }
+    }
+
+    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        MainActor.assumeIsolated { () -> (any NSObjectProtocol)? in
+            guard previousDelegate?.responds(to: aSelector) == true else { return nil }
+            return previousDelegate
+        }
+    }
+}
