@@ -74,6 +74,8 @@ final class WorkspaceViewModel {
     func confirmPendingClose() {
         guard let pending = pendingClose else { return }
         pendingClose = nil
+        let approval = windowCloseApproval
+        windowCloseApproval = nil
         switch pending.target {
         case let .tab(tabID):
             closeTab(id: tabID)
@@ -81,11 +83,15 @@ final class WorkspaceViewModel {
             guard let tab = tabs.first(where: { $0.root.sessionID(ofPane: paneID) != nil }) else { return }
             closePane(paneID: paneID, in: tab)
         case .window:
+            // Önce oturumlar sonlandırılır, sonra pencere/uygulama kapatılır:
+            // ters sırada shell'ler SessionManager cache'inde öksüz kalırdı.
             closeAllTabs()
+            approval?()
         }
     }
 
     func cancelPendingClose() {
+        windowCloseApproval = nil
         pendingClose = nil
     }
 
@@ -103,6 +109,38 @@ final class WorkspaceViewModel {
     func hasAnyRunningProcess() -> Bool {
         tabs.contains { tab in
             tab.root.leaves.contains { sessionManager.hasRunningProcess(sessionID: $0.sessionID) }
+        }
+    }
+
+    // MARK: - Pencere / uygulama kapatma
+
+    /// `.window` hedefli onay verildiğinde çalıştırılacak eylem.
+    /// `requestCloseWindow(onApproved:)` kurar; onay ya da iptal temizler.
+    /// Kapatma kararı burada tutulduğu için akış AppKit olmadan test edilebilir.
+    private var windowCloseApproval: (@MainActor () -> Void)?
+
+    /// Pencere ya da uygulama kapatılmak isteniyor.
+    /// - Parameter onApproved: Kullanıcı onaylarsa, oturumlar sonlandırıldıktan SONRA çağrılır.
+    /// - Returns: Çalışan işlem yoksa `true` — çağıran kapanışa hemen devam edebilir.
+    ///   Çalışan işlem varsa onay diyaloğu kurulur ve `false` döner.
+    func requestCloseWindow(onApproved: @escaping @MainActor () -> Void) -> Bool {
+        guard hasAnyRunningProcess() else { return true }
+        windowCloseApproval = onApproved
+        pendingClose = PendingClose(id: UUID(), target: .window)
+        return false
+    }
+
+    /// Onay diyaloğunun başlığı; hedefe göre değişir (aynı diyalog üç akışta kullanılıyor).
+    var pendingCloseMessage: String {
+        switch pendingClose?.target {
+        case .tab:
+            return "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"
+        case .pane:
+            return "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?"
+        case .window:
+            return "Çalışan işlemler var. Tüm oturumlar kapatılsın mı?"
+        case nil:
+            return ""
         }
     }
 

@@ -198,6 +198,114 @@ import Testing
         #expect(workspace.hasAnyRunningProcess())
     }
 
+    // MARK: - Pencere / uygulama kapatma
+
+    /// Dizin indeksi yerine: kırmızı fazda `[i]` tüm test sürecini öldürür.
+    private func sessionID(ofTabAt index: Int, in workspace: WorkspaceViewModel) throws -> UUID {
+        let tab = try #require(workspace.tabs.indices.contains(index) ? workspace.tabs[index] : nil)
+        return try #require(tab.root.leaves.first).sessionID
+    }
+
+    @Test func hasAnyRunningProcessScansEveryTab() throws {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        workspace.newTab()
+        #expect(workspace.hasAnyRunningProcess() == false)
+
+        let busySessionID = try sessionID(ofTabAt: 1, in: workspace)
+        manager.busySessionIDs.insert(busySessionID)
+        #expect(workspace.hasAnyRunningProcess())
+
+        manager.terminateSession(id: busySessionID)
+        #expect(workspace.hasAnyRunningProcess() == false)
+    }
+
+    @Test func requestCloseWindowAllowsClosingWhenNothingIsRunning() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        var approvedCount = 0
+
+        let canCloseNow = workspace.requestCloseWindow { approvedCount += 1 }
+
+        #expect(canCloseNow)
+        #expect(workspace.pendingClose == nil)
+        // Onay istenmediği için callback de çalışmaz; oturumları çağıran kapatır.
+        #expect(approvedCount == 0)
+        #expect(manager.terminatedSessionIDs.isEmpty)
+    }
+
+    @Test func requestCloseWindowAsksForConfirmationWhenSomethingIsRunning() throws {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        manager.busySessionIDs.insert(try sessionID(ofTabAt: 1, in: workspace))
+        var approvedCount = 0
+
+        let canCloseNow = workspace.requestCloseWindow { approvedCount += 1 }
+
+        #expect(canCloseNow == false)
+        #expect(workspace.pendingClose?.target == .window)
+        #expect(approvedCount == 0)
+        #expect(manager.terminatedSessionIDs.isEmpty)
+        #expect(workspace.tabs.count == 2)
+    }
+
+    @Test func confirmingWindowCloseTerminatesSessionsThenRunsTheApproval() throws {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        let sessionIDs = try (0..<2).map { try sessionID(ofTabAt: $0, in: workspace) }
+        manager.busySessionIDs.insert(try #require(sessionIDs.first))
+        var terminatedCountAtApproval = -1
+        _ = workspace.requestCloseWindow { terminatedCountAtApproval = manager.terminatedSessionIDs.count }
+
+        workspace.confirmPendingClose()
+
+        // Onay callback'i, oturumlar kapatıldıktan SONRA çağrılmalı: pencere kapanırken
+        // arkada canlı shell kalmamalı.
+        #expect(terminatedCountAtApproval == 2)
+        #expect(Set(manager.terminatedSessionIDs) == Set(sessionIDs))
+        #expect(workspace.tabs.isEmpty)
+        #expect(workspace.activeTabID == nil)
+        #expect(workspace.pendingClose == nil)
+    }
+
+    @Test func cancellingWindowCloseKeepsSessionsAndDropsTheApproval() throws {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        manager.busySessionIDs.insert(try sessionID(ofTabAt: 0, in: workspace))
+        var approvedCount = 0
+        _ = workspace.requestCloseWindow { approvedCount += 1 }
+
+        workspace.cancelPendingClose()
+
+        #expect(workspace.pendingClose == nil)
+        #expect(workspace.tabs.count == 1)
+        #expect(manager.terminatedSessionIDs.isEmpty)
+        #expect(approvedCount == 0)
+
+        // Vazgeçilen onay unutulur: yeni bir istek olmadan callback bir daha çalışamaz.
+        workspace.confirmPendingClose()
+        #expect(approvedCount == 0)
+    }
+
+    @Test func pendingCloseMessageDescribesTheTarget() throws {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let tab = try #require(workspace.tabs.first)
+        manager.busySessionIDs.insert(try sessionID(ofTabAt: 0, in: workspace))
+
+        #expect(workspace.pendingCloseMessage.isEmpty)
+
+        workspace.requestCloseTab(id: tab.id)
+        #expect(workspace.pendingCloseMessage == "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?")
+
+        workspace.cancelPendingClose()
+        _ = workspace.requestCloseWindow {}
+        #expect(workspace.pendingCloseMessage == "Çalışan işlemler var. Tüm oturumlar kapatılsın mı?")
+    }
+
     // MARK: - Seçim ve yeniden adlandırma
 
     @Test func selectTabUsesZeroBasedIndexAndIgnoresOutOfBounds() {
