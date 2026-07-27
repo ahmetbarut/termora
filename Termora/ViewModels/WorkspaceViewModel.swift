@@ -78,7 +78,8 @@ final class WorkspaceViewModel {
         case let .tab(tabID):
             closeTab(id: tabID)
         case let .pane(paneID):
-            closePane(paneID: paneID)
+            guard let tab = tabs.first(where: { $0.root.sessionID(ofPane: paneID) != nil }) else { return }
+            closePane(paneID: paneID, in: tab)
         case .window:
             closeAllTabs()
         }
@@ -118,13 +119,6 @@ final class WorkspaceViewModel {
         } else if activeTabID == id {
             activeTabID = tabs[min(index, tabs.count - 1)].id
         }
-    }
-
-    /// M2 değişmezi: her sekmede tek panel vardır, dolayısıyla paneli kapatmak sekmeyi kapatır.
-    /// Task 16 bunu PaneNode.removing(paneID:) ile ağaç budamasına genişletir.
-    private func closePane(paneID: UUID) {
-        guard let tab = tabs.first(where: { $0.root.sessionID(ofPane: paneID) != nil }) else { return }
-        closeTab(id: tab.id)
     }
 
     // MARK: - Sekme seçimi
@@ -202,5 +196,92 @@ final class WorkspaceViewModel {
                 .joined(separator: "\u{1F}")
         }
         .joined(separator: "\u{1E}")
+    }
+
+    // MARK: - Pane operations
+
+    /// Splits the active pane; the new pane becomes active and inherits the current
+    /// pane's working directory.
+    func splitActivePane(axis: SplitAxis) {
+        guard let tab = activeTab else { return }
+        let session = sessionManager.createSession(profile: nil,
+                                                   workingDirectory: workingDirectoryOfActivePane(in: tab))
+        let newPaneID = UUID()
+        tab.root = tab.root.splitting(paneID: tab.activePaneID,
+                                      axis: axis,
+                                      newPaneID: newPaneID,
+                                      newSessionID: session.id)
+        tab.activePaneID = newPaneID
+    }
+
+    private func workingDirectoryOfActivePane(in tab: TerminalTab) -> String? {
+        guard let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) else { return nil }
+        return sessionManager.session(id: sessionID)?.workingDirectory
+    }
+
+    /// Closes the active pane. A single-pane tab is closed as a tab instead.
+    /// Panes with a running foreground job ask for confirmation first.
+    func requestCloseActivePane() {
+        guard let tab = activeTab else { return }
+        guard tab.root.leaves.count > 1 else {
+            requestCloseTab(id: tab.id)
+            return
+        }
+        let paneID = tab.activePaneID
+        guard let sessionID = tab.root.sessionID(ofPane: paneID) else { return }
+
+        if sessionManager.hasRunningProcess(sessionID: sessionID) {
+            pendingClose = PendingClose(id: UUID(), target: .pane(paneID: paneID))
+            return
+        }
+        closePane(paneID: paneID, in: tab)
+    }
+
+    /// Removes a pane from its tab: the sibling subtree takes over the space and,
+    /// when the closed pane was active, focus moves to the sibling.
+    private func closePane(paneID: UUID, in tab: TerminalTab) {
+        guard let sessionID = tab.root.sessionID(ofPane: paneID),
+              let sibling = tab.root.siblingLeafPaneID(of: paneID),
+              let newRoot = tab.root.removing(paneID: paneID) else { return }
+
+        sessionManager.terminateSession(id: sessionID)
+        tab.root = newRoot
+        if tab.activePaneID == paneID {
+            tab.activePaneID = sibling
+        }
+        paneFrames[paneID] = nil
+    }
+
+    /// Moves focus to the neighbouring pane in the given direction, if any.
+    func focusPane(_ direction: FocusDirection) {
+        guard let tab = activeTab else { return }
+        let visiblePaneIDs = Set(tab.root.leaves.map { $0.paneID })
+        let frames = paneFrames.filter { visiblePaneIDs.contains($0.key) }
+        guard let target = PaneGeometry.neighbor(of: tab.activePaneID,
+                                                 direction: direction,
+                                                 frames: frames) else { return }
+        tab.activePaneID = target
+    }
+
+    /// Focuses a pane directly (click on an inactive pane).
+    func activatePane(paneID: UUID) {
+        guard let tab = activeTab, tab.root.sessionID(ofPane: paneID) != nil else { return }
+        tab.activePaneID = paneID
+    }
+
+    /// Applies a divider drag to the layout tree (ratio is clamped by `PaneNode`).
+    func updateSplitRatio(tabID: UUID, splitID: UUID, ratio: Double) {
+        guard let tab = tabs.first(where: { $0.id == tabID }) else { return }
+        tab.root = tab.root.updatingRatio(splitID: splitID, ratio: ratio)
+    }
+
+    /// Starts a fresh shell in the pane that is already on screen (spec §8: the pane
+    /// stays open after the process exits). `forceDefaultShell` ignores the configured
+    /// shell path — the recovery action for an unlaunchable shell.
+    func restartPaneSession(paneID: UUID, forceDefaultShell: Bool = false) {
+        guard let tab = activeTab,
+              let sessionID = tab.root.sessionID(ofPane: paneID) else { return }
+        sessionManager.restartSession(id: sessionID, forceDefaultShell: forceDefaultShell)
+        tab.activePaneID = paneID
     }
 }
