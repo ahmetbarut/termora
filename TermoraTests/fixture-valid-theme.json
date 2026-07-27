@@ -1,0 +1,12 @@
+{
+  "id": "fixture-valid",
+  "name": "Fixture Valid",
+  "background": "#101015",
+  "foreground": "#F0F0F0",
+  "cursor": "#FF5500",
+  "selection": "#33467C",
+  "ansi": ["#000000", "#800000", "#008000", "#808000",
+           "#000080", "#800080", "#008080", "#C0C0C0",
+           "#808080", "#FF0000", "#00FF00", "#FFFF00",
+           "#0000FF", "#FF00FF", "#00FFFF", "#FFFFFF"]
+}
