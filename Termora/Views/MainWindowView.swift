@@ -64,12 +64,23 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private var terminalContent: some View {
-        if let tab = workspace.activeTab,
-           let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) {
-            TerminalHostView(sessionID: sessionID,
-                             sessionManager: services.sessionManager,
-                             isActive: true)
-                .id(sessionID)
+        if let tab = workspace.activeTab {
+            GeometryReader { root in
+                PaneTreeView(node: tab.root,
+                             tabID: tab.id,
+                             activePaneID: tab.activePaneID,
+                             viewModel: workspace,
+                             sessionManager: services.sessionManager)
+                    .coordinateSpace(.named(PaneTreeView.coordinateSpaceName))
+                    .onPreferenceChange(PaneFramesPreferenceKey.self) { frames in
+                        let converted = PaneFrameConverter.appKitFrames(
+                            frames, containerHeight: root.size.height)
+                        Task { @MainActor in
+                            workspace.paneFrames = converted
+                        }
+                    }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Color.clear
         }

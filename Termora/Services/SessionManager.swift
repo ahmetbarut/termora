@@ -64,9 +64,13 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
 
     func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession {
         let shellPath = resolveShellPath(profile: profile)
+        // Son basamak home dizinidir: Finder'dan açılan bir GUI uygulamasının cwd'si `/`
+        // olduğundan, `startProcess(currentDirectory: nil)` shell'i `/` içinde başlatır.
+        // Spec, yeni terminalin kullanıcının home dizininden açılmasını şart koşar.
         let directory = workingDirectory
             ?? profile?.startupDirectory
             ?? settings.settings.startupDirectory
+            ?? NSHomeDirectory()
 
         let session = TerminalSession(
             shellPath: shellPath,

@@ -37,6 +37,43 @@ struct AppCommands: Commands {
 
         // DİKKAT: `Commands` protokolünde `disabled` YOKTUR (yalnız `View` üzerinde vardır);
         // `CommandMenu { … }.disabled(…)` derlenmez. Etkinlik her Button'a tek tek verilir.
+        CommandMenu("Pane") {
+            Button("Split Vertically") {
+                workspace?.splitActivePane(axis: .vertical)
+            }
+            .keyboardShortcut("d", modifiers: .command)
+            .disabled(workspace == nil)
+
+            Button("Split Horizontally") {
+                workspace?.splitActivePane(axis: .horizontal)
+            }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .disabled(workspace == nil)
+
+            Divider()
+
+            Button("Close Pane") {
+                workspace?.requestCloseActivePane()
+            }
+            .keyboardShortcut("w", modifiers: [.command, .shift])
+            .disabled(workspace == nil)
+
+            Divider()
+
+            Button("Focus Pane Left") { workspace?.focusPane(.left) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled(workspace == nil)
+            Button("Focus Pane Right") { workspace?.focusPane(.right) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled(workspace == nil)
+            Button("Focus Pane Up") { workspace?.focusPane(.up) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(workspace == nil)
+            Button("Focus Pane Down") { workspace?.focusPane(.down) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(workspace == nil)
+        }
+
         CommandMenu("Sekme") {
             Button("Sonraki Sekme") { workspace?.nextTab() }
                 .keyboardShortcut("]", modifiers: [.command, .shift])

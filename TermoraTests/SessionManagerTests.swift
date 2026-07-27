@@ -61,6 +61,24 @@ private func poll(timeout: Duration = .seconds(10), until condition: () -> Bool)
 @MainActor
 struct SessionManagerTests {
 
+    /// Spec: "Yeni terminal açıldığında kullanıcının home dizininden başlat".
+    /// Finder'dan açılan bir GUI uygulamasının cwd'si `/` olduğundan, dizin belirtilmezse
+    /// shell onu miras alır ve kullanıcı kendini `/` içinde bulur.
+    @Test func aSessionWithoutAConfiguredDirectoryStartsInTheHomeDirectory() async throws {
+        let (_, manager) = makeStack()
+        let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        #expect(session.workingDirectory == NSHomeDirectory())
+
+        let view = try #require(manager.terminalView(for: session.id))
+        let shellPID = view.process.shellPid
+        let reachedHome = await poll {
+            ProcessProbe.currentWorkingDirectory(pid: shellPID) == NSHomeDirectory()
+        }
+        #expect(reachedHome, "shell home dizininde başlamadı")
+    }
+
     @Test func createSessionRegistersBothTheSessionAndItsView() throws {
         let (_, manager) = makeStack()
         let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
