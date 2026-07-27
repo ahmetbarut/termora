@@ -2,14 +2,15 @@ import Foundation
 
 extension CursorStyleSetting {
     /// Ayarlar penceresindeki imleç şekli seçicisinde görünen ad.
+    /// brief 3 "Uygulama Metin Dili": arayüz metinleri İngilizce, kısa ve teknik.
     var displayName: String {
         switch self {
-        case .blinkBlock: return "Blok (yanıp sönen)"
-        case .steadyBlock: return "Blok (sabit)"
-        case .blinkUnderline: return "Alt çizgi (yanıp sönen)"
-        case .steadyUnderline: return "Alt çizgi (sabit)"
-        case .blinkBar: return "Çubuk (yanıp sönen)"
-        case .steadyBar: return "Çubuk (sabit)"
+        case .blinkBlock: return "Block (blinking)"
+        case .steadyBlock: return "Block (steady)"
+        case .blinkUnderline: return "Underline (blinking)"
+        case .steadyUnderline: return "Underline (steady)"
+        case .blinkBar: return "Bar (blinking)"
+        case .steadyBar: return "Bar (steady)"
         }
     }
 }

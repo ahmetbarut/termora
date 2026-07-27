@@ -57,7 +57,7 @@ struct StatusBarView: View {
 
                 Text("\(snapshot.columns)×\(snapshot.rows)")
                     .monospacedDigit()
-                    .help("Terminal boyutu (sütun × satır)")
+                    .help("Terminal size (columns × rows)")
 
                 separator
 
@@ -82,10 +82,11 @@ struct StatusBarView: View {
     private func busyIndicator(isBusy: Bool) -> some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(isBusy ? Color.green : Color.secondary.opacity(0.35))
+                // brief 3 marka paleti: çalışan işlem "Success" yeşili.
+                .fill(isBusy ? DesignTokens.success.color : Color.secondary.opacity(0.35))
                 .frame(width: 7, height: 7)
-            Text(isBusy ? "çalışıyor" : "boşta")
+            Text(isBusy ? "running" : "idle")
         }
-        .help(isBusy ? "Bu panelde çalışan bir işlem var" : "Bu panelde çalışan işlem yok")
+        .help(isBusy ? "A process is running in this pane" : "No process is running in this pane")
     }
 }

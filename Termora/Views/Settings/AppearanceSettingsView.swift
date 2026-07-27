@@ -5,12 +5,12 @@ struct AppearanceSettingsView: View {
     @Bindable var settings: SettingsStore
     let themes: ThemeStore
 
-    @State private var fontFamilies: [String] = []
+    @State private var fontMenu = FontCatalog.FontMenu(recommended: [], others: [])
 
     var body: some View {
         Form {
-            Section("Tema") {
-                Picker("Tema", selection: $settings.settings.themeID) {
+            Section("Theme") {
+                Picker("Theme", selection: $settings.settings.themeID) {
                     ForEach(themes.themes) { theme in
                         Text(theme.name).tag(theme.id)
                     }
@@ -18,21 +18,29 @@ struct AppearanceSettingsView: View {
                 ThemePreviewView(theme: themes.theme(id: settings.settings.themeID))
             }
 
-            Section("Yazı tipi") {
-                Picker("Aile", selection: $settings.settings.fontName) {
-                    Text("Varsayılan (\(FontCatalog.fallbackFamily))").tag(nil as String?)
-                    ForEach(fontFamilies, id: \.self) { family in
+            Section("Font") {
+                Picker("Family", selection: $settings.settings.fontName) {
+                    // brief 3 "Alternatif fontlar": önerilenler üstte, kurulu olmayanlar hiç yok.
+                    ForEach(fontMenu.recommended, id: \.self) { family in
                         Text(family).tag(family as String?)
                     }
+                    if !fontMenu.others.isEmpty {
+                        Divider()
+                        ForEach(fontMenu.others, id: \.self) { family in
+                            Text(family).tag(family as String?)
+                        }
+                    }
+                    Divider()
+                    Text("System Monospace").tag(nil as String?)
                 }
 
                 Stepper(value: fontSizeBinding, in: SettingsLimits.fontSizeRange, step: 1) {
-                    Text("Boyut: \(Int(settings.settings.fontSize)) pt")
+                    Text("Size: \(Int(settings.settings.fontSize)) pt")
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Slider(value: lineSpacingBinding, in: SettingsLimits.lineSpacingRange, step: 0.05) {
-                        Text("Satır aralığı")
+                        Text("Line height")
                     }
                     Text(String(format: "%.2f×", settings.settings.lineSpacing))
                         .font(.caption)
@@ -40,8 +48,8 @@ struct AppearanceSettingsView: View {
                 }
             }
 
-            Section("İmleç ve pencere") {
-                Picker("İmleç şekli", selection: $settings.settings.cursorStyle) {
+            Section("Cursor & Window") {
+                Picker("Cursor shape", selection: $settings.settings.cursorStyle) {
                     ForEach(CursorStyleSetting.allCases, id: \.self) { style in
                         Text(style.displayName).tag(style)
                     }
@@ -49,9 +57,9 @@ struct AppearanceSettingsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Slider(value: opacityBinding, in: SettingsLimits.opacityRange, step: 0.05) {
-                        Text("Pencere saydamlığı")
+                        Text("Window opacity")
                     }
-                    Text("%\(Int((settings.settings.windowOpacity * 100).rounded())) opaklık")
+                    Text("\(Int((settings.settings.windowOpacity * 100).rounded()))% opaque")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -59,7 +67,7 @@ struct AppearanceSettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear {
-            fontFamilies = FontCatalog.availableMonospacedFamilies()
+            fontMenu = FontCatalog.availableFontMenu()
         }
     }
 

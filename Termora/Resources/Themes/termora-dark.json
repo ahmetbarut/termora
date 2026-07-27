@@ -1,12 +1,12 @@
 {
   "id": "termora-dark",
   "name": "Termora Dark",
-  "background": "#16181D",
-  "foreground": "#EAEAEA",
-  "cursor": "#AEAFAD",
-  "selection": "#264F78",
-  "ansi": ["#000000", "#CD3131", "#0DBC79", "#E5E510",
-           "#2472C8", "#BC3FBC", "#11A8CD", "#E5E5E5",
-           "#666666", "#F14C4C", "#23D18B", "#F5F543",
-           "#3B8EEA", "#D670D6", "#29B8DB", "#FFFFFF"]
+  "background": "#080B18",
+  "foreground": "#F4F6FF",
+  "cursor": "#169CFF",
+  "selection": "#263B70",
+  "ansi": ["#141827", "#FF5D67", "#32D583", "#F5B942",
+           "#169CFF", "#A66BFF", "#42D9E8", "#E8ECF8",
+           "#4F525D", "#FF868D", "#65E0A2", "#F8CB71",
+           "#50B5FF", "#BC90FF", "#71E3EE", "#EEF1FA"]
 }

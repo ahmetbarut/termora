@@ -36,6 +36,40 @@ struct FontCatalogTests {
         #expect(result == ["Menlo"])
     }
 
+    // MARK: - brief 3 "Alternatif fontlar"
+
+    @Test func recommendedFamiliesFollowTheBriefOrder() {
+        #expect(FontCatalog.recommendedFamilies ==
+                ["SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Fira Code", "MesloLGS NF"])
+        #expect(FontCatalog.defaultFamily == "SF Mono")
+    }
+
+    @Test func menuPutsInstalledRecommendationsFirstInBriefOrder() {
+        let installed: Set<String> = ["Menlo", "Monaco", "Fira Code", "Andale Mono", "Courier"]
+        let menu = FontCatalog.menu(
+            from: ["Courier", "Fira Code", "Andale Mono", "Helvetica", "Monaco", "Menlo"],
+            isFixedPitch: { installed.contains($0) }
+        )
+        // SF Mono sistem fontu: NSFontManager listelemez ama her zaman çözülebilir.
+        #expect(menu.recommended == ["SF Mono", "Menlo", "Monaco", "Fira Code"])
+        #expect(menu.others == ["Andale Mono", "Courier"])
+        #expect(menu.allFamilies == ["SF Mono", "Menlo", "Monaco", "Fira Code", "Andale Mono", "Courier"])
+    }
+
+    @Test func menuNeverOffersAFontThatIsNotInstalled() {
+        let menu = FontCatalog.menu(from: ["Helvetica"], isFixedPitch: { _ in false })
+        #expect(menu.recommended == ["SF Mono", "Menlo"])
+        #expect(menu.others.isEmpty)
+        #expect(!menu.allFamilies.contains("JetBrains Mono"))
+        #expect(!menu.allFamilies.contains("MesloLGS NF"))
+        #expect(!menu.allFamilies.contains("Helvetica"))
+    }
+
+    @Test func menuListsEveryFamilyOnlyOnce() {
+        let menu = FontCatalog.menu(from: ["Menlo", "Menlo", "Monaco"], isFixedPitch: { _ in true })
+        #expect(Set(menu.allFamilies).count == menu.allFamilies.count)
+    }
+
     // Step 20'de `SessionManager.resolveFont`'un yerini aldığı için font çözümlemesinin
     // karakterizasyon testleri de buraya taşınır.
 
@@ -49,6 +83,15 @@ struct FontCatalogTests {
         let menlo = FontCatalog.resolvedFont(name: "Menlo", size: 15)
         #expect(menlo.familyName == "Menlo")
         #expect(menlo.pointSize == 15)
+    }
+
+    /// brief 3 varsayılanı SF Mono; macOS onu aile adıyla vermez, sessizce Menlo'ya
+    /// düşmek yerine sistem monospace fontu (aynı yazı tipi) döndürülmeli.
+    @Test func sfMonoResolvesToASystemMonospaceFontInsteadOfMenlo() {
+        let font = FontCatalog.resolvedFont(name: FontCatalog.defaultFamily, size: 14)
+        #expect(font.isFixedPitch)
+        #expect(Double(font.pointSize) == 14)
+        #expect(font.familyName != "Menlo")
     }
 
     @Test func resolvedFontSizeIsClamped() {

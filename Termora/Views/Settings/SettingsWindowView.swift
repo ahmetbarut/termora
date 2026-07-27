@@ -8,14 +8,15 @@ struct SettingsWindowView: View {
 
     var body: some View {
         TabView {
+            // brief 3 "Settings Tasarımı" sol menü adları; yalnız var olan bölümler.
             GeneralSettingsView(settings: settings)
-                .tabItem { Label("Genel", systemImage: "gearshape") }
+                .tabItem { Label("General", systemImage: "gearshape") }
 
             AppearanceSettingsView(settings: settings, themes: themes)
-                .tabItem { Label("Görünüm", systemImage: "paintpalette") }
+                .tabItem { Label("Appearance", systemImage: "paintpalette") }
 
             ProfilesSettingsView(profiles: profiles, themes: themes)
-                .tabItem { Label("Profiller", systemImage: "person.crop.rectangle.stack") }
+                .tabItem { Label("Profiles", systemImage: "person.crop.rectangle.stack") }
         }
         .frame(width: 560, height: 480)
     }
