@@ -76,9 +76,14 @@ private struct PaneLeafView: View {
         TerminalHostView(sessionID: sessionID,
                          sessionManager: sessionManager,
                          isActive: isActive)
-            // SessionManager.restartSession aynı sessionID icin YENI bir NSView kurar;
-            // bu anahtar olmadan SwiftUI olu gorunumu ekranda tutar (Task 8/10 notlari).
-            .id(session?.restartGeneration ?? 0)
+            // Kimlik HEM oturumu HEM de yeniden başlatma kuşağını içerir:
+            // - sessionID: iki sekmenin kök paneli aynı yapısal konumdadır; kimlik yalnız
+            //   kuşak olursa (taze oturumlarda hep 0) SwiftUI makeNSView'i çağırmaz ve
+            //   sekme değiştirince önceki sekmenin terminali ekranda kalır.
+            // - restartGeneration: SessionManager.restartSession aynı sessionID icin YENI
+            //   bir NSView kurar; bu olmadan SwiftUI olu gorunumu ekranda tutar.
+            .id(PaneHostIdentity(sessionID: sessionID,
+                                 restartGeneration: session?.restartGeneration ?? 0))
             .overlay(alignment: .top) {
                 if let exitStatus {
                     banner(exitStatus: exitStatus, failedPath: session?.launchFailure)
