@@ -17,6 +17,12 @@ protocol SessionManaging: AnyObject {
     func session(id: UUID) -> TerminalSession?
     func terminateSession(id: UUID)
     func hasRunningProcess(sessionID: UUID) -> Bool
+
+    /// §8: the pane stays open when the shell dies. Restart puts a new shell behind the SAME
+    /// session id, so panes, tabs and every id-keyed lookup survive it. `forceDefaultShell`
+    /// ignores the settings/profile path and uses the login shell — the recovery action for
+    /// "this shell cannot be executed".
+    func restartSession(id: UUID, forceDefaultShell: Bool)
 }
 
 /// Single owner of terminal session lifetime.
@@ -165,6 +171,41 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
             kill(pid, SIGKILL)
             _ = waitpid(pid, &status, 0) // returns immediately once SIGKILL lands
         }
+    }
+
+    func restartSession(id: UUID, forceDefaultShell: Bool) {
+        guard let session = sessions[id] else { return }
+
+        if let oldView = views.removeValue(forKey: id) {
+            // Clear the delegate first: `terminate()` fires processTerminated on the main queue
+            // and it must not overwrite the state of the session we are just reviving.
+            oldView.processDelegate = nil
+            killProcess(of: oldView)
+        }
+
+        let profile = session.profileID.flatMap { profileID in
+            profiles.profiles.first { $0.id == profileID }
+        }
+        let shellPath = forceDefaultShell
+            ? ShellService.defaultShellPath()
+            : resolveShellPath(profile: profile)
+        session.shellPath = shellPath
+
+        let view = makeView(sessionID: id)
+        views[id] = view
+
+        // The pane's `TerminalHostView` is keyed on this, so SwiftUI drops the dead NSView and
+        // hosts the new one; the session id — and therefore the pane and the tab — stays put.
+        session.restartGeneration += 1
+        session.processState = .running
+        startShell(
+            shellPath,
+            in: view,
+            session: session,
+            environment: profile?.environment ?? [:],
+            startupCommand: profile?.startupCommand,
+            workingDirectory: session.workingDirectory
+        )
     }
 
     // MARK: - View cache

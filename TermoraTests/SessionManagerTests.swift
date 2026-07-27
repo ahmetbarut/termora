@@ -213,4 +213,66 @@ struct SessionManagerTests {
         manager.applyAppearanceToAllSessions()
         #expect(abs(view.nativeBackgroundColor.alphaComponent - 1.0) < 0.001)
     }
+
+    @Test func restartSessionPutsAFreshShellBehindTheSameIdentifier() async throws {
+        let (_, manager) = makeStack(escalationDelay: 0.05)
+        let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        let firstView = try #require(manager.terminalView(for: session.id))
+        let firstPID = firstView.process.shellPid
+        let firstStarted = await poll { ProcessProbe.isAlive(pid: firstPID) }
+        #expect(firstStarted)
+
+        // The shell exited on its own; the pane is still there and asks for a new one.
+        session.processState = .exited(ExitStatus(rawStatus: 0))
+        manager.restartSession(id: session.id, forceDefaultShell: false)
+
+        let secondView = try #require(manager.terminalView(for: session.id))
+        #expect(secondView !== firstView, "restart must install a brand new view")
+        #expect(secondView.sessionID == session.id)
+        #expect(manager.session(id: session.id) === session, "the session object must survive")
+        #expect(session.processState == .running)
+        #expect(session.launchFailure == nil)
+        #expect(session.restartGeneration == 1, "the pane keys its host view on this")
+
+        let secondPID = secondView.process.shellPid
+        #expect(secondPID > 0)
+        #expect(secondPID != firstPID)
+
+        let restarted = await poll { ProcessProbe.isAlive(pid: secondPID) }
+        #expect(restarted, "the replacement shell must be running")
+
+        let oldOneDied = await poll { ProcessProbe.isAlive(pid: firstPID) == false }
+        #expect(oldOneDied, "the old shell must be reaped, not leaked")
+    }
+
+    @Test func aBrokenShellPathIsRecordedAndRecoverableWithTheDefaultShell() async throws {
+        let (settings, manager) = makeStack(escalationDelay: 0.05)
+        settings.settings.defaultShellPath = "/nonexistent/shell"
+
+        let session = manager.createSession(profile: nil, workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        #expect(session.launchFailure == "/nonexistent/shell")
+        #expect(session.processState == .exited(ExitStatus(rawStatus: 127 << 8)))
+        #expect((manager.terminalView(for: session.id)?.process.shellPid ?? 0) <= 0)
+
+        // §8 recovery action: ignore the broken setting and come up on the login shell.
+        manager.restartSession(id: session.id, forceDefaultShell: true)
+
+        #expect(session.launchFailure == nil)
+        #expect(session.processState == .running)
+        #expect(session.shellPath == ShellService.defaultShellPath())
+
+        let view = try #require(manager.terminalView(for: session.id))
+        let alive = await poll { ProcessProbe.isAlive(pid: view.process.shellPid) }
+        #expect(alive, "the default shell must come up even though the setting is broken")
+    }
+
+    @Test func restartingAnUnknownSessionIsAHarmlessNoOp() {
+        let (_, manager) = makeStack()
+        manager.restartSession(id: UUID(), forceDefaultShell: false)
+        manager.restartSession(id: UUID(), forceDefaultShell: true)
+    }
 }
