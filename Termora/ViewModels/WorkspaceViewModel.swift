@@ -344,4 +344,54 @@ final class WorkspaceViewModel {
         _ = searchRunner?.findPrevious(sessionID: sessionID, query: tab.searchQuery)
         tab.searchSummary = searchRunner?.matchSummary(sessionID: sessionID, query: tab.searchQuery) ?? .empty
     }
+
+    // MARK: - Durum çubuğu
+
+    struct StatusSnapshot: Equatable {
+        var shellName: String
+        var workingDirectory: String
+        var branchName: String?
+        var columns: Int
+        var rows: Int
+        var isBusy: Bool
+    }
+
+    /// Durum çubuğu ayarlardan açık mı? (@Observable okuması sayesinde canlı günceller.)
+    var isStatusBarVisible: Bool {
+        settings.settings.showStatusBar
+    }
+
+    private var processInfoProvider: (any TerminalProcessInfoProviding)? {
+        sessionManager as? any TerminalProcessInfoProviding
+    }
+
+    /// Aktif sekmenin aktif paneli için tek seferlik durum okuması. En fazla 1 Hz çağrılır.
+    func statusSnapshot() -> StatusSnapshot? {
+        guard let tab = activeTab,
+              let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),
+              let session = sessionManager.session(id: sessionID) else { return nil }
+
+        let probedDirectory = processInfoProvider
+            .flatMap { $0.shellPID(sessionID: sessionID) }
+            .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
+        if let probedDirectory, probedDirectory != session.workingDirectory {
+            session.workingDirectory = probedDirectory
+            // libproc ile cwd'yi tazeleyen TEK yer burası; sekme başlığı da cwd'ye düşebiliyor
+            // (Task 11 `syncAutomaticTitles`). `sessionTitleDigest` cwd'yi de kapsadığı için
+            // MainWindowView'ın .onChange kancası zaten uyanır, ama başlığı aynı run-loop
+            // turunda kesinleştirmek için burada da eşitliyoruz (aynı 1 Hz bütçesi içinde).
+            syncAutomaticTitles()
+        }
+        let directory = probedDirectory ?? session.workingDirectory
+        let size = session.terminalSize ?? (cols: 0, rows: 0)
+
+        return StatusSnapshot(
+            shellName: (session.shellPath as NSString).lastPathComponent,
+            workingDirectory: directory.map { PathDisplay.abbreviate($0, home: NSHomeDirectory()) } ?? "—",
+            branchName: directory.flatMap { GitBranchReader.branchName(forDirectory: $0) },
+            columns: size.cols,
+            rows: size.rows,
+            isBusy: sessionManager.hasRunningProcess(sessionID: sessionID)
+        )
+    }
 }

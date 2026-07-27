@@ -301,8 +301,13 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
     // hop in with `MainActor.assumeIsolated` instead of an async detour.
 
     nonisolated func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
-        // SwiftTerm already pushed the new winsize onto the PTY. The status bar consumes
-        // cols/rows in M5 (Task 21 fills this body); nothing to do in M1.
+        // SwiftTerm already pushed the new winsize onto the PTY; we only mirror it into the
+        // session so the status bar (Task 21) can show cols×rows.
+        MainActor.assumeIsolated {
+            guard let view = source as? TermoraTerminalView,
+                  let session = self.session(id: view.sessionID) else { return }
+            session.terminalSize = (cols: newCols, rows: newRows)
+        }
     }
 
     nonisolated func setTerminalTitle(source: LocalProcessTerminalView, title: String) {

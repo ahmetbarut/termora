@@ -29,6 +29,10 @@ final class TerminalSession: Identifiable {
     var title: String = ""
     var processState: ProcessState = .running
 
+    /// SwiftTerm `sizeChanged` delegesinden gelen son terminal boyutu.
+    /// Tuple bilerek kullanıldı: Equatable değil ama @Observable için sorun değil.
+    var terminalSize: (cols: Int, rows: Int)?
+
     /// The shell path that could not be executed, or nil after a successful start.
     /// Spec §8: the pane draws an in-pane error banner with a "try the default shell" action.
     var launchFailure: String?
