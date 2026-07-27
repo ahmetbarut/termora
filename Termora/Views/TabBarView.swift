@@ -6,6 +6,10 @@ enum TabBarLayout {
     static let newTabButtonWidth: CGFloat = 28
     static let maxTabWidth: CGFloat = 200
     static let minTabWidth: CGFloat = 72
+    static let dividerWidth: CGFloat = 1
+
+    /// Bu genişliğin altında sekme yalnız kısaltılmış bir başlığa yer bırakır.
+    static let compactTabWidth: CGFloat = 110
 
     /// Sekmeler kalan genişliği eşit paylaşır; 200'ü aşmaz, 72'nin altına inmez.
     static func tabWidth(availableWidth: CGFloat, tabCount: Int) -> CGFloat {
@@ -13,6 +17,24 @@ enum TabBarLayout {
         let usable = max(0, availableWidth)
         let equalShare = usable / CGFloat(tabCount)
         return min(maxTabWidth, max(minTabWidth, equalShare))
+    }
+
+    /// Dar sekmede başlık kısalır ve yatay iç boşluk azalır (brief 3, "Küçük Pencere Davranışı").
+    static func isCompact(tabWidth: CGFloat) -> Bool {
+        tabWidth < compactTabWidth
+    }
+
+    /// Kaç sekme en küçük genişlikte tam görünür — bunun ötesi kaydırılarak gezilir.
+    /// Terminal alanı hiç daralmaz: çubuk sabit yüksekliktedir ve taşan sekmeler kaydırılır.
+    static func fittingTabCount(availableWidth: CGFloat) -> Int {
+        let usable = max(0, availableWidth - newTabButtonWidth)
+        return max(1, Int(usable / minTabWidth))
+    }
+
+    /// Sekme şeridinin toplam genişliği (ayırıcılar dahil).
+    static func stripWidth(tabWidth: CGFloat, tabCount: Int) -> CGFloat {
+        guard tabCount > 0 else { return 0 }
+        return CGFloat(tabCount) * (tabWidth + dividerWidth)
     }
 }
 
@@ -27,15 +49,24 @@ struct TabBarView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let width = TabBarLayout.tabWidth(
-                availableWidth: proxy.size.width - TabBarLayout.newTabButtonWidth,
-                tabCount: workspace.tabs.count
-            )
+            let available = proxy.size.width - TabBarLayout.newTabButtonWidth
+            let width = TabBarLayout.tabWidth(availableWidth: available, tabCount: workspace.tabs.count)
+            let stripWidth = min(TabBarLayout.stripWidth(tabWidth: width, tabCount: workspace.tabs.count),
+                                 max(0, available))
             HStack(spacing: 0) {
-                ForEach(workspace.tabs) { tab in
-                    tabItem(tab, width: width)
-                    Divider().frame(height: TabBarLayout.height * 0.6)
+                // Sekmeler taşarsa kaydırılır; "+" düğmesi her zaman erişilebilir kalır ve
+                // terminal alanı bundan etkilenmez.
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        ForEach(workspace.tabs) { tab in
+                            tabItem(tab, width: width)
+                            Divider().frame(height: TabBarLayout.height * 0.6)
+                        }
+                    }
                 }
+                .scrollIndicators(.never)
+                .frame(width: stripWidth)
+
                 newTabButton
                 Spacer(minLength: 0)
             }
@@ -49,6 +80,7 @@ struct TabBarView: View {
     private func tabItem(_ tab: TerminalTab, width: CGFloat) -> some View {
         let isActive = tab.id == workspace.activeTabID
         let isHovered = hoveredTabID == tab.id
+        let isCompact = TabBarLayout.isCompact(tabWidth: width)
 
         return HStack(spacing: 4) {
             if editingTabID == tab.id {
@@ -64,8 +96,10 @@ struct TabBarView: View {
                 Text(tab.displayTitle)
                     .font(.system(size: 12))
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    // Dar pencerede baş taraf okunabilir kalsın diye sondan kısaltılır.
+                    .truncationMode(isCompact ? .tail : .middle)
                     .foregroundStyle(isActive ? Color.primary : Color.secondary)
+                    .help(tab.displayTitle)
             }
 
             Spacer(minLength: 0)
@@ -79,10 +113,10 @@ struct TabBarView: View {
                         .foregroundStyle(Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Sekmeyi kapat")
+                .accessibilityLabel("Close Tab")
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, isCompact ? 4 : 8)
         .frame(width: width, height: TabBarLayout.height)
         .background(isActive ? Color.accentColor.opacity(0.22) : Color.clear)
         .overlay(alignment: .bottom) {
@@ -102,6 +136,14 @@ struct TabBarView: View {
         }
         .onTapGesture(count: 2) { beginRename(tab) }
         .onTapGesture { workspace.activeTabID = tab.id }
+        // Sürükleyerek sıralama: taşınan sekmenin kimliği metin olarak taşınır, bırakılan
+        // sekmenin yuvasına yerleşir. Sıra değişimini view model yapar (test edilebilir).
+        .draggable(tab.id.uuidString)
+        .dropDestination(for: String.self) { items, _ in
+            guard let identifier = items.first, let draggedID = UUID(uuidString: identifier) else { return false }
+            workspace.moveTab(id: draggedID, toSlotOf: tab.id)
+            return true
+        }
     }
 
     private var newTabButton: some View {
@@ -115,10 +157,11 @@ struct TabBarView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("new-tab-button")
-        .help("Yeni sekme (⌘T)")
+        .accessibilityLabel("New Tab")
+        .help("New Tab (⌘T)")
         .contextMenu {
             if workspace.profiles.profiles.isEmpty {
-                Text("Profil yok")
+                Text("No Profiles")
             } else {
                 ForEach(workspace.profiles.profiles) { profile in
                     Button(profile.name) { workspace.newTab(profile: profile) }

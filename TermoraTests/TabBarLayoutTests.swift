@@ -31,4 +31,35 @@ import Testing
         #expect(TabBarLayout.height > 0)
         #expect(TabBarLayout.newTabButtonWidth > 0)
     }
+
+    // MARK: - Küçük pencere davranışı (brief 3)
+
+    @Test func narrowTabsSwitchToTheCompactPresentation() {
+        #expect(TabBarLayout.isCompact(tabWidth: TabBarLayout.minTabWidth))
+        #expect(TabBarLayout.isCompact(tabWidth: TabBarLayout.maxTabWidth) == false)
+        #expect(TabBarLayout.compactTabWidth > TabBarLayout.minTabWidth)
+        #expect(TabBarLayout.compactTabWidth < TabBarLayout.maxTabWidth)
+    }
+
+    @Test func fittingTabCountCountsFullWidthTabsOnly() {
+        // 720 - 28 = 692 kullanılabilir; 72 pt'lik sekmelerden 9 tanesi sığar.
+        #expect(TabBarLayout.fittingTabCount(availableWidth: 720) == 9)
+        #expect(TabBarLayout.fittingTabCount(availableWidth: 1000) == 13)
+    }
+
+    @Test func atLeastOneTabIsAlwaysReportedAsFitting() {
+        #expect(TabBarLayout.fittingTabCount(availableWidth: 0) == 1)
+        #expect(TabBarLayout.fittingTabCount(availableWidth: -400) == 1)
+    }
+
+    @Test func minimumWindowSizeMatchesTheBrief() {
+        #expect(Double(WindowLayout.minWidth) == 720)
+        #expect(Double(WindowLayout.minHeight) == 480)
+    }
+
+    @Test func minimumWindowStillFitsSeveralTabsAndTheTerminal() {
+        // Sekme çubuğu sabit yükseklikte: terminal alanı daralmadan korunur.
+        #expect(TabBarLayout.fittingTabCount(availableWidth: WindowLayout.minWidth) >= 8)
+        #expect(Double(WindowLayout.minHeight - TabBarLayout.height) >= 400)
+    }
 }

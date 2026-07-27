@@ -1,5 +1,13 @@
 import AppKit
+import Combine
 import SwiftUI
+
+/// Pencere kabuğunun ölçüleri (brief 3, "Küçük Pencere Davranışı").
+enum WindowLayout {
+    /// Brief'teki alt sınır: bu boyutta sekme çubuğu ve terminal birlikte kullanılabilir kalır.
+    static let minWidth: CGFloat = 720
+    static let minHeight: CGFloat = 480
+}
 
 struct MainWindowView: View {
     private let services: AppServices
@@ -8,6 +16,12 @@ struct MainWindowView: View {
     /// Pencere kapatma delegesi. `@State` tutulur çünkü `NSWindow.delegate` zayıftır;
     /// başka bir sahibi olmazsa ilk yerleşimden hemen sonra yok olur.
     @State private var closeCoordinator = WindowCloseCoordinator()
+
+    /// Sekme başlığı artık çalışan komutu da gösteriyor; komutun başlaması/bitmesi ne OSC
+    /// başlığını ne de cwd'yi değiştirdiği için `sessionTitleDigest` değişmez. Başlığın
+    /// gerçeği yansıtması için saniyede bir tazelenir (durum çubuğuyla aynı bütçe).
+    /// `@State`: `Timer.publish(...)` her `body` değerlendirmesinde yeni bir publisher üretir.
+    @State private var titleTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     @MainActor
     init(services: AppServices) {
@@ -32,7 +46,7 @@ struct MainWindowView: View {
                 StatusBarView(workspace: workspace)
             }
         }
-        .frame(minWidth: 480, minHeight: 320)
+        .frame(minWidth: WindowLayout.minWidth, minHeight: WindowLayout.minHeight)
         .onAppear {
             // Sistemin otomatik pencere sekmelerini kapat: kendi sekme çubuğumuzu çiziyoruz,
             // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
@@ -42,6 +56,9 @@ struct MainWindowView: View {
         .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
             workspace.syncAutomaticTitles()
         }
+        .onReceive(titleTicker) { _ in
+            workspace.syncAutomaticTitles()
+        }
         .focusedSceneValue(\.workspace, workspace)
         .background(
             WindowAccessor { window in
@@ -49,11 +66,17 @@ struct MainWindowView: View {
             }
         )
         .confirmationDialog(
-            workspace.pendingCloseMessage,
-            isPresented: pendingCloseBinding
+            workspace.pendingCloseTitle,
+            isPresented: pendingCloseBinding,
+            titleVisibility: .visible
         ) {
-            Button("Kapat", role: .destructive) { workspace.confirmPendingClose() }
-            Button("Vazgeç", role: .cancel) { workspace.cancelPendingClose() }
+            // Belirsiz "OK"/"Yes" yerine eylemin adı (brief 3, "Uygulama Metin Dili").
+            Button(workspace.pendingCloseConfirmLabel, role: .destructive) {
+                workspace.confirmPendingClose()
+            }
+            Button("Cancel", role: .cancel) { workspace.cancelPendingClose() }
+        } message: {
+            Text(workspace.pendingCloseMessage)
         }
     }
 

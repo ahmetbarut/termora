@@ -1,6 +1,87 @@
+import Darwin
 import Foundation
 import CoreGraphics
 import Observation
+
+/// Optional capability of a session manager: the command currently running in the
+/// foreground of a session's pseudo-terminal (`npm`, `vim`, …), or nil while the shell
+/// itself is in the foreground. Test doubles adopt it directly; the live `SessionManager`
+/// does not, so `WorkspaceViewModel` falls back to reading the shell pid via libproc.
+@MainActor
+protocol ForegroundProcessNaming: AnyObject {
+    func foregroundProcessName(sessionID: UUID) -> String?
+}
+
+/// Reads the foreground command of a shell's controlling terminal.
+///
+/// This would belong next to `ProcessProbe`, but that file is owned elsewhere in this
+/// change, so the syscalls live here. `proc_bsdinfo.e_tpgid` is the kernel's own answer to
+/// `tcgetpgrp(masterFD)` — it is the foreground process group of the shell's controlling
+/// tty — which means the pty master descriptor does not have to be plumbed through.
+enum ForegroundProcessProbe {
+
+    /// Name of the process group leader that owns the terminal right now.
+    /// nil when the shell itself is in the foreground (no command is running) or the pid is gone.
+    nonisolated static func foregroundCommandName(shellPID: pid_t) -> String? {
+        guard shellPID > 0, let shell = bsdInfo(pid: shellPID) else { return nil }
+        let foregroundGroup = pid_t(bitPattern: shell.e_tpgid)
+        guard foregroundGroup > 0,
+              foregroundGroup != pid_t(bitPattern: shell.pbi_pgid),
+              foregroundGroup != shellPID,
+              let leader = bsdInfo(pid: foregroundGroup) else { return nil }
+        return commandName(of: leader)
+    }
+
+    nonisolated private static func bsdInfo(pid: pid_t) -> proc_bsdinfo? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return info
+    }
+
+    /// `pbi_name` is the long (up to 32 char) name and is empty for some processes;
+    /// `pbi_comm` is the truncated `argv[0]` basename and is always populated.
+    nonisolated private static func commandName(of info: proc_bsdinfo) -> String? {
+        var info = info
+        let long = withUnsafeBytes(of: &info.pbi_name) { cString(in: $0) }
+        if !long.isEmpty { return long }
+        let short = withUnsafeBytes(of: &info.pbi_comm) { cString(in: $0) }
+        return short.isEmpty ? nil : short
+    }
+
+    nonisolated private static func cString(in raw: UnsafeRawBufferPointer) -> String {
+        guard let base = raw.baseAddress else { return "" }
+        return String(cString: base.assumingMemoryBound(to: CChar.self))
+    }
+}
+
+/// Pure priority chain for a tab's automatic title (brief 3, "Tab Bar"):
+/// the running foreground command, then whatever the shell reports over OSC, then the
+/// working directory, then the profile, and the shell name as a last resort.
+/// (The user's own name outranks all of these and is applied by `TerminalTab.displayTitle`.)
+enum TabTitleResolver {
+
+    static func automaticTitle(foregroundProcessName: String?,
+                               shellReportedTitle: String,
+                               workingDirectory: String?,
+                               profileName: String?,
+                               shellPath: String) -> String {
+        if let command = nonBlank(foregroundProcessName) { return command }
+        if let reported = nonBlank(shellReportedTitle) { return reported }
+        if let directory = nonBlank(workingDirectory) {
+            let basename = (directory as NSString).lastPathComponent
+            return basename.isEmpty ? "/" : basename
+        }
+        if let profileName = nonBlank(profileName) { return profileName }
+        return (shellPath as NSString).lastPathComponent
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+}
 
 /// Pencere başına bir tane. Sekme ve panel operasyonlarının tek sahibi.
 /// Menü kısayolları @FocusedValue üzerinden key window'un örneğine ulaşır.
@@ -130,18 +211,51 @@ final class WorkspaceViewModel {
         return false
     }
 
-    /// Onay diyaloğunun başlığı; hedefe göre değişir (aynı diyalog üç akışta kullanılıyor).
+    /// Onay diyaloğunun soru başlığı; hedefe göre değişir (aynı diyalog üç akışta kullanılıyor).
+    var pendingCloseTitle: String {
+        switch pendingClose?.target {
+        case .tab: return "Do you want to close this tab?"
+        case .pane: return "Do you want to close this pane?"
+        case .window: return "Do you want to close this window?"
+        case nil: return ""
+        }
+    }
+
+    /// Diyaloğun gövdesi. Çalışan komutun adı biliniyorsa yazılır; bilinmiyorsa
+    /// (ör. süreç bilgisi okunamıyorsa) uydurulmaz, genel ifade kullanılır.
     var pendingCloseMessage: String {
         switch pendingClose?.target {
-        case .tab:
-            return "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?"
-        case .pane:
-            return "Bu panelde çalışan bir işlem var. Panel kapatılsın mı?"
+        case let .tab(tabID):
+            guard let tab = tabs.first(where: { $0.id == tabID }) else { return "" }
+            let sessionIDs = tab.root.leaves.map(\.sessionID)
+            return runningProcessSentence(sessionIDs: sessionIDs, fallback: "A process is still running in this tab.")
+        case let .pane(paneID):
+            guard let tab = tabs.first(where: { $0.root.sessionID(ofPane: paneID) != nil }),
+                  let sessionID = tab.root.sessionID(ofPane: paneID) else { return "" }
+            return runningProcessSentence(sessionIDs: [sessionID], fallback: "A process is still running in this pane.")
         case .window:
-            return "Çalışan işlemler var. Tüm oturumlar kapatılsın mı?"
+            return "Processes are still running in this window."
         case nil:
             return ""
         }
+    }
+
+    /// Onay butonunun etiketi. Belirsiz "OK"/"Yes" yerine eylemin adı yazılır (brief 3).
+    var pendingCloseConfirmLabel: String {
+        switch pendingClose?.target {
+        case .tab: return "Close Tab"
+        case .pane: return "Close Pane"
+        case .window: return "Close Window"
+        case nil: return ""
+        }
+    }
+
+    private func runningProcessSentence(sessionIDs: [UUID], fallback: String) -> String {
+        let name = sessionIDs
+            .first { sessionManager.hasRunningProcess(sessionID: $0) }
+            .flatMap { foregroundProcessName(sessionID: $0) }
+        guard let name, !name.isEmpty else { return fallback }
+        return "A process is still running: \(name)"
     }
 
     private func closeTab(id: UUID) {
@@ -182,6 +296,33 @@ final class WorkspaceViewModel {
         return tabs.firstIndex { $0.id == activeTabID }
     }
 
+    // MARK: - Sekme sıralama (sürükle-bırak)
+
+    /// SwiftUI `.onMove` semantiği: `destination`, taşıma ÖNCESİ dizideki araya-ekleme
+    /// noktasıdır ve `tabs.count` (sona ekleme) dahil geçerlidir. Aktif sekme değişmez.
+    func moveTab(from source: IndexSet, to destination: Int) {
+        guard !source.isEmpty,
+              source.allSatisfy({ tabs.indices.contains($0) }),
+              (0...tabs.count).contains(destination) else { return }
+
+        // `Array.move(fromOffsets:toOffset:)` SwiftUI'den gelir; view model çerçeveden
+        // bağımsız kalsın diye aynı semantik elle kurulur.
+        let moving = source.sorted().map { tabs[$0] }
+        let remaining = tabs.enumerated().filter { !source.contains($0.offset) }.map(\.element)
+        let insertIndex = destination - source.filter { $0 < destination }.count
+        tabs = remaining
+        tabs.insert(contentsOf: moving, at: insertIndex)
+    }
+
+    /// Sürükle-bırak yardımcısı: sürüklenen sekme, hedef sekmenin dizinine yerleşir.
+    /// Görünüm katmanının araya-ekleme aritmetiğini tekrar etmemesi için burada durur.
+    func moveTab(id draggedID: UUID, toSlotOf targetID: UUID) {
+        guard let from = tabs.firstIndex(where: { $0.id == draggedID }),
+              let to = tabs.firstIndex(where: { $0.id == targetID }),
+              from != to else { return }
+        moveTab(from: IndexSet(integer: from), to: to > from ? to + 1 : to)
+    }
+
     // MARK: - Başlıklar
 
     /// nil veya yalnız boşluktan oluşan ad otomatik başlığa döner.
@@ -191,8 +332,9 @@ final class WorkspaceViewModel {
         tab.customTitle = trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Aktif panelin başlığını sekmeye yansıtır. Geri düşüş zinciri:
-    /// shell'in OSC ile bildirdiği başlık → çalışma dizininin son bileşeni → profil adı → shell adı.
+    /// Aktif panelin başlığını sekmeye yansıtır. Öncelik `TabTitleResolver`'da (brief 3):
+    /// çalışan foreground işlem → shell'in OSC ile bildirdiği başlık → çalışma dizininin son
+    /// bileşeni → profil adı → shell adı.
     /// (Stok macOS zsh'ı `TERM_PROGRAM=Termora` iken OSC başlık YAYMAZ; geri düşüş olmadan
     /// tüm sekmeler kalıcı olarak "Terminal" yazardı — spec §7.)
     /// Oturum kapandıysa son bilinen başlık korunur.
@@ -201,18 +343,29 @@ final class WorkspaceViewModel {
             guard let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),
                   let session = sessionManager.session(id: sessionID) else { continue }
 
-            if !session.title.isEmpty {
-                tab.automaticTitle = session.title
-            } else if let directory = session.workingDirectory, !directory.isEmpty {
-                let basename = (directory as NSString).lastPathComponent
-                tab.automaticTitle = basename.isEmpty ? "/" : basename
-            } else if let profileName = profileName(for: session), !profileName.isEmpty {
+            let resolved = TabTitleResolver.automaticTitle(
+                foregroundProcessName: foregroundProcessName(sessionID: sessionID),
+                shellReportedTitle: session.title,
+                workingDirectory: session.workingDirectory,
                 // newTab(profile:) sekmeye profil adını tohumlar; senkron onu ezmemeli.
-                tab.automaticTitle = profileName
-            } else {
-                tab.automaticTitle = (session.shellPath as NSString).lastPathComponent
+                profileName: profileName(for: session),
+                shellPath: session.shellPath
+            )
+            // Hiçbir aday yoksa son bilinen başlık korunur; boş başlık yazılmaz.
+            if !resolved.isEmpty {
+                tab.automaticTitle = resolved
             }
         }
+    }
+
+    /// Oturumda o an ön planda olan komutun adı. Yönetici bu bilgiyi doğrudan verebiliyorsa
+    /// (testler) ondan, veremiyorsa shell pid'i üzerinden libproc ile okunur.
+    private func foregroundProcessName(sessionID: UUID) -> String? {
+        if let namer = sessionManager as? any ForegroundProcessNaming {
+            return namer.foregroundProcessName(sessionID: sessionID)
+        }
+        guard let shellPID = processInfoProvider?.shellPID(sessionID: sessionID) else { return nil }
+        return ForegroundProcessProbe.foregroundCommandName(shellPID: shellPID)
     }
 
     private func profileName(for session: TerminalSession) -> String? {

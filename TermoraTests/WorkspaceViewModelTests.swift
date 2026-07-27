@@ -296,14 +296,94 @@ import Testing
         let tab = try #require(workspace.tabs.first)
         manager.busySessionIDs.insert(try sessionID(ofTabAt: 0, in: workspace))
 
+        #expect(workspace.pendingCloseTitle.isEmpty)
         #expect(workspace.pendingCloseMessage.isEmpty)
+        #expect(workspace.pendingCloseConfirmLabel.isEmpty)
 
         workspace.requestCloseTab(id: tab.id)
-        #expect(workspace.pendingCloseMessage == "Bu sekmede çalışan bir işlem var. Sekme kapatılsın mı?")
+        #expect(workspace.pendingCloseTitle == "Do you want to close this tab?")
+        // İşlem adı bilinmiyor (test yöneticisi PTY tutmaz): uydurulmaz, genel ifade kullanılır.
+        #expect(workspace.pendingCloseMessage == "A process is still running in this tab.")
+        #expect(workspace.pendingCloseConfirmLabel == "Close Tab")
 
         workspace.cancelPendingClose()
         _ = workspace.requestCloseWindow {}
-        #expect(workspace.pendingCloseMessage == "Çalışan işlemler var. Tüm oturumlar kapatılsın mı?")
+        #expect(workspace.pendingCloseTitle == "Do you want to close this window?")
+        #expect(workspace.pendingCloseMessage == "Processes are still running in this window.")
+        #expect(workspace.pendingCloseConfirmLabel == "Close Window")
+    }
+
+    @Test func pendingClosePaneUsesPaneWording() throws {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let tab = try #require(workspace.tabs.first)
+        workspace.splitActivePane(axis: .vertical)
+        manager.busySessionIDs.insert(try #require(tab.root.sessionID(ofPane: tab.activePaneID)))
+
+        workspace.requestCloseActivePane()
+
+        #expect(workspace.pendingCloseTitle == "Do you want to close this pane?")
+        #expect(workspace.pendingCloseMessage == "A process is still running in this pane.")
+        #expect(workspace.pendingCloseConfirmLabel == "Close Pane")
+    }
+
+    // MARK: - Sekmeleri sürükleyerek sıralama
+
+    @Test func moveTabReordersUsingOnMoveSemantics() throws {
+        let (workspace, _) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        workspace.newTab()
+        let ids = workspace.tabs.map(\.id)
+
+        // İlk sekme sona taşınır (SwiftUI .onMove: hedef, taşıma ÖNCESİ dizinde bir aralık).
+        workspace.moveTab(from: IndexSet(integer: 0), to: 3)
+
+        #expect(workspace.tabs.map(\.id) == [ids[1], ids[2], ids[0]])
+        // Sıralama aktif sekmeyi değiştirmez.
+        #expect(workspace.activeTabID == ids[2])
+    }
+
+    @Test func moveTabIgnoresEmptyOrOutOfRangeRequests() throws {
+        let (workspace, _) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        let ids = workspace.tabs.map(\.id)
+
+        workspace.moveTab(from: IndexSet(), to: 1)
+        workspace.moveTab(from: IndexSet(integer: 0), to: 9)
+        workspace.moveTab(from: IndexSet(integer: 7), to: 0)
+
+        #expect(workspace.tabs.map(\.id) == ids)
+    }
+
+    @Test func droppingATabOnAnotherTakesOverItsSlot() throws {
+        let (workspace, _) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        workspace.newTab()
+        let ids = workspace.tabs.map(\.id)
+
+        // Sona sürüklenen sekme hedefin yerini alır.
+        workspace.moveTab(id: ids[0], toSlotOf: ids[2])
+        #expect(workspace.tabs.map(\.id) == [ids[1], ids[2], ids[0]])
+
+        // Geriye doğru sürüklemede de hedefin dizini kullanılır.
+        workspace.moveTab(id: ids[0], toSlotOf: ids[1])
+        #expect(workspace.tabs.map(\.id) == [ids[0], ids[1], ids[2]])
+    }
+
+    @Test func droppingATabOnItselfOrOnAnUnknownTabChangesNothing() throws {
+        let (workspace, _) = makeWorkspace()
+        workspace.newTab()
+        workspace.newTab()
+        let ids = workspace.tabs.map(\.id)
+
+        workspace.moveTab(id: ids[0], toSlotOf: ids[0])
+        workspace.moveTab(id: UUID(), toSlotOf: ids[1])
+        workspace.moveTab(id: ids[1], toSlotOf: UUID())
+
+        #expect(workspace.tabs.map(\.id) == ids)
     }
 
     // MARK: - Seçim ve yeniden adlandırma

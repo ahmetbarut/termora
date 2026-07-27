@@ -17,7 +17,7 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("Yeni Sekme") {
+            Button("New Tab") {
                 workspace?.newTab()
             }
             .keyboardShortcut("t", modifiers: .command)
@@ -26,7 +26,7 @@ struct AppCommands: Commands {
 
         // ⌘W standart "Close Window" öğesinin yerine geçer: önce sekme kapanır.
         CommandGroup(replacing: .saveItem) {
-            Button(workspace?.activeTabID == nil ? "Pencereyi Kapat" : "Sekmeyi Kapat") {
+            Button(workspace?.activeTabID == nil ? "Close Window" : "Close Tab") {
                 if let workspace, let activeTabID = workspace.activeTabID {
                     workspace.requestCloseTab(id: activeTabID)
                 } else {
@@ -41,19 +41,19 @@ struct AppCommands: Commands {
 
         CommandGroup(after: .textEditing) {
             Divider()
-            Button("Bul…") {
+            Button("Find…") {
                 workspace?.toggleSearchBar()
             }
             .keyboardShortcut("f", modifiers: .command)
             .disabled(workspace == nil)
 
-            Button("Sonrakini Bul") {
+            Button("Find Next") {
                 workspace?.findNextMatch()
             }
             .keyboardShortcut("g", modifiers: .command)
             .disabled(workspace == nil)
 
-            Button("Öncekini Bul") {
+            Button("Find Previous") {
                 workspace?.findPreviousMatch()
             }
             .keyboardShortcut("g", modifiers: [.command, .shift])
@@ -99,18 +99,18 @@ struct AppCommands: Commands {
                 .disabled(workspace == nil)
         }
 
-        CommandMenu("Sekme") {
-            Button("Sonraki Sekme") { workspace?.nextTab() }
+        CommandMenu("Tab") {
+            Button("Next Tab") { workspace?.nextTab() }
                 .keyboardShortcut("]", modifiers: [.command, .shift])
                 .disabled(workspace == nil)
-            Button("Önceki Sekme") { workspace?.previousTab() }
+            Button("Previous Tab") { workspace?.previousTab() }
                 .keyboardShortcut("[", modifiers: [.command, .shift])
                 .disabled(workspace == nil)
 
             Divider()
 
             ForEach(1...9, id: \.self) { number in
-                Button("Sekme \(number)") {
+                Button("Tab \(number)") {
                     workspace?.selectTab(at: number - 1)
                 }
                 .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)

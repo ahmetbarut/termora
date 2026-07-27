@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// File menüsüne "Profille Yeni Sekme" alt menüsünü ekler.
+/// File menüsüne "New Tab with Profile" alt menüsünü ekler.
 /// Hedef pencere, `@FocusedValue(\.workspace)` ile key window'un view model'idir.
 struct ProfileCommands: Commands {
     let profiles: ProfileStore
 
     @FocusedValue(\.workspace) private var workspace
 
-    private static let title = "Profille Yeni Sekme"
+    private static let title = "New Tab with Profile"
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -21,7 +21,7 @@ struct ProfileCommands: Commands {
             } else {
                 Menu(Self.title) {
                     ForEach(profiles.profiles) { profile in
-                        Button(profile.name.isEmpty ? "Adsız profil" : profile.name) {
+                        Button(profile.name.isEmpty ? "Untitled Profile" : profile.name) {
                             workspace?.newTab(profile: profile)
                         }
                     }
