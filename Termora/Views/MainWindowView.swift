@@ -1,42 +1,48 @@
-//
-//  MainWindowView.swift
-//  Termora
-//
-
+import AppKit
 import SwiftUI
 
-/// M1 window: exactly one tab holding exactly one pane.
-/// Tabs arrive in M2 (`TabBarView`), splits in M3 (`PaneTreeView`).
 struct MainWindowView: View {
-
     private let services: AppServices
+    @State private var workspace: WorkspaceViewModel
 
-    @State private var sessionID: UUID?
-
-    /// Explicit because `services` is private: the synthesised memberwise initialiser would be
-    /// private too. Task 12 keeps this initialiser and adds the workspace view model to it.
+    @MainActor
     init(services: AppServices) {
         self.services = services
+        _workspace = State(initialValue: WorkspaceViewModel(
+            sessionManager: services.sessionManager,
+            settings: services.settings,
+            profiles: services.profiles
+        ))
     }
 
     var body: some View {
-        Group {
-            if let sessionID {
-                TerminalHostView(
-                    sessionID: sessionID,
-                    sessionManager: services.sessionManager,
-                    isActive: true
-                )
-            } else {
-                Color.black
-            }
+        VStack(spacing: 0) {
+            TabBarView(workspace: workspace)
+            Divider()
+            terminalContent
         }
         .frame(minWidth: 480, minHeight: 320)
         .onAppear {
-            guard sessionID == nil else { return }
-            sessionID = services.sessionManager
-                .createSession(profile: nil, workingDirectory: nil)
-                .id
+            // Sistemin otomatik pencere sekmelerini kapat: kendi sekme çubuğumuzu çiziyoruz,
+            // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
+            NSWindow.allowsAutomaticWindowTabbing = false
+            if workspace.tabs.isEmpty { workspace.newTab() }
+        }
+        .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
+            workspace.syncAutomaticTitles()
+        }
+    }
+
+    @ViewBuilder
+    private var terminalContent: some View {
+        if let tab = workspace.activeTab,
+           let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) {
+            TerminalHostView(sessionID: sessionID,
+                             sessionManager: services.sessionManager,
+                             isActive: true)
+                .id(sessionID)
+        } else {
+            Color.clear
         }
     }
 }
