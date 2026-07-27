@@ -229,26 +229,49 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         }
     }
 
-    /// M1 applies the global settings to every terminal alike. `sessionID` is already part of
-    /// the signature because Task 19 resolves the session's profile through it (per-profile
-    /// theme and font overrides); the name and the parameter list are final from here on.
+    /// Applies the appearance to a single terminal. When the session was opened with a profile,
+    /// the profile's font/theme overrides win; line spacing, cursor and scrollback stay global.
+    ///
+    /// The two expensive setters are guarded by an "did the value actually change?" check:
+    /// SwiftTerm's `font` setter calls `selectNone()` (it would wipe the user's text selection
+    /// on every unrelated settings tweak) and `changeScrollback` refreshes the whole screen.
     private func applyAppearance(to view: TermoraTerminalView, sessionID: UUID) {
         let current = settings.settings
-        let theme = themes.theme(id: current.themeID)
+        let resolved = AppearanceResolver.resolve(settings: current, profile: profile(forSession: sessionID))
+        let theme = themes.theme(id: resolved.themeID)
+        let opacity = SettingsLimits.clampOpacity(current.windowOpacity)
 
-        view.font = FontCatalog.resolvedFont(name: current.fontName, size: current.fontSize)
-        view.lineSpacing = CGFloat(current.lineSpacing)
+        let font = FontCatalog.resolvedFont(name: resolved.fontName, size: resolved.fontSize)
+        if view.font != font {
+            view.font = font
+        }
+
+        let lineSpacing = CGFloat(SettingsLimits.clampLineSpacing(current.lineSpacing))
+        if view.lineSpacing != lineSpacing {
+            view.lineSpacing = lineSpacing
+        }
+
         view.nativeForegroundColor = theme.foregroundNSColor
-
-        let opacity = min(max(current.windowOpacity, 0.2), 1.0)
         view.nativeBackgroundColor = opacity < 1.0
             ? theme.backgroundNSColor.withAlphaComponent(CGFloat(opacity))
             : theme.backgroundNSColor
-
         view.caretColor = theme.cursorNSColor
+        view.selectedTextBackgroundColor = theme.selectionNSColor
         view.installColors(theme.swiftTermAnsiColors())
         view.getTerminal().setCursorStyle(current.cursorStyle.swiftTermStyle)
-        view.changeScrollback(current.scrollbackLines)
+
+        // `TerminalView.changeScrollback` also updates the scroller; `Terminal.changeScrollback`
+        // does not — but it is the one holding the value we compare against.
+        let scrollback = SettingsLimits.clampScrollback(current.scrollbackLines)
+        if view.getTerminal().options.scrollback != scrollback {
+            view.changeScrollback(scrollback)
+        }
+    }
+
+    /// The profile a session was opened with, if it still exists in the store.
+    private func profile(forSession sessionID: UUID) -> TerminalProfile? {
+        guard let profileID = sessions[sessionID]?.profileID else { return nil }
+        return profiles.profiles.first { $0.id == profileID }
     }
 
 
