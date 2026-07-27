@@ -240,11 +240,34 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
     // on `DispatchQueue.main` (its `dispatchQueue` defaults to the main queue), so the bodies
     // hop in with `MainActor.assumeIsolated` instead of an async detour.
 
-    nonisolated func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
+    nonisolated func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
+        // SwiftTerm already pushed the new winsize onto the PTY. The status bar consumes
+        // cols/rows in M5 (Task 21 fills this body); nothing to do in M1.
+    }
 
-    nonisolated func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
+    nonisolated func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
+        MainActor.assumeIsolated {
+            guard let sessionID = (source as? TermoraTerminalView)?.sessionID else { return }
+            sessions[sessionID]?.title = title
+        }
+    }
 
-    nonisolated func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+    nonisolated func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
+        MainActor.assumeIsolated {
+            guard let sessionID = (source as? TermoraTerminalView)?.sessionID,
+                  let path = Self.workingDirectory(fromHostReport: directory)
+            else { return }
+            sessions[sessionID]?.workingDirectory = path
+        }
+    }
 
-    nonisolated func processTerminated(source: TerminalView, exitCode: Int32?) {}
+    nonisolated func processTerminated(source: TerminalView, exitCode: Int32?) {
+        MainActor.assumeIsolated {
+            guard let sessionID = (source as? TermoraTerminalView)?.sessionID else { return }
+            // `exitCode` is the raw waitpid status, not an exit code (SwiftTerm passes `n` from
+            // `waitpid` straight through). nil means the PTY died before waitpid ran, which we
+            // report as "hung up".
+            sessions[sessionID]?.processState = .exited(ExitStatus(rawStatus: exitCode ?? SIGHUP))
+        }
+    }
 }

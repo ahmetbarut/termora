@@ -150,4 +150,67 @@ struct SessionManagerTests {
         #expect(SessionManager.workingDirectory(fromHostReport: "") == nil)
         #expect(SessionManager.workingDirectory(fromHostReport: "http://example.com/x") == nil)
     }
+
+    @Test func delegateCallbacksAreRoutedByTheViewsSessionIdentifier() throws {
+        let (_, manager) = makeStack()
+        let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        // A detached view proves routing goes through `sessionID`, not object identity.
+        let detached = TermoraTerminalView(
+            sessionID: session.id,
+            frame: CGRect(x: 0, y: 0, width: 400, height: 240)
+        )
+
+        manager.setTerminalTitle(source: detached, title: "make build")
+        #expect(session.title == "make build")
+
+        manager.hostCurrentDirectoryUpdate(source: detached, directory: "file:///private/tmp")
+        #expect(session.workingDirectory == "/private/tmp")
+
+        manager.hostCurrentDirectoryUpdate(source: detached, directory: nil)
+        #expect(session.workingDirectory == "/private/tmp", "an empty OSC 7 report must not clear the cwd")
+
+        manager.processTerminated(source: detached, exitCode: 256)
+        #expect(session.processState == .exited(ExitStatus(rawStatus: 256)))
+    }
+
+    @Test func delegateCallbacksFromForeignViewsAreIgnored() throws {
+        let (_, manager) = makeStack()
+        let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+
+        let stranger = TermoraTerminalView(
+            sessionID: UUID(),
+            frame: CGRect(x: 0, y: 0, width: 400, height: 240)
+        )
+
+        manager.setTerminalTitle(source: stranger, title: "not mine")
+        manager.processTerminated(source: stranger, exitCode: 9)
+
+        #expect(session.title == "")
+        #expect(session.processState == .running)
+    }
+
+    @Test func appearanceSettingsReachEveryOpenTerminal() throws {
+        let (settings, manager) = makeStack()
+        let session = manager.createSession(profile: try makeHermeticProfile(), workingDirectory: nil)
+        defer { manager.terminateSession(id: session.id) }
+        let view = try #require(manager.terminalView(for: session.id))
+
+        settings.settings.fontName = "Menlo-Regular"
+        settings.settings.fontSize = 18
+        settings.settings.lineSpacing = 1.4
+        settings.settings.windowOpacity = 0.8
+        manager.applyAppearanceToAllSessions()
+
+        #expect(view.font.fontName == "Menlo-Regular")
+        #expect(view.font.pointSize == 18)
+        #expect(view.lineSpacing == 1.4)
+        #expect(abs(view.nativeBackgroundColor.alphaComponent - 0.8) < 0.001)
+
+        settings.settings.windowOpacity = 1.0
+        manager.applyAppearanceToAllSessions()
+        #expect(abs(view.nativeBackgroundColor.alphaComponent - 1.0) < 0.001)
+    }
 }
