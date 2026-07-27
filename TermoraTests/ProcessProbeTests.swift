@@ -26,4 +26,15 @@ struct ProcessProbeTests {
         #expect(ProcessProbe.isAlive(pid: 0) == false)
         #expect(ProcessProbe.isAlive(pid: -1) == false)
     }
+
+    @Test func readsTheWorkingDirectoryOfThisProcessFromTheKernel() {
+        // libproc, not OSC 7: a stock zsh only emits OSC 7 under Terminal.app.
+        #expect(ProcessProbe.currentWorkingDirectory(pid: getpid()) == FileManager.default.currentDirectoryPath)
+    }
+
+    @Test func theWorkingDirectoryOfAnImpossiblePidIsNil() {
+        #expect(ProcessProbe.currentWorkingDirectory(pid: 999_999) == nil)
+        #expect(ProcessProbe.currentWorkingDirectory(pid: 0) == nil)
+        #expect(ProcessProbe.currentWorkingDirectory(pid: -1) == nil)
+    }
 }
