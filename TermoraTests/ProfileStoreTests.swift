@@ -40,4 +40,17 @@ import Testing
         store.profiles.removeAll { $0.id == deploy.id }
         #expect(ProfileStore(defaults: defaults).profiles == [updatedWork])
     }
+
+    @Test func corruptBlobFallsBackToEmptyAndIsBackedUp() {
+        let (defaults, suiteName) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let garbage = Data("[{broken".utf8)
+        defaults.set(garbage, forKey: ProfileStore.storageKey)
+
+        let store = ProfileStore(defaults: defaults)
+        #expect(store.profiles.isEmpty)
+        #expect(defaults.data(forKey: ProfileStore.backupKey) == garbage)
+        #expect(defaults.data(forKey: ProfileStore.storageKey) == nil)
+    }
 }
