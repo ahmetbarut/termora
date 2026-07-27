@@ -284,4 +284,58 @@ final class WorkspaceViewModel {
         sessionManager.restartSession(id: sessionID, forceDefaultShell: forceDefaultShell)
         tab.activePaneID = paneID
     }
+
+    // MARK: - Arama (⌘F / ⌘G / ⌘⇧G)
+
+    /// Aktif oturum yöneticisi arama yürütebiliyorsa onu verir; testlerdeki basit çiftlerde nil olur.
+    private var searchRunner: (any TerminalSearchRunner)? {
+        sessionManager as? any TerminalSearchRunner
+    }
+
+    /// Aktif sekmenin aktif panelinin oturum kimliği.
+    private var activeSessionID: UUID? {
+        guard let tab = activeTab else { return nil }
+        return tab.root.sessionID(ofPane: tab.activePaneID)
+    }
+
+    func toggleSearchBar() {
+        guard let tab = activeTab else { return }
+        if tab.isSearchVisible {
+            closeSearch()
+        } else {
+            tab.isSearchVisible = true
+        }
+    }
+
+    func closeSearch() {
+        guard let tab = activeTab else { return }
+        tab.isSearchVisible = false
+        tab.searchSummary = .empty
+        guard let sessionID = activeSessionID else { return }
+        searchRunner?.clearSearch(sessionID: sessionID)
+        searchRunner?.focusTerminal(sessionID: sessionID)
+    }
+
+    /// Metin ya da seçenekler değiştiğinde sayacı tazeler.
+    func refreshSearchSummary() {
+        guard let tab = activeTab, let sessionID = activeSessionID else { return }
+        guard !tab.searchQuery.term.isEmpty else {
+            tab.searchSummary = .empty
+            searchRunner?.clearSearch(sessionID: sessionID)
+            return
+        }
+        tab.searchSummary = searchRunner?.matchSummary(sessionID: sessionID, query: tab.searchQuery) ?? .empty
+    }
+
+    func findNextMatch() {
+        guard let tab = activeTab, let sessionID = activeSessionID, !tab.searchQuery.term.isEmpty else { return }
+        _ = searchRunner?.findNext(sessionID: sessionID, query: tab.searchQuery)
+        tab.searchSummary = searchRunner?.matchSummary(sessionID: sessionID, query: tab.searchQuery) ?? .empty
+    }
+
+    func findPreviousMatch() {
+        guard let tab = activeTab, let sessionID = activeSessionID, !tab.searchQuery.term.isEmpty else { return }
+        _ = searchRunner?.findPrevious(sessionID: sessionID, query: tab.searchQuery)
+        tab.searchSummary = searchRunner?.matchSummary(sessionID: sessionID, query: tab.searchQuery) ?? .empty
+    }
 }
