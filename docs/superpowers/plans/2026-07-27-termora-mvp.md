@@ -8653,12 +8653,12 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: add sett
 - Task 6: `struct AppSettings`, `enum CursorStyleSetting { var swiftTermStyle: SwiftTerm.CursorStyle }`, `@MainActor @Observable final class SettingsStore { var settings: AppSettings }`
 - Task 7: `struct TerminalProfile: Codable, Identifiable, Equatable { var id: UUID; var name: String; var shellPath: String?; var startupDirectory: String?; var startupCommand: String?; var fontName: String?; var fontSize: Double?; var themeID: String?; var environment: [String: String] }`, `@MainActor @Observable final class ProfileStore { init(defaults: UserDefaults = .standard); var profiles: [TerminalProfile] }`
 - Task 8: `@MainActor @Observable final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate` — `init(settings: SettingsStore, themes: ThemeStore, profiles: ProfileStore, escalationDelay: TimeInterval = 1.5)`; depolanan özellikler `private let settings: SettingsStore`, `private let themes: ThemeStore`, `private let profiles: ProfileStore`, `private var sessions: [UUID: TerminalSession]`, `@ObservationIgnored private var views: [UUID: TermoraTerminalView]`; `func applyAppearanceToAllSessions()`, `applyAppearance(to view: TermoraTerminalView, sessionID: UUID)`. **`profiles` Task 8'de zaten enjekte edilmiştir — bu görev init imzasına DOKUNMAZ, yalnız kullanır.**
-- Task 8: `@MainActor protocol SessionManaging: AnyObject { func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession; func session(id: UUID) -> TerminalSession?; func terminateSession(id: UUID); func hasRunningProcess(sessionID: UUID) -> Bool }`, `@Observable final class TerminalSession: Identifiable { init(id: UUID = UUID(), shellPath: String, profileID: UUID? = nil, workingDirectory: String? = nil) }`
+- Task 8: `@MainActor protocol SessionManaging: AnyObject { func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession; func session(id: UUID) -> TerminalSession?; func terminateSession(id: UUID); func hasRunningProcess(sessionID: UUID) -> Bool; func restartSession(id: UUID, forceDefaultShell: Bool) }` — **beş üyenin tamamı zorunludur; bu görevdeki test sahtesi hepsini gerçeklemelidir**, `@Observable final class TerminalSession: Identifiable { init(id: UUID = UUID(), shellPath: String, profileID: UUID? = nil, workingDirectory: String? = nil); var shellPath: String; var workingDirectory: String?; var title: String; var processState: ProcessState; var launchFailure: String?; var restartGeneration: Int }`
 - Task 11: `@MainActor @Observable final class WorkspaceViewModel { init(sessionManager: any SessionManaging, settings: SettingsStore, profiles: ProfileStore); private(set) var tabs: [TerminalTab]; var activeTab: TerminalTab?; func newTab(profile: TerminalProfile? = nil) }`, `@Observable final class TerminalTab { var root: PaneNode; var activePaneID: UUID }`
 - Task 13: `extension FocusedValues { var workspace: WorkspaceViewModel? { get set } }`
 - Task 14: `indirect enum PaneNode { var leaves: [(paneID: UUID, sessionID: UUID)] { get } }`
 - Task 18: `enum SettingsLimits`, `enum FontCatalog { @MainActor static func availableMonospacedFamilies() -> [String]; @MainActor static func resolvedFont(name: String?, size: Double) -> NSFont }` (Task 18 Step 20 `SessionManager`'ın font çözümünü zaten buna bağladı), `extension CursorStyleSetting { var displayName: String }`, `struct SettingsWindowView { let settings: SettingsStore; let themes: ThemeStore; let profiles: ProfileStore }`
-- Task 12/13: `struct TermoraApp: App` içinde `private let services = AppServices()` — servislere `services.settings`, `services.themes`, `services.profiles`, `services.sessionManager` ile erişilir; `TermoraApp` kapsamında çıplak `profiles` adı YOKTUR
+- Task 12/13: `struct TermoraApp: App` içinde `@State private var services = AppServices()` (bilerek `@State`; `let` olursa açık oturumlar kaybolur — Task 10 Step 8 / Task 12 Step 8) — servislere `services.settings`, `services.themes`, `services.profiles`, `services.sessionManager` ile erişilir; `TermoraApp` kapsamında çıplak `profiles` adı YOKTUR
 
 *Produces:*
 - `struct EnvironmentEntry: Identifiable, Equatable { let id: UUID; var key: String; var value: String; init(id: UUID = UUID(), key: String, value: String) }`
@@ -8900,7 +8900,11 @@ cd /Users/ahmetbarut/Apps/Termora && git add -A && git commit -m "feat: resolve 
 
 - [ ] **Step 11: `SessionManager`'ın görünüm uygulama bölümünü resolver'a bağla**
 
-`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içinde Task 8'de yazılan `// MARK: - Appearance` bölümü aşağıdaki üç metotla değiştirilir (dosyanın kalanına dokunulmaz). Bu adım **yalnız görünüm çözümünü** profil farkındalığına taşır:
+`/Users/ahmetbarut/Apps/Termora/Termora/Services/SessionManager.swift` içinde YALNIZ İKİ METOT değiştirilir: `func applyAppearanceToAllSessions()` ve `applyAppearance(to:sessionID:)` (Task 18 Step 20'den sonraki hâlleriyle). Bunların yerine aşağıdaki blok yazılır ve sonuna `private func profile(forSession:)` eklenir.
+
+> **DİKKAT — bölümün tamamını silme.** Aynı `// MARK: - Appearance` bölümünde `static func workingDirectory(fromHostReport:)` ve `private func resolveShellPath(profile:)` metotları da durur; bunlar OLDUĞU GİBİ KALIR. Silinirlerse `hostCurrentDirectoryUpdate`, `createSession`, `restartSession` çağrıları ve `SessionManagerTests`'in `hostDirectoryReportsAreParsedIntoPlainPaths` / `unusableHostDirectoryReportsAreIgnored` testleri derlenmez. (`static func resolveFont(name:size:)` zaten Task 18 Step 20(b)'de silinmiştir; dosyanın kalanına dokunulmaz.)
+
+Bu adım **yalnız görünüm çözümünü** profil farkındalığına taşır:
 
 - `init` imzasına DOKUNULMAZ — `profiles: ProfileStore` Task 8'de zaten enjekte edilmiş ve `private let profiles` olarak saklanmıştır; çağrı yerleri (AppServices, testler) değişmez.
 - Metot adı Task 8'deki `applyAppearance(to:sessionID:)` ile aynı kalır, bu yüzden `createSession` içindeki çağrı olduğu gibi çalışır.
@@ -8915,7 +8919,9 @@ cd /Users/ahmetbarut/Apps/Termora && grep -n "selectionNSColor" Termora/Models/T
 İkisinden biri bulunamazsa aşağıdaki `view.selectedTextBackgroundColor = ...` satırı çıkarılır (tema `selection` alanı MVP'de uygulanmamış sayılır); diğer satırlar aynen kalır.
 
 ```swift
-    // MARK: - Görünüm uygulama
+    // MARK: - Appearance
+    // Bu MARK satırı Task 8'deki gibi kalır. Aşağıdaki iki metot mevcutlarının YERİNE geçer;
+    // aynı bölümdeki `workingDirectory(fromHostReport:)` ve `resolveShellPath(profile:)` durur.
 
     func applyAppearanceToAllSessions() {
         for (sessionID, view) in views {
@@ -9120,6 +9126,23 @@ final class ProfileLaunchMockSessionManager: SessionManaging {
 
     func hasRunningProcess(sessionID: UUID) -> Bool {
         busySessionIDs.contains(sessionID)
+    }
+
+    /// `SessionManaging`'in beşinci üyesi (Task 8). Profil süiti yeniden başlatmayı test
+    /// etmez ama protokol zorunlu kıldığı için burada da bulunmalı — yoksa
+    /// `error: type 'ProfileLaunchMockSessionManager' does not conform to protocol 'SessionManaging'`
+    /// ile TÜM test hedefi derlenmez. Gerçek `SessionManager` gibi AYNI oturum nesnesini
+    /// korur, yalnız alanlarını tazeler.
+    private(set) var restartedSessionIDs: [UUID] = []
+
+    func restartSession(id: UUID, forceDefaultShell: Bool) {
+        restartedSessionIDs.append(id)
+        busySessionIDs.remove(id)
+        guard let session = sessionsByID[id] else { return }
+        if forceDefaultShell { session.shellPath = defaultShellPath }
+        session.launchFailure = nil
+        session.processState = .running
+        session.restartGeneration += 1
     }
 }
 ```
@@ -9575,7 +9598,7 @@ Consumes:
 - `PaneNode.sessionID(ofPane paneID: UUID) -> UUID?` (Task 14)
 - `WorkspaceViewModel` (Task 11/16): `var activeTab: TerminalTab? { get }`, `private let sessionManager: any SessionManaging` (Task 11'de bu adla saklandı), `func newTab(profile: TerminalProfile? = nil)`
 - `SessionManager` (Task 8): `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`
-- `SessionManaging` (Task 8): `func createSession(profile:workingDirectory:) -> TerminalSession`, `func session(id:) -> TerminalSession?`, `func terminateSession(id:)`, `func hasRunningProcess(sessionID:) -> Bool`
+- `SessionManaging` (Task 8): `func createSession(profile:workingDirectory:) -> TerminalSession`, `func session(id:) -> TerminalSession?`, `func terminateSession(id:)`, `func hasRunningProcess(sessionID:) -> Bool`, `func restartSession(id: UUID, forceDefaultShell: Bool)` — **beş üyenin tamamı zorunludur; Step 11'deki stub hepsini gerçeklemelidir**
 - `MainWindowView` (M2 görevi), `AppCommands` + `@FocusedValue(\.workspace)` (Task 13)
 - SwiftTerm: `TerminalView.findNext(_:options:scrollToResult:) -> Bool`, `findPrevious(_:options:scrollToResult:) -> Bool`, `searchMatchSummary(_:options:limit:) -> (index: Int, total: Int)`, `clearSearch()`, `SearchOptions(caseSensitive:regex:wholeWord:)` — **bu beş sembol planın "Ek: Kaynak Kodda Doğrulanmış SwiftTerm Sembolleri" listesinde YOK; imzaları Step 13'ün başındaki doğrulama alt adımında kaynaktan okunur ve gerekiyorsa kod ona uydurulur.**
 
@@ -9793,6 +9816,11 @@ final class WorkspaceSearchStubManager: SessionManaging, TerminalSearchRunner {
     func session(id: UUID) -> TerminalSession? { storage[id] }
     func terminateSession(id: UUID) { storage[id] = nil }
     func hasRunningProcess(sessionID: UUID) -> Bool { false }
+
+    /// `SessionManaging`'in beşinci üyesi (Task 8). Arama süiti yeniden başlatmayı test
+    /// etmez ama protokol zorunlu kıldığı için burada da bulunmalı; çağrı yalnız kaydedilir.
+    private(set) var restartedSessionIDs: [UUID] = []
+    func restartSession(id: UUID, forceDefaultShell: Bool) { restartedSessionIDs.append(id) }
 
     func findNext(sessionID: UUID, query: TerminalSearchQuery) -> Bool {
         findNextCalls.append((sessionID, query))
@@ -10215,8 +10243,8 @@ cd /Users/ahmetbarut/Apps/Termora && git add Termora/Views/SearchBarView.swift T
 **Interfaces:**
 
 Consumes:
-- `TerminalSession` (Task 8): `let shellPath: String`, `var workingDirectory: String?`
-- `SessionManaging` (Task 8): `func session(id: UUID) -> TerminalSession?`, `func hasRunningProcess(sessionID: UUID) -> Bool`
+- `TerminalSession` (Task 8): `var shellPath: String` (`let` DEĞİL — `restartSession` yeniden yazar), `var workingDirectory: String?`
+- `SessionManaging` (Task 8): bu görev yalnız `func session(id: UUID) -> TerminalSession?` ve `func hasRunningProcess(sessionID: UUID) -> Bool` üyelerini KULLANIR, ama protokolün tamamı `func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession`, `func terminateSession(id: UUID)` ve `func restartSession(id: UUID, forceDefaultShell: Bool)` üyelerini de zorunlu kılar — **Step 11'deki stub beşini birden gerçeklemelidir**
 - `SessionManager` (Task 8): `func terminalView(for sessionID: UUID) -> TermoraTerminalView?`, sınıf gövdesindeki `nonisolated func sizeChanged(source:newCols:newRows:)` delegate metodu (minimal gövdeyle; bu görevde doldurulur — `nonisolated` + `MainActor.assumeIsolated` kalıbı korunur)
 - `TermoraTerminalView` (Task 8): `let sessionID: UUID`, SwiftTerm `process: LocalProcess!` → `process.shellPid`
 - `ProcessProbe` (Task 9): `static func currentWorkingDirectory(pid: pid_t) -> String?`
