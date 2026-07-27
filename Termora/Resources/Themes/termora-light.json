@@ -1,0 +1,12 @@
+{
+  "id": "termora-light",
+  "name": "Termora Light",
+  "background": "#FFFFFF",
+  "foreground": "#333333",
+  "cursor": "#333333",
+  "selection": "#ADD6FF",
+  "ansi": ["#000000", "#CD3131", "#00BC00", "#949800",
+           "#0451A5", "#BC05BC", "#0598BC", "#555555",
+           "#666666", "#CD3131", "#14CE14", "#B5BA00",
+           "#0451A5", "#BC05BC", "#0598BC", "#A5A5A5"]
+}

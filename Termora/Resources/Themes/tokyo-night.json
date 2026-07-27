@@ -1,0 +1,12 @@
+{
+  "id": "tokyo-night",
+  "name": "Tokyo Night",
+  "background": "#1A1B26",
+  "foreground": "#C0CAF5",
+  "cursor": "#C0CAF5",
+  "selection": "#33467C",
+  "ansi": ["#15161E", "#F7768E", "#9ECE6A", "#E0AF68",
+           "#7AA2F7", "#BB9AF7", "#7DCFFF", "#A9B1D6",
+           "#414868", "#F7768E", "#9ECE6A", "#E0AF68",
+           "#7AA2F7", "#BB9AF7", "#7DCFFF", "#C0CAF5"]
+}

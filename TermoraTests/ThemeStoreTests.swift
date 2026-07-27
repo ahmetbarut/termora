@@ -33,4 +33,10 @@ private final class FixtureBundleToken {}
         #expect(ThemeStore.fallback.ansi.count == 16)
         #expect(ThemeStore.fallback.swiftTermAnsiColors().count == 16)
     }
+
+    @Test func appBundleShipsFiveThemes() {
+        let store = ThemeStore(bundle: .main)
+        let ids = Set(store.themes.map(\.id))
+        #expect(ids.isSuperset(of: ["termora-dark", "termora-light", "dracula", "nord", "tokyo-night"]))
+    }
 }
