@@ -23,17 +23,18 @@ struct ExitStatus: Equatable {
         return low
     }
 
+    /// Brief 3 "Uygulama Metin Dili": arayuz metinleri Ingilizcedir.
     var localizedSummary: String {
         if let code = exitCode {
-            return "çıkış kodu \(code)"
+            return "exit code \(code)"
         }
         if let sig = signal {
             if let name = Self.signalNames[sig] {
-                return "\(name) ile sonlandı"
+                return "terminated by \(name)"
             }
-            return "sinyal \(sig) ile sonlandı"
+            return "terminated by signal \(sig)"
         }
-        return "bilinmeyen durum (raw: \(rawStatus))"
+        return "unknown status (raw: \(rawStatus))"
     }
 
     private static let signalNames: [Int32: String] = [

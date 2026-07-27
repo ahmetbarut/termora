@@ -39,14 +39,15 @@ struct ExitStatusTests {
         #expect(status.signal == nil)
     }
 
-    @Test("localizedSummary metinleri")
+    /// Brief 3 "Uygulama Metin Dili": arayuz metinleri Ingilizce olmalidir.
+    @Test("localizedSummary metinleri Ingilizce")
     func summaries() {
-        #expect(ExitStatus(rawStatus: 0).localizedSummary == "çıkış kodu 0")
-        #expect(ExitStatus(rawStatus: 256).localizedSummary == "çıkış kodu 1")
-        #expect(ExitStatus(rawStatus: 15).localizedSummary == "SIGTERM ile sonlandı")
-        #expect(ExitStatus(rawStatus: 9).localizedSummary == "SIGKILL ile sonlandı")
-        #expect(ExitStatus(rawStatus: 28).localizedSummary == "sinyal 28 ile sonlandı")
-        #expect(ExitStatus(rawStatus: 0x7f).localizedSummary == "bilinmeyen durum (raw: 127)")
+        #expect(ExitStatus(rawStatus: 0).localizedSummary == "exit code 0")
+        #expect(ExitStatus(rawStatus: 256).localizedSummary == "exit code 1")
+        #expect(ExitStatus(rawStatus: 15).localizedSummary == "terminated by SIGTERM")
+        #expect(ExitStatus(rawStatus: 9).localizedSummary == "terminated by SIGKILL")
+        #expect(ExitStatus(rawStatus: 28).localizedSummary == "terminated by signal 28")
+        #expect(ExitStatus(rawStatus: 0x7f).localizedSummary == "unknown status (raw: 127)")
     }
 
     @Test("Equatable rawStatus uzerinden")
