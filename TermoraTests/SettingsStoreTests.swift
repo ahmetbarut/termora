@@ -42,4 +42,17 @@ import Testing
         let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
         #expect(decoded.scrollbackLines == 25_000)
     }
+
+    @Test func corruptBlobFallsBackToDefaultsAndIsBackedUp() {
+        let (defaults, suiteName) = Self.makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let garbage = Data("definitely{not-json".utf8)
+        defaults.set(garbage, forKey: SettingsStore.storageKey)
+
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.settings == AppSettings())
+        #expect(defaults.data(forKey: SettingsStore.backupKey) == garbage)
+        #expect(defaults.data(forKey: SettingsStore.storageKey) == nil)
+    }
 }
