@@ -13,39 +13,41 @@ struct TerminalContextMenuTests {
 
     @Test("bolumler ve sira: duzenleme / ekran / bolme")
     func sectionOrder() {
-        let sections = TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true)
+        let sections = TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true, hasLink: true)
 
         #expect(sections.count == 3)
-        #expect(sections.first?.map(\.command) == [.copy, .paste, .selectAll, .searchSelection, .explainWithAI])
+        #expect(sections.first?.map(\.command) == [.copy, .paste, .selectAll, .searchSelection,
+                                                   .openLink, .copyLink, .explainWithAI])
         #expect(sections.dropFirst().first?.map(\.command) == [.clearScreen])
         #expect(sections.last?.map(\.command) == [.splitRight, .splitDown])
     }
 
     @Test("basliklar Ingilizce ve tek anlamli")
     func titles() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true))
+        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true, hasLink: true))
         #expect(items.map(\.title) == ["Copy", "Paste", "Select All", "Search Selection",
+                                       "Open Link", "Copy Link",
                                        "Explain with AI", "Clear Screen", "Split Right", "Split Down"])
     }
 
     @Test("secim yokken Copy gizlenmez, disabled olur")
     func copyDisabledWithoutSelection() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
+        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true, hasLink: true))
         let copy = items.first { $0.command == .copy }
         #expect(copy?.isEnabled == false)
-        #expect(items.count == 8)
+        #expect(items.count == 10)
     }
 
     @Test("pano bosken Paste disabled")
     func pasteDisabledWithEmptyClipboard() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: false, canSplit: true))
+        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: false, canSplit: true, hasLink: true))
         #expect(items.first { $0.command == .paste }?.isEnabled == false)
         #expect(items.first { $0.command == .copy }?.isEnabled == true)
     }
 
     @Test("bolme eylemi bagli degilse Split ogeleri disabled")
     func splitDisabledWhenUnavailable() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: false))
+        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: false, hasLink: true))
         #expect(items.first { $0.command == .splitRight }?.isEnabled == false)
         #expect(items.first { $0.command == .splitDown }?.isEnabled == false)
         #expect(items.first { $0.command == .clearScreen }?.isEnabled == true)
@@ -58,7 +60,7 @@ struct TerminalContextMenuTests {
     /// girdigi icin oge SECIM olmadan anlamsizdir; brief geregi gizlenmez, disabled olur.
     @Test("secim yokken Explain with AI gizlenmez, disabled olur")
     func explainDisabledWithoutSelection() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
+        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true, hasLink: true))
         let explain = items.first { $0.command == .explainWithAI }
         #expect(explain?.isEnabled == false)
         #expect(explain?.title == "Explain with AI")
@@ -67,7 +69,7 @@ struct TerminalContextMenuTests {
     /// Arama tek satirda calisir; secim yoksa aranacak bir sey de yok.
     @Test("secim yokken Search Selection gizlenmez, disabled olur")
     func searchSelectionDisabledWithoutSelection() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
+        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true, hasLink: true))
         let search = items.first { $0.command == .searchSelection }
         #expect(search?.isEnabled == false)
         #expect(search?.title == "Search Selection")
@@ -75,7 +77,7 @@ struct TerminalContextMenuTests {
 
     @Test("secim varken Explain with AI etkin")
     func explainEnabledWithSelection() {
-        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true))
+        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true, hasLink: true))
         #expect(items.first { $0.command == .explainWithAI }?.isEnabled == true)
     }
 
@@ -102,6 +104,30 @@ struct TerminalContextMenuTests {
         // "Explain" demek hicbir sey yapmazdi (onChange ayni degerde uyanmaz).
         workspace.requestExplainSelection()
         #expect(workspace.explainSelectionRequest != first)
+    }
+
+    // MARK: - Open Link / Copy Link (briefs/3)
+
+    /// Imlecin altinda bir baglanti yoksa iki oge de GIZLENMEZ, disabled olur — menu
+    /// imlecin altinda sekil degistirmemeli.
+    @Test("imlec altinda baglanti yokken Open/Copy Link disabled")
+    func linkItemsDisabledWithoutALink() {
+        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true,
+                                                      canSplit: true, hasLink: false))
+        #expect(items.first { $0.command == .openLink }?.isEnabled == false)
+        #expect(items.first { $0.command == .copyLink }?.isEnabled == false)
+        // Secim VAR: baglanti yoklugu diger ogeleri etkilemez.
+        #expect(items.first { $0.command == .searchSelection }?.isEnabled == true)
+    }
+
+    /// Baglanti SECIME degil, imlecin altindaki hucreye baglidir: secim olmadan da
+    /// bir URL'in ustune sag tiklanabilir.
+    @Test("baglanti varken secim olmasa da Open/Copy Link etkin")
+    func linkItemsDoNotDependOnTheSelection() {
+        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true,
+                                                      canSplit: true, hasLink: true))
+        #expect(items.first { $0.command == .openLink }?.isEnabled == true)
+        #expect(items.first { $0.command == .copyLink }?.isEnabled == true)
     }
 
     /// Ctrl-L PTY'ye gider: shell (readline/zle) ekrani temizleyip promptu YENIDEN CIZER.

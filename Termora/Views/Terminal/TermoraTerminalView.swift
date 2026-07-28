@@ -13,7 +13,8 @@ import SwiftTerm
 /// enabled/disabled rules can be tested without an NSMenu or a live PTY.
 struct TerminalContextMenuItem: Equatable {
     enum Command: Equatable {
-        case copy, paste, selectAll, searchSelection, explainWithAI, clearScreen, splitRight, splitDown
+        case copy, paste, selectAll, searchSelection, openLink, copyLink, explainWithAI,
+             clearScreen, splitRight, splitDown
     }
 
     let command: Command
@@ -31,9 +32,12 @@ enum TerminalContextMenu {
     static let clearScreenInput = "\u{0C}"
 
     /// Menu entries grouped into sections; the caller draws a separator between sections.
+    /// - Parameter hasLink: imlecin ALTINDA bir bağlantı var mı. Seçime değil tıklanan
+    ///   hücreye bağlıdır: seçim olmadan da bir URL'in üstüne sağ tıklanabilir.
     static func sections(hasSelection: Bool,
                          canPaste: Bool,
-                         canSplit: Bool) -> [[TerminalContextMenuItem]] {
+                         canSplit: Bool,
+                         hasLink: Bool) -> [[TerminalContextMenuItem]] {
         [
             [
                 TerminalContextMenuItem(command: .copy, title: "Copy", isEnabled: hasSelection),
@@ -43,6 +47,8 @@ enum TerminalContextMenu {
                 TerminalContextMenuItem(command: .searchSelection,
                                         title: "Search Selection",
                                         isEnabled: hasSelection),
+                TerminalContextMenuItem(command: .openLink, title: "Open Link", isEnabled: hasLink),
+                TerminalContextMenuItem(command: .copyLink, title: "Copy Link", isEnabled: hasLink),
                 // Seçilen metin AI panelinin bağlamına girer, bu yüzden seçim olmadan
                 // anlamsızdır. Brief gereği gizlenmez: menü imlecin altında şekil değiştirmez.
                 TerminalContextMenuItem(command: .explainWithAI,
@@ -112,9 +118,13 @@ final class TermoraTerminalView: LocalProcessTerminalView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let canPaste = NSPasteboard.general.string(forType: .string)?.isEmpty == false
+        // Menü AÇILIRKEN bir kez çözülür. Eylem anında yeniden çözmek, terminal bu arada
+        // kaydırıldıysa BAŞKA bir bağlantıyı açardı: kullanıcı gördüğü satırı onaylıyor.
+        linkUnderCursor = resolveLink(at: event)
         let sections = TerminalContextMenu.sections(hasSelection: selectionActive,
                                                     canPaste: canPaste,
-                                                    canSplit: onSplitRight != nil && onSplitDown != nil)
+                                                    canSplit: onSplitRight != nil && onSplitDown != nil,
+                                                    hasLink: linkUnderCursor != nil)
 
         let menu = NSMenu()
         // Items are enabled from the model above; letting AppKit auto-validate would send
@@ -141,6 +151,8 @@ final class TermoraTerminalView: LocalProcessTerminalView {
         case .paste: return #selector(paste(_:))
         case .selectAll: return #selector(selectAll(_:))
         case .searchSelection: return #selector(searchSelection(_:))
+        case .openLink: return #selector(openLinkUnderCursor(_:))
+        case .copyLink: return #selector(copyLinkUnderCursor(_:))
         case .explainWithAI: return #selector(explainWithAI(_:))
         case .clearScreen: return #selector(clearScreen(_:))
         case .splitRight: return #selector(splitRight(_:))
@@ -159,6 +171,61 @@ final class TermoraTerminalView: LocalProcessTerminalView {
 
     @objc private func explainWithAI(_ sender: Any?) {
         onExplainWithAI?()
+    }
+
+    // MARK: Bağlantılar (briefs/3 "Sağ Tık Menüleri")
+
+    /// Menü açılırken çözülen bağlantı. Eylem anında değil AÇILIŞ anında saptanır.
+    private var linkUnderCursor: String?
+
+    @objc private func openLinkUnderCursor(_ sender: Any?) {
+        guard let link = linkUnderCursor, let url = URL(string: link) else { return }
+        // Şema BEYAZ LİSTEDEN geçer: terminal çıktısı düşmanca olabilir ve `file://` ya da
+        // özel bir şema, tek tıkla keyfi bir uygulamayı açmaya dönüşürdü.
+        guard let scheme = url.scheme?.lowercased(),
+              Self.openableLinkSchemes.contains(scheme) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func copyLinkUnderCursor(_ sender: Any?) {
+        guard let link = linkUnderCursor else { return }
+        // Kopyalamada şema kısıtı YOK: panoya yazmak hiçbir şeyi çalıştırmaz.
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(link, forType: .string)
+    }
+
+    /// Tek tıkla açılmasına izin verilen şemalar.
+    private static let openableLinkSchemes: Set<String> = ["http", "https", "mailto"]
+
+    /// İmlecin altındaki bağlantı, yoksa nil.
+    ///
+    /// Hücre ölçüsü fonttan hesaplanır (SwiftTerm'ün formülü `internal`) ve SwiftTerm'ün
+    /// KENDİ bildirdiği piksel boyutuna karşı DOĞRULANIR. Uyuşmazlık, çoğaltılan formülün
+    /// ayrıştığı anlamına gelir; o durumda bağlantı çözülmez ve öğeler disabled kalır —
+    /// yanlış bir URL açmaktansa hiç açmamak doğrudur.
+    private func resolveLink(at event: NSEvent) -> String? {
+        let terminal = getTerminal()
+        let glyph = font.glyph(withName: "W")
+        guard let cellSize = TerminalCellGeometry.cellSize(
+                ascent: CTFontGetAscent(font),
+                descent: CTFontGetDescent(font),
+                leading: CTFontGetLeading(font),
+                advanceWidth: font.advancement(forGlyph: glyph).width,
+                lineSpacing: lineSpacing),
+              let reported = cellSizeInPixels(source: terminal),
+              TerminalCellGeometry.agrees(cellSize: cellSize,
+                                          withPixelSize: reported,
+                                          scale: window?.backingScaleFactor ?? 1),
+              let hit = TerminalCellGeometry.cell(at: convert(event.locationInWindow, from: nil),
+                                                  viewHeight: bounds.height,
+                                                  cellSize: cellSize,
+                                                  cols: terminal.cols,
+                                                  rows: terminal.rows)
+        else { return nil }
+
+        // `.screen`: satır GÖRÜNÜR alana göredir, kaydırma ofsetini SwiftTerm ekler.
+        return terminal.link(at: .screen(Position(col: hit.col, row: hit.row)),
+                             mode: .explicitAndImplicit)
     }
 
     @objc private func splitRight(_ sender: Any?) {
