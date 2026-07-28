@@ -2,13 +2,14 @@ import Foundation
 
 /// Komut paletindeki sonuç kategorileri (brief 3, "Komut Paleti Tasarımı").
 ///
-/// Brief ayrıca Folders, SSH ve AI Actions kategorilerini sayar; bu yetenekler henüz
+/// Brief ayrıca Folders ve AI Actions kategorilerini sayar; bu yetenekler henüz
 /// uygulamada yok. Boş kategori çizmemek için yalnız bugün gerçek komutu olanlar burada
 /// tanımlıdır — ilgili özellikler geldiğinde kategori de burada açılır.
-/// (Workspaces kategorisi kayıtlı workspace YOKKEN de hiç çizilmez; bkz. `CommandPaletteCatalog`.)
+/// (Workspaces ve SSH kategorileri kayıt YOKKEN hiç çizilmez; bkz. `CommandPaletteCatalog`.)
 enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
     case actions
     case workspaces
+    case ssh
     case settings
     case themes
 
@@ -18,6 +19,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .actions: return "Actions"
         case .workspaces: return "Workspaces"
+        case .ssh: return "SSH"
         case .settings: return "Settings"
         case .themes: return "Themes"
         }
@@ -28,6 +30,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .actions: return "bolt"
         case .workspaces: return "square.grid.2x2"
+        case .ssh: return "network"
         case .settings: return "gearshape"
         case .themes: return "paintpalette"
         }
@@ -38,8 +41,9 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .actions: return 0
         case .workspaces: return 1
-        case .settings: return 2
-        case .themes: return 3
+        case .ssh: return 2
+        case .settings: return 3
+        case .themes: return 4
         }
     }
 }

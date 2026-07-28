@@ -2,18 +2,25 @@ import Foundation
 
 /// Komut paletinin içeriği: BUGÜN uygulamada karşılığı olan her komut.
 ///
-/// Brief 3 ayrıca Folders, SSH ve AI Actions kategorilerini sayar; bu yetenekler henüz yok,
+/// Brief 3 ayrıca Folders ve AI Actions kategorilerini sayar; bu yetenekler henüz yok,
 /// bu yüzden palet onları hiç çizmez (boş kategori göstermek yerine). İlgili özellikler
 /// geldiğinde komutları buraya eklenir.
 @MainActor
 enum CommandPaletteCatalog {
 
+    /// - Parameter ssh: kayıtlı SSH profilleri + `~/.ssh/config` hostları. `nil` ise SSH
+    ///   kategorisi hiç çizilmez. Depo BURADA yüklenmez: `items` her çizimde çağrılır ve
+    ///   çizim sırasında dosya okuyup durum yazmak SwiftUI güncelleme döngüsü doğurur;
+    ///   `ensureConfigHostsLoaded()` çağrısı ekranın `onAppear`'ına aittir.
     static func items(workspace: WorkspaceViewModel,
                       settings: SettingsStore,
                       themes: ThemeStore,
+                      ssh: SSHHostStore? = nil,
+                      now: @escaping @MainActor () -> Date = Date.init,
                       openSettings: @escaping @MainActor () -> Void) -> [CommandPaletteItem] {
         actions(workspace: workspace)
             + workspaceCommands(workspace: workspace)
+            + sshCommands(workspace: workspace, ssh: ssh, now: now)
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
     }
@@ -130,6 +137,35 @@ enum CommandPaletteCatalog {
                 workspace.openWorkspace(saved)
             }
         }
+    }
+
+    // MARK: - SSH
+
+    /// Kayıtlı SSH profilleri ve `~/.ssh/config` hostları (brief 3, "Sonuç kategorileri → SSH").
+    /// Enter, hedefi YENİ BİR SEKMEDE `/usr/bin/ssh` ile açar; açık sekmelere dokunulmaz.
+    private static func sshCommands(workspace: WorkspaceViewModel,
+                                    ssh: SSHHostStore?,
+                                    now: @escaping @MainActor () -> Date) -> [CommandPaletteItem] {
+        guard let ssh else { return [] }
+        return ssh.targets.map { target in
+            CommandPaletteItem(id: target.id,
+                               title: target.displayName,
+                               category: .ssh,
+                               symbolName: CommandPaletteCategory.ssh.symbolName) {
+                connect(to: target, workspace: workspace, ssh: ssh, at: now())
+            }
+        }
+    }
+
+    /// Bağlantı = kullanıcının kabuğunda `/usr/bin/ssh` çalıştırmak (briefs/2: yeni bir SSH
+    /// protokolü uygulanmaz). Komut satırı `SSHCommand` tarafından argüman argüman
+    /// alıntılanarak üretilir; burada string birleştirme YOKTUR.
+    static func connect(to target: SSHTarget,
+                        workspace: WorkspaceViewModel,
+                        ssh: SSHHostStore?,
+                        at date: Date) {
+        workspace.newTab(profile: SSHLaunch.profile(for: target))
+        ssh?.recordLaunch(of: target, at: date)
     }
 
     // MARK: - Settings
