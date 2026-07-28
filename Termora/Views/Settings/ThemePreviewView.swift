@@ -32,6 +32,10 @@ struct ThemePreviewView: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color(nsColor: .separatorColor))
         )
+        // 16 renk kutusu tek tek gezilecek bir şey değil; önizleme tek bir öğe olarak
+        // duyurulur, yoksa VoiceOver kullanıcısı 17 anlamsız durakta takılır.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Preview of the \(theme.name) theme")
     }
 
     private func swatch(at index: Int) -> some View {

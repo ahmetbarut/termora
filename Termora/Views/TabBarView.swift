@@ -38,6 +38,36 @@ enum TabBarLayout {
     }
 }
 
+/// Sekme çubuğunun VoiceOver metinleri — brief 3 "Tüm butonlarda VoiceOver etiketi bulunmalı".
+///
+/// Ekranda aynı anda beş tane "Close Tab" düğmesi bulunabilir; etiket hangi sekmeye ait
+/// olduğunu söylemezse VoiceOver kullanıcısı yanlış sekmeyi kapatır. Metin üretimi saf
+/// tutulur ki `AccessibilityAffordanceTests` bunu denetleyebilsin.
+enum TabAccessibility {
+
+    /// Başlıksız sekme sessiz kalmasın diye kullanılan yedek ad.
+    static let untitled = "Untitled"
+
+    private static func spoken(_ title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? untitled : trimmed
+    }
+
+    /// Sekmenin kendisi: adı ve kaçıncı sırada olduğu. Seçili olma bilgisi `.isSelected`
+    /// trait'iyle verilir, metne yazılmaz (VoiceOver onu kendi dilinde söyler).
+    static func tabLabel(title: String, index: Int, total: Int) -> String {
+        "\(spoken(title)), tab \(index + 1) of \(total)"
+    }
+
+    static func closeLabel(title: String) -> String {
+        "Close tab \(spoken(title))"
+    }
+
+    static func renameFieldLabel(title: String) -> String {
+        "Rename tab \(spoken(title))"
+    }
+}
+
 /// Elle çizilen sekme çubuğu (macOS 14'te NSWindow tab bar'ı kullanılmaz).
 struct TabBarView: View {
     let workspace: WorkspaceViewModel
@@ -58,8 +88,8 @@ struct TabBarView: View {
                 // terminal alanı bundan etkilenmez.
                 ScrollView(.horizontal) {
                     HStack(spacing: 0) {
-                        ForEach(workspace.tabs) { tab in
-                            tabItem(tab, width: width)
+                        ForEach(Array(workspace.tabs.enumerated()), id: \.element.id) { index, tab in
+                            tabItem(tab, index: index, width: width)
                             Divider().frame(height: TabBarLayout.height * 0.6)
                         }
                     }
@@ -77,7 +107,7 @@ struct TabBarView: View {
 
     // MARK: - Parçalar
 
-    private func tabItem(_ tab: TerminalTab, width: CGFloat) -> some View {
+    private func tabItem(_ tab: TerminalTab, index: Int, width: CGFloat) -> some View {
         let isActive = tab.id == workspace.activeTabID
         let isHovered = hoveredTabID == tab.id
         let isCompact = TabBarLayout.isCompact(tabWidth: width)
@@ -92,9 +122,14 @@ struct TabBarView: View {
                     .onChange(of: renameFieldFocused) { _, focused in
                         if !focused { commitRename(tab) }
                     }
+                    .accessibilityLabel(TabAccessibility.renameFieldLabel(title: tab.displayTitle))
             } else {
                 Text(tab.displayTitle)
                     .font(.system(size: 12))
+                    // brief 3 "Sadece renkle durum anlatılmamalı": aktif sekme yalnız accent
+                    // zeminle değil, KALIN başlıkla da işaretlenir. Ağırlık farkı renkten
+                    // bağımsız okunur; alttaki accent çizgisi üçüncü (şekil) sinyaldir.
+                    .fontWeight(isActive ? .semibold : .regular)
                     .lineLimit(1)
                     // Dar pencerede baş taraf okunabilir kalsın diye sondan kısaltılır.
                     .truncationMode(isCompact ? .tail : .middle)
@@ -113,20 +148,30 @@ struct TabBarView: View {
                         .foregroundStyle(Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Close Tab")
+                .accessibilityLabel(TabAccessibility.closeLabel(title: tab.displayTitle))
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, isCompact ? 4 : 8)
         .frame(width: width, height: TabBarLayout.height)
-        .background(isActive ? Color.accentColor.opacity(0.22) : Color.clear)
+        .background(background(isActive: isActive, isHovered: isHovered))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(isActive ? Color.accentColor : Color.clear)
                 .frame(height: 2)
         }
+        // brief 3 "Animasyonlar": izin verilen iki yüzey — sekme değişimi ve hover.
+        // Sistem "Reduce Motion" açıkken `Motion` nil döner ve hiç geçiş kurulmaz.
+        .motionAnimation(.selection, value: isActive)
+        .motionAnimation(.hover, value: isHovered)
         .contentShape(Rectangle())
         // XCUITest smoke testi (Task 13) sekmeleri bu önekle sayar.
         .accessibilityIdentifier("tab-\(tab.id)")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(TabAccessibility.tabLabel(title: tab.displayTitle,
+                                                      index: index,
+                                                      total: workspace.tabs.count))
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .onHover { hovering in
             if hovering {
                 hoveredTabID = tab.id
@@ -144,6 +189,12 @@ struct TabBarView: View {
             workspace.moveTab(id: draggedID, toSlotOf: tab.id)
             return true
         }
+    }
+
+    /// Aktif zemin accent, hover zemini nötr: ikisi karışmaz.
+    private func background(isActive: Bool, isHovered: Bool) -> Color {
+        if isActive { return Color.accentColor.opacity(0.22) }
+        return isHovered ? Color.primary.opacity(0.07) : Color.clear
     }
 
     private var newTabButton: some View {

@@ -32,8 +32,11 @@ struct ProfileEditorView: View {
                         .lineLimit(1)
                         .truncationMode(.head)
                         .foregroundStyle(.secondary)
+                    // Bu ekranda üç ayrı "Clear" düğmesi var; her biri neyi temizlediğini söyler.
                     Button("Choose…") { chooseStartupDirectory() }
+                        .accessibilityLabel("Choose Startup Directory")
                     Button("Clear") { profile.startupDirectory = nil }
+                        .accessibilityLabel("Clear Startup Directory Override")
                         .disabled(profile.startupDirectory == nil)
                 }
 
@@ -59,7 +62,9 @@ struct ProfileEditorView: View {
                         .foregroundStyle(.secondary)
                     Stepper("", value: fontSizeBinding, in: SettingsLimits.fontSizeRange, step: 1)
                         .labelsHidden()
+                        .accessibilityLabel("Font size")
                     Button("Clear") { profile.fontSize = nil }
+                        .accessibilityLabel("Clear Font Size Override")
                         .disabled(profile.fontSize == nil)
                 }
 

@@ -195,11 +195,14 @@ private struct PaneLeafView: View {
             .overlay {
                 // Brief 3: the active pane is marked with a thin accent border. Hit testing is
                 // off so the border never eats a click at the edge of the terminal.
-                if isActive && showsActiveIndicator {
-                    Rectangle()
-                        .strokeBorder(Self.accentGradient, lineWidth: 1)
-                        .allowsHitTesting(false)
-                }
+                //
+                // The layer is always present and only its opacity changes, so the transition
+                // stays on this overlay and never reaches the terminal surface below (brief 3
+                // forbids decorative animation on terminal text, cursor and output).
+                activeIndicator
+                    .opacity(isActive && showsActiveIndicator ? 1 : 0)
+                    .allowsHitTesting(false)
+                    .motionAnimation(.selection, value: isActive)
             }
             .background(
                 GeometryReader { proxy in
@@ -209,6 +212,21 @@ private struct PaneLeafView: View {
                     )
                 }
             )
+    }
+
+    /// Brief 3 "Erişilebilirlik → Sadece renkle durum anlatılmamalı": a colour-blind user must
+    /// be able to tell the active pane apart, so the marker carries a shape signal as well as
+    /// a hue. The 2 pt border has visible mass on its own, and the short bar centred on the
+    /// top edge repeats the tab bar's "this one is active" language — a form that reads even
+    /// if the blue-violet gradient is perceived as a flat grey.
+    private var activeIndicator: some View {
+        Rectangle()
+            .strokeBorder(Self.accentGradient, lineWidth: 2)
+            .overlay(alignment: .top) {
+                Capsule()
+                    .fill(Self.accentGradient)
+                    .frame(width: 28, height: 3)
+            }
     }
 
     /// Splits this pane from its own context menu. The pane is focused first because the view
@@ -254,7 +272,9 @@ private struct PaneLeafView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.bar)
         .focusable()
-        .focusEffectDisabled()
+        // Brief 3 "Erişilebilirlik → Klavye focus görünür olmalı". This banner is focusable so
+        // that Return restarts the shell; hiding the focus ring (as this used to do) left the
+        // keyboard user with no way to see that Return was aimed here. The ring stays.
         .focused($isBannerFocused)
         .onKeyPress(.return) {
             viewModel.restartPaneSession(paneID: paneID)
@@ -380,5 +400,12 @@ private struct PaneDividerView: View {
                     NSCursor.pop()
                 }
             }
+            // Brief 3 "Erişilebilirlik": the divider is a real control, so VoiceOver must be
+            // able to name it. It is drag-only today — see the pane resize note in the report.
+            .accessibilityElement()
+            .accessibilityLabel(axis == .vertical
+                                ? "Vertical split divider"
+                                : "Horizontal split divider")
+            .accessibilityHint("Drag to resize the panes")
     }
 }

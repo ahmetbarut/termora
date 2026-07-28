@@ -25,8 +25,11 @@ struct GeneralSettingsView: View {
                         .truncationMode(.head)
                         .foregroundStyle(.secondary)
                     Spacer()
+                    // Görünen metin kısa tutulur; konuşulan etiket neyin değiştiğini söyler.
                     Button("Choose…") { chooseStartupDirectory() }
+                        .accessibilityLabel("Choose Startup Directory")
                     Button("Clear") { settings.settings.startupDirectory = nil }
+                        .accessibilityLabel("Clear Startup Directory")
                         .disabled(settings.settings.startupDirectory == nil)
                 }
             }
@@ -35,12 +38,16 @@ struct GeneralSettingsView: View {
                 HStack(spacing: 8) {
                     Text("Scrollback (lines)")
                     Spacer()
+                    // Alanın görünen etiketi solundaki `Text`; ekran okuyucu ikisini
+                    // ilişkilendiremediği için etiket burada tekrar edilir.
                     TextField("", text: $scrollbackText)
                         .frame(width: 90)
                         .multilineTextAlignment(.trailing)
                         .onSubmit { commitScrollbackText() }
+                        .accessibilityLabel("Scrollback lines")
                     Stepper("", value: scrollbackBinding, in: SettingsLimits.scrollbackRange, step: 500)
                         .labelsHidden()
+                        .accessibilityLabel("Scrollback lines")
                 }
                 Text("100 – 100,000. Values outside the range are clamped.")
                     .font(.caption)
