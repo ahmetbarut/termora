@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Termora'nın Info.plist TABANI (briefs/2 "Hızlı Açma").
+
+	  GENERATE_INFOPLIST_FILE açık kalır: sürüm, kimlik, telif gibi anahtarları Xcode
+	  üretmeye devam eder ve bu dosyanın içeriği onların ÜZERİNE eklenir. Burada yalnız
+	  build ayarıyla ifade edilemeyen (sözlük dizisi olan) iki anahtar durur.
+
+	  Dosya `Termora/` altında DEĞİL: o klasör bir "file system synchronized group" ve
+	  içine konan her dosya uygulama paketine kaynak olarak da kopyalanırdı.
+	-->
+
+	<!-- termora://open?path=… — ayrıştırma ve doğrulama: Termora/Services/TermoraURL.swift -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.ahmetbarut.Termora.open</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>termora</string>
+			</array>
+		</dict>
+	</array>
+
+	<!--
+	  Finder ▸ sağ tık ▸ Services ▸ Open in Termora.
+
+	  NSSendFileTypes yalnız `public.folder`: servis girdisi bir DOSYA seçiliyken menüde
+	  hiç görünmez. NSMessage, TermoraServicesProvider.openFolderInTermora(_:userData:error:)
+	  yöntemine karşılık gelir (bkz. FinderService.messageName).
+	-->
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Open in Termora</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>openFolderInTermora</string>
+			<key>NSPortName</key>
+			<string>Termora</string>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

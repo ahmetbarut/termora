@@ -21,6 +21,11 @@ struct CommandPaletteView: View {
     let themes: ThemeStore
     /// SSH kategorisi; nil ise palet SSH göstermez (testlerdeki varsayılan).
     var ssh: SSHHostStore?
+    /// Folders kategorisi (briefs/2 "Hızlı Açma"); nil ise palet klasör göstermez.
+    var folders: RecentFoldersStore?
+    /// Aktif panelin çalışma dizini (palet açılırken okunmuş hâli); favoriye alma komutu
+    /// buna dayanır.
+    var currentDirectory: String?
 
     @Environment(\.openSettings) private var openSettings
     @FocusState private var isSearchFocused: Bool
@@ -31,6 +36,8 @@ struct CommandPaletteView: View {
                                     settings: settings,
                                     themes: themes,
                                     ssh: ssh,
+                                    folders: folders,
+                                    currentDirectory: currentDirectory,
                                     openSettings: { openSettings() })
     }
 
@@ -55,6 +62,10 @@ struct CommandPaletteView: View {
                 .padding(.top, Self.topInset)
         }
         .onAppear {
+            // Diske BURADA bakılır, `items` içinde değil: `items` her çizimde çağrılıyor ve
+            // çizim sırasında durum yazmak SwiftUI güncelleme döngüsü doğurur.
+            // Silinmiş klasörler böylece palet AÇILIRKEN elenir (bkz. RecentFoldersStore).
+            folders?.refreshAvailability()
             // @FocusState'i eklendiği güncelleme turunda atamak güvenilir değil: palet İKİNCİ
             // kez açıldığında odak terminalde kalıyor ve yazılan metin kabuğa gidiyordu
             // (aynı tuzak arama çubuğunda da yaşandı). Odağı bir sonraki tura ertele.
@@ -269,6 +280,12 @@ private struct CommandPaletteRow: View {
         // Fare geri bildirimi klavye seçiminden AYRIDIR: imlecin listenin üzerinde durması
         // Enter'ın ne çalıştıracağını değiştirmemelidir (brief: "Klavye ile tam kontrol").
         .onHover { isHovered = $0 }
+        // Satır tek bir erişilebilirlik öğesidir; etiketi komutun kendisi söyler. İkon ve
+        // vurgulama renkleri okunmadığı için (örn. favori ⭑ / son kullanılan ⏱ ayrımı)
+        // etiket bu farkı KELİMEYLE taşır.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(result.item.accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
     }
 
     /// Seçili satır markanın mavi→mor geçişiyle vurgulanır

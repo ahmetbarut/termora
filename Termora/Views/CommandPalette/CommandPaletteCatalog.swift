@@ -2,25 +2,38 @@ import Foundation
 
 /// Komut paletinin içeriği: BUGÜN uygulamada karşılığı olan her komut.
 ///
-/// Brief 3 ayrıca Folders ve AI Actions kategorilerini sayar; bu yetenekler henüz yok,
-/// bu yüzden palet onları hiç çizmez (boş kategori göstermek yerine). İlgili özellikler
-/// geldiğinde komutları buraya eklenir.
+/// Brief 3 ayrıca AI Actions kategorisini sayar; o yetenek henüz yok, bu yüzden palet onu
+/// hiç çizmez (boş kategori göstermek yerine). İlgili özellik geldiğinde komutları buraya
+/// eklenir.
 @MainActor
 enum CommandPaletteCatalog {
 
-    /// - Parameter ssh: kayıtlı SSH profilleri + `~/.ssh/config` hostları. `nil` ise SSH
-    ///   kategorisi hiç çizilmez. Depo BURADA yüklenmez: `items` her çizimde çağrılır ve
-    ///   çizim sırasında dosya okuyup durum yazmak SwiftUI güncelleme döngüsü doğurur;
-    ///   `ensureConfigHostsLoaded()` çağrısı ekranın `onAppear`'ına aittir.
+    /// - Parameters:
+    ///   - ssh: kayıtlı SSH profilleri + `~/.ssh/config` hostları. `nil` ise SSH
+    ///     kategorisi hiç çizilmez. Depo BURADA yüklenmez: `items` her çizimde çağrılır ve
+    ///     çizim sırasında dosya okuyup durum yazmak SwiftUI güncelleme döngüsü doğurur;
+    ///     `ensureConfigHostsLoaded()` çağrısı ekranın `onAppear`'ına aittir.
+    ///   - folders: son kullanılan + favori klasörler (briefs/2 "Hızlı Açma"). `nil` ise
+    ///     Folders kategorisi hiç çizilmez. Aynı kural: `refreshAvailability()` diske
+    ///     bakar ve ekranın `onAppear`'ına aittir, buraya değil.
+    ///   - currentDirectory: aktif panelin çalışma dizini; favoriye alma komutu buna
+    ///     dayanır. Bilinmiyorsa komut hiç görünmez. Kapanış DEĞİL düz değerdir: dizin
+    ///     palet açılırken bir kez okunur — palet açıkken kullanıcı zaten `cd` yapamaz ve
+    ///     kapanış her tuş vuruşunda bir süreç sorgusu doğururdu.
     static func items(workspace: WorkspaceViewModel,
                       settings: SettingsStore,
                       themes: ThemeStore,
                       ssh: SSHHostStore? = nil,
+                      folders: RecentFoldersStore? = nil,
+                      currentDirectory: String? = nil,
+                      home: String = NSHomeDirectory(),
                       now: @escaping @MainActor () -> Date = Date.init,
                       openSettings: @escaping @MainActor () -> Void) -> [CommandPaletteItem] {
         actions(workspace: workspace)
+            + favoriteCommands(folders: folders, currentDirectory: currentDirectory, now: now)
             + workspaceCommands(workspace: workspace)
             + sshCommands(workspace: workspace, ssh: ssh, now: now)
+            + folderCommands(workspace: workspace, folders: folders, home: home, now: now)
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
     }
@@ -166,6 +179,71 @@ enum CommandPaletteCatalog {
                         at date: Date) {
         workspace.newTab(profile: SSHLaunch.profile(for: target))
         ssh?.recordLaunch(of: target, at: date)
+    }
+
+    // MARK: - Folders (briefs/2 "Hızlı Açma")
+
+    /// Favori ve son kullanılan klasörler. Enter, klasörü YENİ BİR SEKMEDE açar; açık
+    /// sekmelere dokunulmaz.
+    ///
+    /// Satır başlığı kısaltılmış YOLDUR (yalnız klasör adı değil): aynı adlı iki proje
+    /// klasörü ayırt edilebilsin ve fuzzy arama yol parçalarıyla da eşleşsin diye.
+    private static func folderCommands(workspace: WorkspaceViewModel,
+                                       folders: RecentFoldersStore?,
+                                       home: String,
+                                       now: @escaping @MainActor () -> Date) -> [CommandPaletteItem] {
+        guard let folders else { return [] }
+        return folders.targets.map { target in
+            CommandPaletteItem(id: target.id,
+                               title: target.title(home: home),
+                               category: .folders,
+                               symbolName: target.symbolName,
+                               accessibilityLabel: target.accessibilityLabel(home: home)) {
+                openFolder(at: target.path, workspace: workspace, folders: folders, at: now())
+            }
+        }
+    }
+
+    /// Klasörü yeni sekmede açar ve geçmişe yazar.
+    ///
+    /// GÜVENLİK: açılış KOMUT ÇALIŞTIRMAZ — profil yalnız `startupDirectory` taşır ve
+    /// dizin `startProcess(currentDirectory:)`e verilir, bir kabuk satırına gömülmez.
+    /// URL şeması ve Finder servisi de bu tek kapıdan geçer.
+    static func openFolder(at path: String,
+                           workspace: WorkspaceViewModel,
+                           folders: RecentFoldersStore?,
+                           at date: Date) {
+        workspace.newTab(profile: QuickOpenLaunch.profile(forFolder: path))
+        folders?.recordOpen(path, at: date)
+    }
+
+    /// Aktif panelin klasörünü favorilere alma / favorilerden çıkarma.
+    /// İki karşıt komut aynı anda listelenmez: hangisi anlamlıysa o çizilir.
+    private static func favoriteCommands(folders: RecentFoldersStore?,
+                                         currentDirectory: String?,
+                                         now: @escaping @MainActor () -> Date) -> [CommandPaletteItem] {
+        guard let folders, let directory = currentDirectory else { return [] }
+        let name = QuickOpenPath.displayName(directory)
+
+        if folders.isFavorite(directory) {
+            return [
+                CommandPaletteItem(id: "action.removeFolderFromFavorites",
+                                   title: "Remove “\(name)” from Favorites",
+                                   category: .actions,
+                                   symbolName: "star.slash") {
+                    folders.removeFavorite(directory)
+                },
+            ]
+        }
+        return [
+            CommandPaletteItem(id: "action.addFolderToFavorites",
+                               title: "Add “\(name)” to Favorites",
+                               category: .actions,
+                               symbolName: "star") {
+                // Favoriye almak bir AÇMA değildir: son kullanılanlar listesine yazmaz.
+                folders.addFavorite(directory, at: now())
+            },
+        ]
     }
 
     // MARK: - Settings
