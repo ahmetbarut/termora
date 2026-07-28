@@ -2,9 +2,9 @@ import Foundation
 
 /// Komut paletinin içeriği: BUGÜN uygulamada karşılığı olan her komut.
 ///
-/// Brief 3 ayrıca Workspaces, Folders, SSH ve AI Actions kategorilerini sayar; bu yetenekler
-/// henüz yok, bu yüzden palet onları hiç çizmez (boş kategori göstermek yerine). İlgili
-/// özellikler geldiğinde komutları buraya eklenir.
+/// Brief 3 ayrıca Folders, SSH ve AI Actions kategorilerini sayar; bu yetenekler henüz yok,
+/// bu yüzden palet onları hiç çizmez (boş kategori göstermek yerine). İlgili özellikler
+/// geldiğinde komutları buraya eklenir.
 @MainActor
 enum CommandPaletteCatalog {
 
@@ -13,6 +13,7 @@ enum CommandPaletteCatalog {
                       themes: ThemeStore,
                       openSettings: @escaping @MainActor () -> Void) -> [CommandPaletteItem] {
         actions(workspace: workspace)
+            + workspaceCommands(workspace: workspace)
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
     }
@@ -108,6 +109,27 @@ enum CommandPaletteCatalog {
                                symbolName: "arrow.down.square",
                                shortcut: "⌥⌘↓") { workspace.focusPane(.down) },
         ]
+    }
+
+    // MARK: - Workspaces
+
+    /// Kayıtlı workspace'ler (brief 3, "Sonuç kategorileri → Workspaces"). Enter kaydı açar.
+    ///
+    /// Depo `WorkspaceViewModel` üzerinden okunur: pencere hangi listeyi açıyorsa palet de
+    /// onu gösterir. Depo bağlı değilse (workspace ekranı olmayan bağlamlar) kategori hiç
+    /// çizilmez — boş bir "Workspaces" başlığı göstermek yerine.
+    ///
+    /// Komut, ONAY akışını atlamaz: `openWorkspace` başlangıç komutu olan güvenilmez bir
+    /// kaydı çalıştırmaz, önce onay diyaloğunu kurar (briefs/2 güvenlik kuralı).
+    private static func workspaceCommands(workspace: WorkspaceViewModel) -> [CommandPaletteItem] {
+        (workspace.workspaces?.workspaces ?? []).map { saved in
+            CommandPaletteItem(id: "workspace.\(saved.id.uuidString)",
+                               title: WorkspaceCardModel.displayName(saved.name),
+                               category: .workspaces,
+                               symbolName: CommandPaletteCategory.workspaces.symbolName) {
+                workspace.openWorkspace(saved)
+            }
+        }
     }
 
     // MARK: - Settings
