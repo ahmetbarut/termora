@@ -49,6 +49,24 @@ enum TermoraURL {
         case blankPath
         case notAnAbsolutePath
         case notAFolder
+
+        /// Sistem log'una yazılabilir SABİT etiket.
+        ///
+        /// İliştirilmiş metin (parametre adı, eylem adı) tamamen SALDIRGAN KONTROLÜNDEDİR;
+        /// serbest metni log'a geçirmek log enjeksiyonuna ve sınırsız büyümeye açık kapı
+        /// bırakır. Bu yüzden yalnız case adı yazılır.
+        var logLabel: String {
+            switch self {
+            case .notATermoraURL: return "notATermoraURL"
+            case .unsupportedAction: return "unsupportedAction"
+            case .unsupportedParameter: return "unsupportedParameter"
+            case .missingPathParameter: return "missingPathParameter"
+            case .ambiguousPath: return "ambiguousPath"
+            case .blankPath: return "blankPath"
+            case .notAnAbsolutePath: return "notAnAbsolutePath"
+            case .notAFolder: return "notAFolder"
+            }
+        }
     }
 
     /// - Parameter isDirectory: dosya sistemi kontrolü; testlerde sabitlenir.

@@ -58,7 +58,11 @@ struct MainWindowView: View {
         _workspace = State(initialValue: WorkspaceViewModel(
             sessionManager: services.sessionManager,
             settings: services.settings,
-            profiles: services.profiles
+            profiles: services.profiles,
+            // Depo BAĞLANMAZSA `workspace.workspaces` nil kalır ve buna bağlı üç davranış
+            // sessizce ölür: paletin Workspaces kategorisi hiç çizilmez, `lastOpenedAt`
+            // damgalanmaz ve "Always trust this workspace" seçimi diske yazılmaz.
+            workspaces: services.workspaces
         ))
     }
 
@@ -84,7 +88,9 @@ struct MainWindowView: View {
                                    workspace: workspace,
                                    settings: services.settings,
                                    themes: services.themes,
-                                   ssh: services.sshHosts)
+                                   ssh: services.sshHosts,
+                                   folders: services.recentFolders,
+                                   currentDirectory: { currentWorkingDirectory() })
                     .transition(.opacity)
             }
         }
@@ -100,6 +106,10 @@ struct MainWindowView: View {
             // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
             NSWindow.allowsAutomaticWindowTabbing = false
             prepareWindow()
+            // Uygulama bir `termora://` bağlantısıyla ya da Finder servisiyle AÇILDIYSA
+            // istek, bu pencere görünmeden park edilmiş olabilir; `onChange` o değişimi
+            // kaçırır. Kuyruk açılışta da boşaltılır.
+            drainFolderOpenRequest()
         }
         .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
             workspace.syncAutomaticTitles()
@@ -154,6 +164,19 @@ struct MainWindowView: View {
                                           workspace: workspace,
                                           ssh: services.sshHosts,
                                           at: Date())
+        }
+        // `termora://open` / Finder ▸ Services isteği (briefs/2 "Hızlı Açma").
+        .onChange(of: services.folderOpenRequest?.id) { _, _ in
+            drainFolderOpenRequest()
+        }
+        // Son kullanılan klasörler kullanıcının AÇTIĞI klasörleri saklar. Workspace açılışı
+        // İSTEK anında değil, GERÇEKTEN açıldığında yazılır: başlangıç komutu onayını iptal
+        // eden bir kullanıcı hiçbir klasör açmamıştır.
+        .onChange(of: workspace.openWorkspaceID) { _, openedID in
+            guard let openedID,
+                  let opened = services.workspaces.workspaces.first(where: { $0.id == openedID })
+            else { return }
+            services.recentFolders.recordOpen(opened.directory, at: Date())
         }
         .confirmationDialog(
             WorkspaceLaunchPrompt.title(workspaceName: workspace.pendingWorkspaceLaunch?.workspace.name ?? ""),
@@ -254,6 +277,34 @@ struct MainWindowView: View {
         if SessionWindowPlacement.shouldEnterFullScreen(restoring: restored) {
             window.toggleFullScreen(nil)
         }
+    }
+
+    // MARK: - Hızlı açma (briefs/2)
+
+    /// Park edilmiş klasör açma isteğini alır ve her klasör için YENİ BİR SEKME açar.
+    ///
+    /// İstek ÖNCE temizlenir: birden fazla pencere aynı turda uyanabilir ve temizlenmemiş
+    /// bir istek her pencerede bir sekme açardı. Açık sekmelere dokunulmaz.
+    private func drainFolderOpenRequest() {
+        guard let request = services.folderOpenRequest else { return }
+        services.folderOpenRequest = nil
+        let now = Date()
+        for path in request.paths {
+            CommandPaletteCatalog.openFolder(at: path,
+                                             workspace: workspace,
+                                             folders: services.recentFolders,
+                                             at: now)
+        }
+    }
+
+    /// Aktif panelin çalışma dizini. Önce süreç sorulur (kullanıcı `cd` yapmış olabilir),
+    /// okunamazsa oturumun bilinen dizinine düşülür.
+    private func currentWorkingDirectory() -> String? {
+        guard let tab = workspace.activeTab,
+              let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) else { return nil }
+        let probed = services.sessionManager.shellPID(sessionID: sessionID)
+            .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
+        return probed ?? services.sessionManager.session(id: sessionID)?.workingDirectory
     }
 
     /// Klavye odağını aktif panelin terminaline geri verir.

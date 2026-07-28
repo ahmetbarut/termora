@@ -6,6 +6,7 @@
 import AppKit
 import Foundation
 import Observation
+import os
 
 /// Object graph for one running Termora instance, built once by `TermoraApp`.
 /// Stores are shared by every window, and so is `SessionManager` — it owns the terminal view
@@ -25,6 +26,9 @@ final class AppServices {
     let sessionManager: SessionManager
     /// Önceki oturumun kaydı ve açılış kuyruğu (briefs/2 "Oturum Geri Yükleme").
     let sessionRestore: SessionRestoreStore
+    /// Son kullanılan ve favori klasörler (briefs/2 "Hızlı Açma"). Diğer depolar gibi
+    /// paylaşılır: hangi pencere klasör açarsa açsın geçmiş TEKTİR.
+    let recentFolders: RecentFoldersStore
 
     /// Settings is a separate scene, so it cannot reach a window's `WorkspaceViewModel`.
     /// It parks the request here; the key window picks it up and clears it. Per-window view
@@ -33,6 +37,12 @@ final class AppServices {
 
     /// Ayarlar ▸ SSH'tan gelen bağlanma isteği; anahtar pencere alır ve yeni sekmede açar.
     var sshConnectRequest: SSHTarget?
+
+    /// `termora://open` ya da Finder ▸ Services ▸ Open in Termora'dan gelen klasör açma
+    /// isteği. Uygulama düzeyindeki bu kapılar bir pencerenin `WorkspaceViewModel`'ine
+    /// erişemez; isteği buraya park ederler, ilk pencere alıp temizler
+    /// (`workspaceOpenRequest` ile aynı kalıp — böylece çok pencerede TEK sekme açılır).
+    var folderOpenRequest: FolderOpenRequest?
 
     /// "Use Current Layout" için pencere başına düzen sağlayıcı.
     ///
@@ -62,6 +72,17 @@ final class AppServices {
 
     @ObservationIgnored private var terminationObserver: (any NSObjectProtocol)?
 
+    /// Servisler menüsü sağlayıcısı. `NSApplication.servicesProvider` bu nesneyi TUTMAZ
+    /// (zayıf gibi davranır), sahibi burasıdır.
+    @ObservationIgnored private var servicesProvider: TermoraServicesProvider?
+
+    @ObservationIgnored private static let logger =
+        Logger(subsystem: "com.ahmetbarut.Termora", category: "QuickOpen")
+
+    /// `NSUpdateDynamicServices()` süreç başına bir kez yeter; testler `AppServices`'i
+    /// defalarca kurduğu için sayaç statiktir.
+    @ObservationIgnored private static var hasRefreshedServices = false
+
     init(defaults: UserDefaults = .standard) {
         // Termora draws its own tab bar (M2); leaving the system tabbing on would add a
         // "Show Tab Bar" menu item and fight ⌘T for the same gesture.
@@ -75,6 +96,7 @@ final class AppServices {
         self.profiles = profiles
         self.workspaces = WorkspaceStore(defaults: defaults)
         self.sshHosts = SSHHostStore(defaults: defaults)
+        self.recentFolders = RecentFoldersStore(defaults: defaults)
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
 
         let sessionRestore = SessionRestoreStore(defaults: defaults)
@@ -85,6 +107,46 @@ final class AppServices {
 
         observeApplicationTermination()
         observeRestoreSettingBeingTurnedOff()
+        registerFinderService()
+    }
+
+    // MARK: - Hızlı açma (briefs/2)
+
+    /// Dışarıdan gelen `termora://…` URL'i.
+    ///
+    /// GÜVENLİK: karar `TermoraURL.parse` içindedir ve burada YUMUŞATILMAZ. Reddedilen
+    /// istek loglanır ama kullanıcıya diyalog GÖSTERİLMEZ: herhangi bir web sayfasının
+    /// tetikleyebildiği bir istek, kullanıcının ekranını kesme hakkı kazanmamalı
+    /// (aksi hâlde şemanın kendisi bir taciz vektörü olurdu).
+    func handleIncomingURL(_ url: URL) {
+        switch TermoraURL.parse(url) {
+        case let .success(.openFolder(path)):
+            requestOpenFolder(paths: [path])
+        case let .failure(reason):
+            Self.logger.error("Rejected incoming URL: \(reason.logLabel, privacy: .public)")
+        }
+    }
+
+    /// Klasör açma isteğini park eder; ilk pencere alır. Boş liste hiçbir şey yapmaz.
+    func requestOpenFolder(paths: [String]) {
+        guard !paths.isEmpty else { return }
+        folderOpenRequest = FolderOpenRequest(paths: paths)
+    }
+
+    /// macOS Servisler menüsüne "Open in Termora" girdisini bağlar.
+    ///
+    /// Girdinin TANIMI Info.plist'teki `NSServices` bloğudur; burada yalnız o tanımın
+    /// çağıracağı nesne kaydedilir. Tam bir Finder Sync uzantısı ayrı bir hedef (ve ayrı
+    /// bir imza) isterdi; Servisler menüsü aynı işi tek bir yöntemle yapar.
+    private func registerFinderService() {
+        let provider = TermoraServicesProvider(services: self)
+        servicesProvider = provider
+        NSApplication.shared.servicesProvider = provider
+
+        guard !Self.hasRefreshedServices else { return }
+        Self.hasRefreshedServices = true
+        // Geliştirme sırasında pbs önbelleği eskiyebiliyor; süreç başına bir tazeleme.
+        NSUpdateDynamicServices()
     }
 
     // MARK: - Oturumun kaydedilmesi
@@ -148,5 +210,51 @@ final class AppServices {
                 self.observeRestoreSettingBeingTurnedOff()
             }
         }
+    }
+}
+
+/// Bekleyen bir klasör açma isteği (URL şeması ya da Finder servisi).
+///
+/// `id` her istekte tazedir: aynı klasör arka arkaya iki kez istendiğinde pencerenin
+/// `onChange` kancası ikinci isteği de görmeli.
+struct FolderOpenRequest: Identifiable, Equatable {
+    let id = UUID()
+    /// Açılacak klasörler, seçim sırasıyla. Her biri kanonik mutlak yoldur ve
+    /// `FinderService` / `TermoraURL` doğrulamasından geçmiştir.
+    let paths: [String]
+}
+
+/// macOS Servisler menüsündeki "Open in Termora" girdisinin hedefi.
+///
+/// Ayrı bir `NSObject`: servis yöntemleri Objective-C çalışma zamanından çağrılır,
+/// `AppServices` ise `@Observable` bir Swift sınıfıdır.
+///
+/// GÜVENLİK: pano da dışarıdan gelen bir girdidir. Seçim `FinderService` süzgecinden
+/// geçer — dosyalar ve dosya olmayan URL'ler elenir, yalnız var olan klasörler kalır — ve
+/// klasör `termora://` ile AYNI kapıdan açılır. Buradan komut çalıştırılmaz.
+@MainActor
+final class TermoraServicesProvider: NSObject {
+
+    private weak var services: AppServices?
+
+    init(services: AppServices) {
+        self.services = services
+        super.init()
+    }
+
+    /// Info.plist'teki `NSServices ▸ NSMessage` = `FinderService.messageName`.
+    @objc
+    func openFolderInTermora(_ pasteboard: NSPasteboard,
+                             userData: String?,
+                             error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        let urls = (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL]) ?? []
+        let paths = FinderService.folderPaths(from: urls)
+        guard !paths.isEmpty else {
+            // Servis menüsündeki hata metni; kullanıcı bir dosya seçmiş olabilir.
+            error.pointee = "Select a folder to open in Termora." as NSString
+            return
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        services?.requestOpenFolder(paths: paths)
     }
 }
