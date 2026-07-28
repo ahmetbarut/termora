@@ -130,6 +130,7 @@ struct MainWindowView: View {
                                    themes: services.themes,
                                    ssh: services.sshHosts,
                                    folders: services.recentFolders,
+                                   docker: DockerStore.shared,
                                    currentDirectory: currentWorkingDirectory())
                     .transition(.opacity)
             }
@@ -234,6 +235,23 @@ struct MainWindowView: View {
             }
         } message: {
             Text(pendingLaunchMessage)
+        }
+        // Docker yeniden başlatma onayı (briefs/2: "Silme, durdurma veya yeniden başlatma
+        // gibi etkili işlemlerde kullanıcıdan onay alınmalıdır"). Komut YALNIZ buradan
+        // onaylandığında çalışır; `requestDockerRestart` tek başına hiçbir şey çalıştırmaz.
+        .confirmationDialog(
+            workspace.pendingDockerActionTitle,
+            isPresented: pendingDockerBinding,
+            titleVisibility: .visible
+        ) {
+            Button(workspace.pendingDockerActionConfirmLabel, role: .destructive) {
+                workspace.confirmPendingDockerAction()
+            }
+            Button(DockerActionPrompt.cancelLabel, role: .cancel) {
+                workspace.cancelPendingDockerAction()
+            }
+        } message: {
+            Text(workspace.pendingDockerActionMessage)
         }
     }
 
@@ -378,6 +396,17 @@ struct MainWindowView: View {
             get: { workspace.pendingClose != nil },
             set: { isPresented in
                 if !isPresented { workspace.cancelPendingClose() }
+            }
+        )
+    }
+
+    /// Diyalog dışarıdan kapatılırsa (Esc, pencere değişimi) bekleyen komut SİLİNİR —
+    /// aksi hâlde kapanmış bir onay penceresi arkada canlı kalırdı.
+    private var pendingDockerBinding: Binding<Bool> {
+        Binding(
+            get: { workspace.pendingDockerAction != nil },
+            set: { isPresented in
+                if !isPresented { workspace.cancelPendingDockerAction() }
             }
         )
     }

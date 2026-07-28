@@ -23,6 +23,8 @@ struct CommandPaletteView: View {
     var ssh: SSHHostStore?
     /// Folders kategorisi (briefs/2 "Hızlı Açma"); nil ise palet klasör göstermez.
     var folders: RecentFoldersStore?
+    /// Docker kategorisi (briefs/2 "Docker Entegrasyonu"); nil ise palet Docker göstermez.
+    var docker: DockerStore?
     /// Aktif panelin çalışma dizini (palet açılırken okunmuş hâli); favoriye alma komutu
     /// buna dayanır.
     var currentDirectory: String?
@@ -37,6 +39,7 @@ struct CommandPaletteView: View {
                                     themes: themes,
                                     ssh: ssh,
                                     folders: folders,
+                                    docker: docker,
                                     currentDirectory: currentDirectory,
                                     openSettings: { openSettings() })
     }
@@ -66,6 +69,10 @@ struct CommandPaletteView: View {
             // çizim sırasında durum yazmak SwiftUI güncelleme döngüsü doğurur.
             // Silinmiş klasörler böylece palet AÇILIRKEN elenir (bkz. RecentFoldersStore).
             folders?.refreshAvailability()
+            // Container listesi diskte değil SÜREÇTE: `items` içinden okunamaz, çünkü orası
+            // her çizimde çalışır. Palet açılırken bir kez yüklenir; `ensureLoaded` zaten
+            // yüklüyse süreç başlatmaz.
+            Task { await docker?.ensureLoaded() }
             // @FocusState'i eklendiği güncelleme turunda atamak güvenilir değil: palet İKİNCİ
             // kez açıldığında odak terminalde kalıyor ve yazılan metin kabuğa gidiyordu
             // (aynı tuzak arama çubuğunda da yaşandı). Odağı bir sonraki tura ertele.
