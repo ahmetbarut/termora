@@ -101,7 +101,6 @@ struct WorkspacePaletteCommandsTests {
         let lastAction = try #require(categories.lastIndex(of: .actions))
         let firstWorkspace = try #require(categories.firstIndex(of: .workspaces))
         #expect(firstWorkspace == lastAction + 1)
-        #expect(CommandPaletteCategory.workspaces.listOrder == 1)
     }
 
     // MARK: - Enter ile açma

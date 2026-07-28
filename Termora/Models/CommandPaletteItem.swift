@@ -43,28 +43,11 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Sorgu boşken kategorilerin listelenme sırası.
-    ///
-    /// brief 3 kategorileri Actions → Workspaces → **Folders** → SSH → Settings → Themes
-    /// diye sayar; burada Folders, SSH'ın ARDINA konuldu. Sebep ürünsel değil, teknik:
-    /// `TermoraTests/SSHPaletteCommandsTests` (bu görevin kapsamı dışında bir dosya)
-    /// `ssh.listOrder == 2` değerini sabitliyor ve Folders'ı öne almak o testi kırardı.
-    /// Kullanıcı açısından fark, sorgu boşken iki başlığın sırasıdır.
-    ///
-    /// DİKKAT: bu değer bugün uygulamada HİÇBİR YERDE OKUNMUYOR — ekrandaki sıra
-    /// `CommandPaletteCatalog.items`'ın dizileri birleştirme sırasından geliyor. İkisi
-    /// elle aynı tutuluyor; ayrıştıkları gün kimse fark etmez.
-    var listOrder: Int {
-        switch self {
-        case .actions: return 0
-        case .workspaces: return 1
-        case .ssh: return 2
-        case .folders: return 3
-        case .docker: return 4
-        case .settings: return 5
-        case .themes: return 6
-        }
-    }
+    // Kategorilerin listelenme sırası BURADA saklanmaz. Ekrandaki sıra
+    // `CommandPaletteCatalog.items`'ın dizileri birleştirme sırasından gelir; ikinci bir
+    // kopya tutmak (eski `listOrder`) yalnız sessizce ayrışan ve testlere yanlış güven
+    // veren bir ölü değer üretiyordu. Sırayı doğrulayan test:
+    // `CommandPaletteCatalogTests.categoriesFollowTheOrderTheBriefLists`.
 }
 
 /// Palette çalıştırılabilir tek bir komut.

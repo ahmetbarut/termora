@@ -154,4 +154,38 @@ struct CommandPaletteCatalogTests {
 
         #expect(fixture.settings.settings.themeID == target.id)
     }
+
+    // MARK: - Kategori sırası (briefs/3 "Sonuç kategorileri")
+
+    /// briefs/3 kategorileri Actions → Workspaces → **Folders** → SSH → Settings → Themes
+    /// diye sayar. Sıra ekranda GERÇEKTEN `items`'ın birleştirme sırasından gelir; başka
+    /// hiçbir yerde saklanmaz, çünkü iki ayrı kopya sessizce ayrışır.
+    @Test func categoriesFollowTheOrderTheBriefLists() throws {
+        let suiteName = "termora.catalog.order.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = SettingsStore(defaults: defaults)
+        let workspace = WorkspaceViewModel(sessionManager: MockSessionManager(),
+                                           settings: settings,
+                                           profiles: ProfileStore(defaults: defaults))
+        workspace.newTab()
+
+        let folders = RecentFoldersStore(defaults: defaults, home: "/Users/ahmet")
+        folders.recordOpen("~/Projects/pinro", at: Date(timeIntervalSince1970: 1_700_000_000))
+        let ssh = SSHHostStore(defaults: defaults, configLoader: { [] })
+        ssh.hosts = [SSHHost(name: "Pinro", hostName: "pinro.app", user: "deploy")]
+
+        let items: [CommandPaletteItem] = CommandPaletteCatalog.items(workspace: workspace,
+                                                                      settings: settings,
+                                                                      themes: ThemeStore(bundle: .main),
+                                                                      ssh: ssh,
+                                                                      folders: folders,
+                                                                      openSettings: {})
+        let categories: [CommandPaletteCategory] = items.map(\.category)
+
+        let firstFolders = try #require(categories.firstIndex(of: .folders))
+        let firstSSH = try #require(categories.firstIndex(of: .ssh))
+        #expect(firstFolders < firstSSH, "briefs/3 Folders'ı SSH'tan önce sayıyor")
+    }
 }

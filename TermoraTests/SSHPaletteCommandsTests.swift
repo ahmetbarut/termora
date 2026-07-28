@@ -92,7 +92,7 @@ struct SSHPaletteCommandsTests {
         }
     }
 
-    /// briefs/3 kategori sırası: Actions → Workspaces → SSH → Settings.
+    /// briefs/3 kategori sırası: Actions → Workspaces → Folders → SSH → Settings.
     @Test func sshIsListedAfterWorkspacesAndBeforeSettings() throws {
         let subject = try makeSubject(hosts: [host("Pinro")])
         let categories = items(subject, ssh: subject.ssh).map(\.category)
@@ -100,7 +100,6 @@ struct SSHPaletteCommandsTests {
         let firstSettings = try #require(categories.firstIndex(of: .settings))
 
         #expect(firstSSH < firstSettings)
-        #expect(CommandPaletteCategory.ssh.listOrder == 2)
         #expect(CommandPaletteCategory.ssh.title == "SSH")
     }
 
