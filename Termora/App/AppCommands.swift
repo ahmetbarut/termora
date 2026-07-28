@@ -10,6 +10,11 @@ struct CommandPaletteFocusedKey: FocusedValueKey {
     typealias Value = CommandPaletteModel
 }
 
+/// AI paneli de pencere başınadır; menü onu @FocusedValue ile bulur.
+struct AIPanelFocusedKey: FocusedValueKey {
+    typealias Value = AIPanelModel
+}
+
 extension FocusedValues {
     var workspace: WorkspaceViewModel? {
         get { self[WorkspaceFocusedKey.self] }
@@ -20,13 +25,41 @@ extension FocusedValues {
         get { self[CommandPaletteFocusedKey.self] }
         set { self[CommandPaletteFocusedKey.self] = newValue }
     }
+
+    var aiPanel: AIPanelModel? {
+        get { self[AIPanelFocusedKey.self] }
+        set { self[AIPanelFocusedKey.self] = newValue }
+    }
 }
 
 struct AppCommands: Commands {
     @FocusedValue(\.workspace) private var workspace
     @FocusedValue(\.commandPalette) private var commandPalette
+    @FocusedValue(\.aiPanel) private var aiPanel
 
     var body: some Commands {
+        // briefs/2 "Menü Çubuğu": AI için ayrı bir üst menü AÇILMAZ, liste sabittir.
+        // Panel bir görünüm anahtarıdır, yeri View menüsüdür.
+        // DİKKAT: `CommandGroup { … }.disabled(…)` menüde çalışmaz; etkinlik Button'a verilir.
+        CommandGroup(after: .sidebar) {
+            Button(aiPanel?.isPresented == true ? "Hide AI Assistant" : "Show AI Assistant") {
+                aiPanel?.isPresented.toggle()
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled(aiPanel == nil)
+
+            Button("Explain Selection with AI") {
+                guard let aiPanel else { return }
+                Task { await aiPanel.openAndExplainSelection() }
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            // Seçim yokken sorulacak bir şey yok; öğe gizlenmez, devre dışı görünür
+            // (briefs/3 "Sağ Tık Menüleri" ile aynı kural).
+            .disabled(aiPanel == nil)
+
+            Divider()
+        }
+
         // Paletin ikinci kısayolu (⌘⇧P) menüye ikinci bir öğe eklemez; pencere düzeyinde
         // `CommandPaletteHotkeyMonitor` karşılar (menü öğesi tek kısayol taşıyabilir).
         CommandGroup(after: .toolbar) {

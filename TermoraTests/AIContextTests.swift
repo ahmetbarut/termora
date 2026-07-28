@@ -79,6 +79,33 @@ struct AIContextTests {
         #expect(prepared.entries.map(\.kind) == [.shell])
     }
 
+    /// ⌘A bütün scrollback'i seçer. Sınır olmasaydı brief'in "tüm geçmiş gönderilmez"
+    /// yasağı TEK kısayolla delinirdi; bu yüzden kesme güvenlik sınırında yapılır.
+    @Test func aHugeSelectionIsCutDownBeforeItCanBecomeTheWholeHistory() throws {
+        let huge = String(repeating: "x", count: AIContextBuilder.selectionCharacterLimit * 3)
+        let snapshot = AIContextSnapshot([.selectedOutput: huge])
+        let prepared = AIContextBuilder.prepare(snapshot, preferences: AIContextPreferences())
+        let entry = try #require(prepared.entries.first)
+        #expect(entry.value.count < huge.count)
+        #expect(entry.value.contains(AIContextBuilder.truncationMarker))
+    }
+
+    /// Sondan kesilir: bir komut başarısız olduğunda anlamlı satırlar SONDADIR.
+    @Test func truncationKeepsTheEndWhereTheErrorLives() throws {
+        let filler = String(repeating: "a\n", count: AIContextBuilder.selectionCharacterLimit)
+        let snapshot = AIContextSnapshot([.selectedOutput: filler + "fatal: permission denied"])
+        let prepared = AIContextBuilder.prepare(snapshot, preferences: AIContextPreferences())
+        let entry = try #require(prepared.entries.first)
+        #expect(entry.value.hasSuffix("fatal: permission denied"))
+    }
+
+    @Test func aSelectionThatFitsIsSentUntouched() throws {
+        let snapshot = AIContextSnapshot([.selectedOutput: "fatal: not a git repository"])
+        let prepared = AIContextBuilder.prepare(snapshot, preferences: AIContextPreferences())
+        let entry = try #require(prepared.entries.first)
+        #expect(entry.value == "fatal: not a git repository")
+    }
+
     @Test func preferencesSurviveAFutureVersionThatAddedMoreKeys() throws {
         let future = Data(#"{"includesShell":false,"includesTelepathy":true}"#.utf8)
         let decoded = try JSONDecoder().decode(AIContextPreferences.self, from: future)

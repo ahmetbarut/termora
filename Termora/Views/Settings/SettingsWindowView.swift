@@ -56,6 +56,7 @@ struct SettingsWindowView: View {
     var connectSSH: ((SSHTarget) -> Void)?
     /// Kurulu Ollama modelleri. Panelle AYNI mantığı paylaşır (bkz. `AIModelCatalog`),
     /// böylece iki ekran "model yok" durumunu aynı cümlelerle anlatır.
+    /// Verilmezse `AppServices`'in kaydettiği kataloğa düşer.
     var aiCatalog: AIModelCatalog?
 
     var body: some View {
@@ -78,8 +79,8 @@ struct SettingsWindowView: View {
             SSHSettingsView(hosts: ssh, connect: connectSSH)
                 .tabItem { label(for: .ssh) }
 
-            if let aiCatalog {
-                AISettingsView(catalog: aiCatalog, settings: settings)
+            if let catalog = aiCatalog ?? AIModelCatalog.current {
+                AISettingsView(catalog: catalog, settings: settings)
                     .tabItem { label(for: .ai) }
             }
 

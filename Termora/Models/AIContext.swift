@@ -242,7 +242,21 @@ struct PreparedAIContext: Equatable {
 /// Ham anlık görüntüden gönderilebilir bağlama giden TEK yol.
 enum AIContextBuilder {
 
-    /// Kapalı türleri eler, boş değerleri atar, kalanları maskeler.
+    /// Seçimin gönderilebilecek en büyük boyu, karakter.
+    ///
+    /// # Neden bir sınır var
+    ///
+    /// briefs/2: "Tüm terminal geçmişi varsayılan olarak AI'a gönderilmemelidir."
+    /// Seçim kullanıcının kendi eylemidir, ama ⌘A tek tuşta bütün scrollback'i seçer —
+    /// sınır olmasaydı brief'in yasağı tek kısayolla delinirdi. Kesme burada, yani
+    /// GÜVENLİK SINIRINDA yapılır; köprünün nazik davranmasına güvenilmez.
+    static let selectionCharacterLimit = 4_000
+
+    /// Kesildiğinde metnin başına konan işaret. Kullanıcı önizlemede bunu görür ve
+    /// modelin neyi görmediğini bilir.
+    static let truncationMarker = "[earlier lines omitted]"
+
+    /// Kapalı türleri eler, boş değerleri atar, uzun seçimi kısaltır, kalanları maskeler.
     ///
     /// Sıra `AIContextKind.allCases`'tir: aynı bağlam her seferinde aynı sırayla görünür,
     /// böylece kullanıcı önizlemeyi okumayı öğrenir.
@@ -252,10 +266,18 @@ enum AIContextBuilder {
             guard preferences.includes(kind) else { return nil }
             guard let raw = snapshot[kind]?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !raw.isEmpty else { return nil }
-            let masked = MaskedPayload.masking(raw)
+            let bounded = truncated(raw)
+            let masked = MaskedPayload.masking(bounded)
             return AIContextEntry(kind: kind, value: masked.text, findings: masked.findings)
         }
         return PreparedAIContext(entries: entries)
+    }
+
+    /// Sondan kesilir: bir komut başarısız olduğunda anlamlı satırlar ÇIKTININ SONUNDADIR
+    /// (hata mesajı, exit kodu). Baştan kesmek tam da gereken kısmı atardı.
+    private static func truncated(_ text: String) -> String {
+        guard text.count > selectionCharacterLimit else { return text }
+        return truncationMarker + "\n" + String(text.suffix(selectionCharacterLimit))
     }
 }
 

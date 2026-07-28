@@ -10,6 +10,16 @@ enum WindowLayout {
 
     static var minimumSize: CGSize { CGSize(width: minWidth, height: minHeight) }
 
+    /// AI paneli açıkken pencere, panelin genişliği KADAR büyür.
+    ///
+    /// briefs/3 iki şey ister: "Terminal alanı korunmalı" ve "AI paneli terminal
+    /// kullanımını engellememeli". Alt sınır sabit kalsaydı 720 pt'lik bir pencerede
+    /// panel terminalin yarısını yerdi; bu yüzden panel açılırken pencere büyür ve
+    /// terminal tanıdık alt sınırını korur.
+    static func minWidth(withAIPanel isPresented: Bool) -> CGFloat {
+        isPresented ? minWidth + AIPanelLayout.minWidth : minWidth
+    }
+
     /// briefs/3 "Pencere Yönetimi": boyut ve konum, oturum geri yükleme KAPALIYKEN de
     /// hatırlanmalı. AppKit'in kendi mekanizması kullanılır — kayıt yeri `NSUserDefaults`'tur,
     /// ikinci bir pencere açıldığında AppKit onu kaydedilen çerçevenin üzerine basmak yerine
@@ -37,6 +47,12 @@ struct MainWindowView: View {
     @State private var palette = CommandPaletteModel()
     @State private var paletteHotkey = CommandPaletteHotkeyMonitor()
 
+    /// AI paneli pencere başınadır: konuşma bu pencerenin terminaline aittir ve başka
+    /// bir pencerede görünmemelidir (briefs/2 "Gizlilik" — konuşma diske de yazılmaz).
+    @State private var ai: AIPanelModel
+    /// Köprü `AIPanelModel` tarafından ZAYIF tutulur; sahibi burasıdır.
+    @State private var terminalBridge: WorkspaceTerminalBridge
+
     /// Sekme başlığı artık çalışan komutu da gösteriyor; komutun başlaması/bitmesi ne OSC
     /// başlığını ne de cwd'yi değiştirdiği için `sessionTitleDigest` değişmez. Başlığın
     /// gerçeği yansıtması için saniyede bir tazelenir (durum çubuğuyla aynı bütçe).
@@ -55,7 +71,7 @@ struct MainWindowView: View {
     @MainActor
     init(services: AppServices) {
         self.services = services
-        _workspace = State(initialValue: WorkspaceViewModel(
+        let workspace = WorkspaceViewModel(
             sessionManager: services.sessionManager,
             settings: services.settings,
             profiles: services.profiles,
@@ -63,23 +79,45 @@ struct MainWindowView: View {
             // sessizce ölür: paletin Workspaces kategorisi hiç çizilmez, `lastOpenedAt`
             // damgalanmaz ve "Always trust this workspace" seçimi diske yazılmaz.
             workspaces: services.workspaces
-        ))
+        )
+        _workspace = State(initialValue: workspace)
+
+        let bridge = WorkspaceTerminalBridge(workspace: workspace,
+                                             sessionManager: services.sessionManager)
+        let panel = AIPanelModel(provider: services.aiProvider, settings: services.settings)
+        panel.bridge = bridge
+        _terminalBridge = State(initialValue: bridge)
+        _ai = State(initialValue: panel)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabBarView(workspace: workspace)
-            Divider()
-            if let tab = workspace.activeTab, tab.isSearchVisible {
-                SearchBarView(tab: tab, workspace: workspace)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-            terminalContent
-            if workspace.isStatusBarVisible {
-                StatusBarView(workspace: workspace)
+        // Panel terminalin ÜZERİNE binmez, YANINDA durur (briefs/3: "AI paneli terminal
+        // kullanımını engellememeli"). Kardeş görünüm olduğu için oturumlar okumaya ve
+        // çalışmaya devam eder; klavye odağı panele girmedikçe terminaldedir.
+        HStack(spacing: 0) {
+            terminalColumn
+            if ai.isPresented {
+                Divider()
+                AIPanelView(model: ai)
+                    .frame(minWidth: AIPanelLayout.minWidth,
+                           idealWidth: AIPanelLayout.defaultWidth,
+                           maxWidth: AIPanelLayout.maxWidth)
+                    .transition(.move(edge: .trailing))
             }
         }
-        .frame(minWidth: WindowLayout.minWidth, minHeight: WindowLayout.minHeight)
+        .frame(minWidth: WindowLayout.minWidth(withAIPanel: ai.isPresented),
+               minHeight: WindowLayout.minHeight)
+        .motionAnimation(.panel, value: ai.isPresented)
+        .focusedSceneValue(\.aiPanel, ai)
+        .onChange(of: ai.isPresented) { _, isPresented in
+            // Panel açıldığında gönderilecek bağlam TAZE olmalı; kapanırken klavye
+            // terminale geri döner.
+            if isPresented { ai.refreshContext() } else { focusActiveTerminal() }
+        }
+        // Aktif sekme/panel değişince bağlam da değişti: gösterge eskisini göstermemeli.
+        .onChange(of: workspace.activeTabID) { _, _ in
+            if ai.isPresented { ai.refreshContext() }
+        }
         // Palet terminalin ÜZERİNDE bir katmandır: oturumlar okumaya/çalışmaya devam eder
         // (brief 3: "Komut paleti açıldığında terminal oturumu durmamalıdır").
         .overlay(alignment: .top) {
@@ -195,6 +233,24 @@ struct MainWindowView: View {
         } message: {
             Text(pendingLaunchMessage)
         }
+    }
+
+    /// Pencerenin terminal sütunu: sekme çubuğu, arama, terminal ve durum çubuğu.
+    /// AI paneli bunun YANINA eklenir, üstüne değil.
+    private var terminalColumn: some View {
+        VStack(spacing: 0) {
+            TabBarView(workspace: workspace)
+            Divider()
+            if let tab = workspace.activeTab, tab.isSearchVisible {
+                SearchBarView(tab: tab, workspace: workspace)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            terminalContent
+            if workspace.isStatusBarVisible {
+                StatusBarView(workspace: workspace)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// İki diyalog aynı anda açılmamalı: kapatma onayı önceliklidir (kullanıcı zaten

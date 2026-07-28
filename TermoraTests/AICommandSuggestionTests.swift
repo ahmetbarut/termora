@@ -71,6 +71,26 @@ struct AICommandSuggestionTests {
         #expect(first.command == "cd build\nmake clean")
     }
 
+    /// Çok satırlı blok terminale olduğu gibi yazılsaydı aradaki her satır sonu birer
+    /// "çalıştır" olurdu — Insert sessizce Run'a dönüşürdü.
+    @Test func aMultiLineSuggestionBecomesOneLineBeforeItTouchesTheTerminal() throws {
+        let suggestions = AIReplyParser.suggestions(in: "```sh\ncd build\nmake clean\n```")
+        let first = try #require(suggestions.first)
+        #expect(first.terminalText == "cd build; make clean")
+    }
+
+    @Test func aSingleLineSuggestionIsTypedExactlyAsWritten() throws {
+        let suggestions = AIReplyParser.suggestions(in: "```sh\nls -la\n```")
+        #expect(try #require(suggestions.first).terminalText == "ls -la")
+    }
+
+    /// Kullanıcı onay penceresinde OKUDUĞU metni onaylar: gösterilen satır, terminale
+    /// düşecek satırın aynısıdır.
+    @Test func theConfirmationShowsTheLineThatWillActuallyBeTyped() {
+        let message = AIRunPrompt.message(for: "cd build\nmake clean")
+        #expect(message.contains("cd build; make clean"))
+    }
+
     // MARK: - Riskli komut (briefs/2)
 
     @Test func aDestructiveSuggestionIsMarkedWithItsReason() throws {

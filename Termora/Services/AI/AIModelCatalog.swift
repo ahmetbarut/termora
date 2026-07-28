@@ -10,6 +10,14 @@ import Observation
 @Observable
 final class AIModelCatalog {
 
+    /// Nesne grafiğinin kökü `AppServices`'tir; Ayarlar penceresini kuran `TermoraApp` ise
+    /// bu görevin kapsamı dışında, yani katalog oraya argüman olarak GEÇİRİLEMİYOR.
+    /// `AppServices` kurulurken kendi kataloğunu buraya yazar ve Ayarlar ▸ AI onu bulur —
+    /// böylece iki ekran AYNI `SettingsStore`'u paylaşır (ikinci bir depo kurulsaydı
+    /// Ayarlar'da değiştirilen adresi panel hiç görmezdi).
+    @ObservationIgnored
+    static var current: AIModelCatalog?
+
     private let provider: any AIProviding
     private let settings: SettingsStore
 

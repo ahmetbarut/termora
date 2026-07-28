@@ -100,6 +100,21 @@ struct AICommandSuggestion: Identifiable, Equatable {
 
     var isRisky: Bool { warning != nil }
 
+    /// Terminale YAZILACAK hâl.
+    ///
+    /// Çok satırlı bir blok olduğu gibi gönderilseydi aradaki her satır sonu birer
+    /// "çalıştır" olurdu — yani Insert sessizce Run'a dönüşürdü. Satırlar `; ` ile
+    /// birleştirilir: adımlar sırayla ve TEK onayla çalışır.
+    ///
+    /// Onay penceresi de bunu gösterir; kullanıcının okuduğu metinle çalışan metin aynıdır.
+    var terminalText: String {
+        command
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "; ")
+    }
+
     /// Renkten bağımsız etiket ("Destructive" / "High risk").
     var riskLabel: String? { warning?.label }
 
@@ -286,9 +301,13 @@ enum AIRunPrompt {
 
     static let riskMarker = "⚠"
 
+    /// Onay metni, terminale DÜŞECEK satırı gösterir (çok satırlı öneri `;` ile
+    /// birleşmiş hâliyle) — kullanıcı okuduğu şeyi onaylar.
     static func message(for command: String) -> String {
-        let body = "Termora will type this into the active terminal and press return:\n\n\(command)"
-        guard let warning = AICommandSuggestion(command: command).warning else { return body }
+        let suggestion = AICommandSuggestion(command: command)
+        let body = "Termora will type this into the active terminal and press return:"
+            + "\n\n\(suggestion.terminalText)"
+        guard let warning = suggestion.warning else { return body }
         return "\(riskMarker) \(warning.label) — \(warning.message)\n\n\(body)"
     }
 }

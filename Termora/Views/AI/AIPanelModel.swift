@@ -152,6 +152,21 @@ final class AIPanelModel {
         await catalog.refresh()
     }
 
+    /// Panel HİÇ açılmadan menüden bir eylem tetiklendiğinde ilk hazırlık.
+    /// Model listesi daha önce sorulmadıysa şimdi sorulur; sorulduysa ağa çıkılmaz.
+    func prepareIfNeeded() async {
+        guard availability == .idle else { return }
+        await refreshModels()
+    }
+
+    /// Menüden "Explain Selection with AI": paneli açar, bağlamı tazeler ve sorar.
+    func openAndExplainSelection() async {
+        isPresented = true
+        await prepareIfNeeded()
+        refreshContext()
+        await explainSelection()
+    }
+
     // MARK: - Bağlam
 
     /// Terminalden bağlamı okur, tercihlerden geçirir ve MASKELER.
@@ -261,7 +276,7 @@ final class AIPanelModel {
     /// Komutu terminale YAZAR ama çalıştırmaz; kullanıcı düzenleyip kendisi return'e basar
     /// (briefs/2: "Terminal girişine ekleyebilir", "Düzenleyebilir").
     func insert(_ suggestion: AICommandSuggestion) {
-        bridge?.insert(suggestion.command)
+        bridge?.insert(suggestion.terminalText)
     }
 
     /// Onay penceresini AÇAR. Terminale dokunmaz — briefs/2'nin kırmızı çizgisi budur.
@@ -274,7 +289,7 @@ final class AIPanelModel {
     func confirmRun() {
         guard let suggestion = pendingRun else { return }
         pendingRun = nil
-        bridge?.run(suggestion.command)
+        bridge?.run(suggestion.terminalText)
     }
 
     func cancelRun() {
