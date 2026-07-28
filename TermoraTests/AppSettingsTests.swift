@@ -18,6 +18,8 @@ import Testing
         #expect(settings.defaultShellPath == nil)
         #expect(settings.startupDirectory == nil)
         #expect(settings.showStatusBar == true)
+        // brief 3 "İlk Açılış Akışı": ilk açılışta onboarding gösterilir.
+        #expect(settings.hasCompletedOnboarding == false)
     }
 
     @Test func codableRoundTrip() throws {
@@ -32,9 +34,20 @@ import Testing
         settings.defaultShellPath = "/bin/bash"
         settings.startupDirectory = "/Users/me"
         settings.showStatusBar = false
+        settings.hasCompletedOnboarding = true
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
         #expect(decoded == settings)
+        #expect(decoded.hasCompletedOnboarding == true)
+    }
+
+    /// Eski (onboarding alanı olmayan) bloblar hâlâ çözülmeli; aksi hâlde güncelleyen
+    /// kullanıcının tüm ayarları sıfırlanırdı.
+    @Test func legacyBlobWithoutOnboardingFlagStillDecodes() throws {
+        let legacy = Data(#"{"fontSize":15,"lineSpacing":1.25,"cursorStyle":"blinkBlock","themeID":"nord","windowOpacity":1,"scrollbackLines":10000,"showStatusBar":true}"#.utf8)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: legacy)
+        #expect(decoded.themeID == "nord")
+        #expect(decoded.hasCompletedOnboarding == false)
     }
 
     @Test func cursorStyleMapsToSwiftTermForAllSixCases() {
