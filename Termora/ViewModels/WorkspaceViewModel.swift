@@ -538,6 +538,35 @@ final class WorkspaceViewModel {
         }
     }
 
+    /// briefs/3 "Sağ Tık Menüleri" ▸ Search Selection. Çubuğu AÇAR (açıksa açık bırakır),
+    /// terimi seçili metne kurar ve sayacı tazeler.
+    ///
+    /// `toggleSearchBar()` ÇAĞRILMAZ: çubuk açıkken ikinci bir arama onu kapatır ve
+    /// kullanıcı hiçbir sonuç göremezdi.
+    func searchForSelection(_ selection: String) {
+        guard let tab = activeTab, let term = Self.searchTerm(from: selection) else { return }
+        // Regex KAPATILIR: kullanıcı düz metin seçti. Açık bırakılsaydı seçimdeki `.` ya da
+        // `(` gibi karakterler desen olarak okunur ve arama sessizce yanlış yeri bulurdu.
+        // Büyük/küçük harf ve tam kelime tercihleri kullanıcınındır, korunur.
+        tab.searchQuery = TerminalSearchQuery(term: term,
+                                              caseSensitive: tab.searchQuery.caseSensitive,
+                                              usesRegex: false,
+                                              wholeWord: tab.searchQuery.wholeWord)
+        tab.isSearchVisible = true
+        refreshSearchSummary()
+    }
+
+    /// Seçimden arama terimi. Arama TEK SATIRDA çalışır; ham çok satırlı metni geçirmek
+    /// çubuğa görünmez bir satır sonu koyar ve hiçbir eşleşme bulunmazdı.
+    /// Yalnız boşluktan oluşan seçim terim ÜRETMEZ: boş terim çubuğu açıp "0/0" gösterirdi.
+    private static func searchTerm(from selection: String) -> String? {
+        selection
+            .split(whereSeparator: \.isNewline)
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+    }
+
     func closeSearch() {
         guard let tab = activeTab else { return }
         tab.isSearchVisible = false

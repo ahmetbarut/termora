@@ -146,4 +146,53 @@ struct WorkspaceSearchTests {
         #expect(stub.clearCalls == [sessionID])
         #expect(stub.focusCalls == [sessionID])
     }
+
+    // MARK: - Search Selection (briefs/3 "Sağ Tık Menüleri")
+
+    /// Sağ tık menüsünden gelen arama: çubuğu AÇAR, terimi seçili metne kurar ve sayacı
+    /// tazeler. Kullanıcı ⌘F'e basıp metni elle yazmak zorunda kalmaz.
+    @Test func searchingASelectionOpensTheBarWithThatTerm() throws {
+        let (workspace, stub) = makeWorkspace()
+
+        workspace.searchForSelection("connection refused")
+
+        #expect(workspace.activeTab?.isSearchVisible == true)
+        #expect(workspace.activeTab?.searchQuery.term == "connection refused")
+        #expect(workspace.activeTab?.searchSummary == stub.summaryToReturn)
+    }
+
+    /// Çubuk zaten AÇIKSA kapanmaz — `toggleSearchBar()` çağrılsaydı ikinci bir arama
+    /// çubuğu kapatır ve kullanıcı hiçbir sonuç göremezdi.
+    @Test func searchingAgainWhileTheBarIsOpenDoesNotCloseIt() throws {
+        let (workspace, _) = makeWorkspace()
+        workspace.toggleSearchBar()
+
+        workspace.searchForSelection("first")
+        workspace.searchForSelection("second")
+
+        #expect(workspace.activeTab?.isSearchVisible == true)
+        #expect(workspace.activeTab?.searchQuery.term == "second")
+    }
+
+    /// Çok satırlı seçim arama terimi OLAMAZ (arama tek satırda çalışır); ilk dolu satır
+    /// alınır. Ham metni geçirmek çubuğa görünmez bir satır sonu koyar ve hiçbir eşleşme
+    /// bulunmazdı.
+    @Test func aMultiLineSelectionIsReducedToItsFirstLine() throws {
+        let (workspace, _) = makeWorkspace()
+
+        workspace.searchForSelection("  \nfatal: not a git repository\nsecond line\n")
+
+        #expect(workspace.activeTab?.searchQuery.term == "fatal: not a git repository")
+    }
+
+    /// Yalnız boşluktan oluşan seçim hiçbir şey yapmaz: boş terim çubuğu açıp "0/0"
+    /// gösterirdi.
+    @Test func aBlankSelectionDoesNotOpenTheBar() throws {
+        let (workspace, stub) = makeWorkspace()
+
+        workspace.searchForSelection("   \n\t ")
+
+        #expect(workspace.activeTab?.isSearchVisible != true)
+        #expect(stub.findNextCalls.isEmpty)
+    }
 }

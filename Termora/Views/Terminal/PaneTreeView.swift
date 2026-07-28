@@ -167,8 +167,18 @@ private struct PaneLeafView: View {
                          isActive: isActive,
                          onSplitRight: { split(axis: .vertical) },
                          onSplitDown: { split(axis: .horizontal) },
+                         // Sağ tık menüsü BU panelde açıldı ama eylemler AKTİF panele
+                         // bakıyor. Aktif olmayan bir panele sağ tıklandığında yanlış
+                         // panelin seçimi işlenmesin diye önce panel aktifleştirilir.
+                         onSearchSelection: { selection in
+                             viewModel.activatePane(paneID: paneID)
+                             viewModel.searchForSelection(selection)
+                         },
                          // Menü AI'a dokunmaz, yalnız istek bırakır; pencere onu karşılar.
-                         onExplainWithAI: { viewModel.requestExplainSelection() })
+                         onExplainWithAI: {
+                             viewModel.activatePane(paneID: paneID)
+                             viewModel.requestExplainSelection()
+                         })
             // Kimlik HEM oturumu HEM de yeniden başlatma kuşağını içerir:
             // - sessionID: iki sekmenin kök paneli aynı yapısal konumdadır; kimlik yalnız
             //   kuşak olursa (taze oturumlarda hep 0) SwiftUI makeNSView'i çağırmaz ve

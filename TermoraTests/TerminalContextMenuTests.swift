@@ -16,7 +16,7 @@ struct TerminalContextMenuTests {
         let sections = TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true)
 
         #expect(sections.count == 3)
-        #expect(sections.first?.map(\.command) == [.copy, .paste, .selectAll, .explainWithAI])
+        #expect(sections.first?.map(\.command) == [.copy, .paste, .selectAll, .searchSelection, .explainWithAI])
         #expect(sections.dropFirst().first?.map(\.command) == [.clearScreen])
         #expect(sections.last?.map(\.command) == [.splitRight, .splitDown])
     }
@@ -24,8 +24,8 @@ struct TerminalContextMenuTests {
     @Test("basliklar Ingilizce ve tek anlamli")
     func titles() {
         let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true))
-        #expect(items.map(\.title) == ["Copy", "Paste", "Select All", "Explain with AI",
-                                       "Clear Screen", "Split Right", "Split Down"])
+        #expect(items.map(\.title) == ["Copy", "Paste", "Select All", "Search Selection",
+                                       "Explain with AI", "Clear Screen", "Split Right", "Split Down"])
     }
 
     @Test("secim yokken Copy gizlenmez, disabled olur")
@@ -33,7 +33,7 @@ struct TerminalContextMenuTests {
         let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
         let copy = items.first { $0.command == .copy }
         #expect(copy?.isEnabled == false)
-        #expect(items.count == 7)
+        #expect(items.count == 8)
     }
 
     @Test("pano bosken Paste disabled")
@@ -62,6 +62,15 @@ struct TerminalContextMenuTests {
         let explain = items.first { $0.command == .explainWithAI }
         #expect(explain?.isEnabled == false)
         #expect(explain?.title == "Explain with AI")
+    }
+
+    /// Arama tek satirda calisir; secim yoksa aranacak bir sey de yok.
+    @Test("secim yokken Search Selection gizlenmez, disabled olur")
+    func searchSelectionDisabledWithoutSelection() {
+        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
+        let search = items.first { $0.command == .searchSelection }
+        #expect(search?.isEnabled == false)
+        #expect(search?.title == "Search Selection")
     }
 
     @Test("secim varken Explain with AI etkin")
