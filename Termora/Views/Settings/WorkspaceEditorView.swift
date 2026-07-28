@@ -101,10 +101,18 @@ struct WorkspaceEditorView: View {
     private var startupCommandsSection: some View {
         Section("Startup Commands") {
             ForEach(draft.paneEditors) { pane in
-                TextField(pane.label,
-                          text: binding(for: pane),
-                          prompt: Text("npm run dev"))
-                    .accessibilityLabel(pane.accessibilityLabel)
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField(pane.label,
+                              text: binding(for: pane),
+                              prompt: Text("npm run dev"))
+                        .accessibilityLabel(pane.accessibilityLabel)
+
+                    // Uyarı KAYDETMEYİ engellemez: kullanıcı ne yaptığını biliyor olabilir
+                    // (briefs/2 — koruma shell davranışını bozmamalı). Yalnız görünür kılar.
+                    if let warning = DangerousCommand.inspect(pane.command) {
+                        CommandRiskWarningLabel(warning: warning)
+                    }
+                }
             }
 
             Text("Commands need your approval each time the workspace opens.")
@@ -130,5 +138,28 @@ struct WorkspaceEditorView: View {
                     .help(WorkspaceLaunchPrompt.trustToggleHelp)
             }
         }
+    }
+}
+
+/// Riskli bir başlangıç komutunun editördeki işareti (briefs/2 "Tehlikeli Komut
+/// Koruması"). `ProfileEditorView` de aynı satırı kullanır.
+///
+/// Durum ÜÇ sinyalle anlatılır — simge, sözcük ve renk — çünkü renk tek gösterge olamaz
+/// (briefs/2 "Erişilebilirlik"). VoiceOver için satır tek bir öğeye indirilir; iki ayrı
+/// parça hâlinde okunması bağlamı bölerdi.
+struct CommandRiskWarningLabel: View {
+    let warning: DangerousCommandWarning
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: warning.symbolName)
+                .foregroundStyle(warning.risk.colorToken.color)
+            Text("\(warning.label): \(warning.message)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(warning.accessibilityLabel)
     }
 }

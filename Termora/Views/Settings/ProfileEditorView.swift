@@ -40,11 +40,19 @@ struct ProfileEditorView: View {
                         .disabled(profile.startupDirectory == nil)
                 }
 
-                TextField(
-                    "Startup command",
-                    text: startupCommandBinding,
-                    prompt: Text("e.g. tmux attach")
-                )
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField(
+                        "Startup command",
+                        text: startupCommandBinding,
+                        prompt: Text("e.g. tmux attach")
+                    )
+
+                    // Bu komut her yeni terminalde Termora tarafından çalıştırılır; riskli
+                    // olduğunda YAZARKEN görünür (briefs/2 "Tehlikeli Komut Koruması").
+                    if let warning = DangerousCommand.inspect(profile.startupCommand ?? "") {
+                        CommandRiskWarningLabel(warning: warning)
+                    }
+                }
             }
 
             Section("Appearance Overrides") {

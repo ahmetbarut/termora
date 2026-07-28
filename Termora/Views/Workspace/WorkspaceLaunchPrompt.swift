@@ -27,8 +27,37 @@ enum WorkspaceLaunchPrompt {
     static let trustToggleHelp = "Startup commands for this workspace run without asking from now on."
 
     /// VoiceOver: komut satırları tek tek okunurken kaçıncı komut olduğu söylenir.
+    /// Riskli komutta seviye ve sonuç aynı cümlede duyulur — işaret yalnız GÖRSEL olamaz.
     static func commandAccessibilityLabel(index: Int, total: Int, command: String) -> String {
-        "Command \(index + 1) of \(total): \(command)"
+        let base = "Command \(index + 1) of \(total): \(command)"
+        guard let warning = DangerousCommand.inspect(command) else { return base }
+        return "\(base). \(warning.accessibilityLabel)"
+    }
+
+    // MARK: - Riskli komutun işareti (briefs/2 "Tehlikeli Komut Koruması")
+
+    /// Onay bir `confirmationDialog` mesajıdır: orada renk, kalınlık ya da SF Symbol
+    /// YOKTUR, yalnız düz metin vardır. Bu yüzden işaret metnin içine girer — simge
+    /// karakteri + seviyeyi adlandıran sözcük.
+    static let riskMarker = "⚠"
+
+    static let riskFooter = "Marked commands can destroy data. Review them before you run them."
+
+    static func commandLine(_ command: String) -> String {
+        guard let warning = DangerousCommand.inspect(command) else { return command }
+        return "\(riskMarker) \(warning.label): \(command)"
+    }
+
+    /// Diyaloğun tam gövdesi: kaç komut çalışacağı + komutların kendisi (riskliler işaretli)
+    /// + yalnız gerçekten risk varsa açıklama satırı.
+    static func messageBody(commands: [String]) -> String {
+        var lines = [message(commandCount: commands.count), ""]
+        lines.append(contentsOf: commands.map(commandLine))
+        if commands.contains(where: { DangerousCommand.inspect($0) != nil }) {
+            lines.append("")
+            lines.append(riskFooter)
+        }
+        return lines.joined(separator: "\n")
     }
 }
 
