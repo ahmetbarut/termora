@@ -181,6 +181,21 @@ struct SSHScreenTests {
         #expect(draft.makeHost().port == 2222)
     }
 
+    /// Form, kaydetmeden önce çalışacak komutu gösterir; host girilmeden gösterilecek
+    /// bir komut YOKTUR.
+    @Test func theFormPreviewsTheCommandItWillRun() {
+        var draft = SSHHostDraft.newHost()
+        #expect(draft.commandPreviewText == SSHHostDraft.commandPreviewPlaceholder)
+
+        draft.hostName = "pinro.app"
+        draft.user = "deploy"
+        draft.port = "2222"
+
+        #expect(draft.commandPreviewText == "/usr/bin/ssh -p 2222 -- deploy@pinro.app")
+        // Önizleme kullanıcıya doğrulamanın gevşetilmediğini de gösterir.
+        #expect(!draft.commandPreviewText.contains("-o"))
+    }
+
     @Test func tagsAreSplitTrimmedAndDeduplicated() {
         #expect(SSHHostDraft.parseTags("prod, eu ,, PROD") == ["prod", "eu"])
         #expect(SSHHostDraft.parseTags("   ").isEmpty)

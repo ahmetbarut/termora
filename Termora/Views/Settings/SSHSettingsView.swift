@@ -165,6 +165,15 @@ struct SSHHostDraft: Equatable, Identifiable {
         return nil
     }
 
+    static let commandPreviewPlaceholder = "Enter a host to preview the ssh command."
+
+    /// Kaydetmeden ÖNCE ne çalışacağı. Kullanıcı alanlarının komuta nasıl döndüğünü —
+    /// ve hiçbir doğrulama seçeneğinin eklenmediğini — burada gözle görür.
+    var commandPreviewText: String {
+        guard isSaveEnabled else { return Self.commandPreviewPlaceholder }
+        return SSHCommand.commandLine(SSHCommand.arguments(for: makeHost()))
+    }
+
     static func newHost() -> SSHHostDraft { SSHHostDraft() }
 
     init() {}
@@ -264,7 +273,7 @@ struct SSHSettingsView: View {
             footer
         }
         .onAppear { hosts.ensureConfigHostsLoaded() }
-        .sheet(item: $draft) { _ in editorSheet }
+        .sheet(item: $draft) { presented in editorSheet(for: presented) }
     }
 
     // MARK: - Liste
@@ -366,18 +375,22 @@ struct SSHSettingsView: View {
         hosts.remove(id: host.id)
     }
 
-    @ViewBuilder
-    private var editorSheet: some View {
-        if let binding = Binding($draft) {
-            SSHHostEditorView(
-                draft: binding,
-                onSave: {
-                    hosts.upsert(binding.wrappedValue.makeHost())
-                    draft = nil
-                },
-                onCancel: { draft = nil })
-            .frame(width: 520, height: 460)
-        }
+    /// Formu SUNULAN taslakla kurar.
+    ///
+    /// `Binding($draft)` (isteğe bağlıyı açan sarmalayıcı) BİLEREK kullanılmıyor: bu
+    /// yüzeyde sayfanın içeriği boş çiziliyordu — kapanış, durum yazılmadan ÖNCEKİ
+    /// görünüm değerini yakalayınca `if let` dalı hiç seçilmiyor ve kullanıcı boş bir
+    /// sayfa görüyordu. Sayfanın kendi verdiği `presented` değeri her zaman doludur.
+    private func editorSheet(for presented: SSHHostDraft) -> some View {
+        let binding = Binding(get: { draft ?? presented }, set: { draft = $0 })
+        return SSHHostEditorView(
+            draft: binding,
+            onSave: {
+                hosts.upsert(binding.wrappedValue.makeHost())
+                draft = nil
+            },
+            onCancel: { draft = nil })
+        .frame(width: 520, height: 460)
     }
 }
 
@@ -489,9 +502,7 @@ struct SSHHostEditorView: View {
             Divider()
 
             HStack {
-                // Kullanıcı ne çalışacağını KAYDETMEDEN görür; alanların komuta nasıl
-                // döndüğü (ve hiçbir `-o` eklenmediği) gözle doğrulanabilir.
-                Text(SSHCommand.commandLine(SSHCommand.arguments(for: draft.makeHost())))
+                Text(draft.commandPreviewText)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
