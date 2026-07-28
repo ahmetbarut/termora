@@ -71,6 +71,7 @@ final class AppServices {
     }
 
     @ObservationIgnored private var terminationObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var launchObserver: (any NSObjectProtocol)?
 
     /// Servisler menüsü sağlayıcısı. `NSApplication.servicesProvider` bu nesneyi TUTMAZ
     /// (zayıf gibi davranır), sahibi burasıdır.
@@ -107,7 +108,7 @@ final class AppServices {
 
         observeApplicationTermination()
         observeRestoreSettingBeingTurnedOff()
-        registerFinderService()
+        registerExternalEntryPoints()
     }
 
     // MARK: - Hızlı açma (briefs/2)
@@ -133,15 +134,44 @@ final class AppServices {
         folderOpenRequest = FolderOpenRequest(paths: paths)
     }
 
-    /// macOS Servisler menüsüne "Open in Termora" girdisini bağlar.
+    /// Uygulamanın DIŞ kapıları: Servisler menüsü ve `termora://` şeması.
     ///
-    /// Girdinin TANIMI Info.plist'teki `NSServices` bloğudur; burada yalnız o tanımın
-    /// çağıracağı nesne kaydedilir. Tam bir Finder Sync uzantısı ayrı bir hedef (ve ayrı
-    /// bir imza) isterdi; Servisler menüsü aynı işi tek bir yöntemle yapar.
-    private func registerFinderService() {
+    /// Servis girdisinin TANIMI Info.plist'teki `NSServices` bloğudur; burada yalnız o
+    /// tanımın çağıracağı nesne kaydedilir. Tam bir Finder Sync uzantısı ayrı bir hedef
+    /// (ve ayrı bir imza) isterdi; Servisler menüsü aynı işi tek bir yöntemle yapar.
+    ///
+    /// URL şeması için SwiftUI'nin `.onOpenURL`'ü KULLANILMIYOR: bu uygulamada (özel bir
+    /// `NSApplicationDelegate` ile) Apple Event pakete ULAŞIYOR — `log` çıktısında
+    /// `RECEIVED:(GURL,GURL)` görünüyor — ama `.onOpenURL` hiç tetiklenmiyor. Bu yüzden
+    /// `kAEGetURL` olayı doğrudan dinlenir; tek ve kesin bir giriş noktası kalır.
+    private func registerExternalEntryPoints() {
         let provider = TermoraServicesProvider(services: self)
         servicesProvider = provider
         NSApplication.shared.servicesProvider = provider
+
+        NSAppleEventManager.shared().setEventHandler(
+            provider,
+            andSelector: #selector(TermoraServicesProvider.handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: TermoraServicesProvider.internetEventClass,
+            andEventID: TermoraServicesProvider.getURLEventID)
+
+        // AppKit kendi `GURL` işleyicisini `finishLaunching` sırasında kurar ve
+        // uygulama ÖNCE kurulmuş bir işleyiciyi ezebilir; kayıt açılış bittikten sonra
+        // tazelenir. (Sonradan kurulan `AppServices` için init'teki kayıt zaten yeterli.)
+        launchObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didFinishLaunchingNotification,
+            object: nil,
+            queue: .main
+        ) { [weak provider] _ in
+            guard let provider else { return }
+            MainActor.assumeIsolated {
+                NSAppleEventManager.shared().setEventHandler(
+                    provider,
+                    andSelector: #selector(TermoraServicesProvider.handleGetURLEvent(_:withReplyEvent:)),
+                    forEventClass: TermoraServicesProvider.internetEventClass,
+                    andEventID: TermoraServicesProvider.getURLEventID)
+            }
+        }
 
         guard !Self.hasRefreshedServices else { return }
         Self.hasRefreshedServices = true
@@ -235,11 +265,32 @@ struct FolderOpenRequest: Identifiable, Equatable {
 @MainActor
 final class TermoraServicesProvider: NSObject {
 
+    /// `kInternetEventClass` / `kAEGetURL` / `keyDirectObject`.
+    ///
+    /// Ham FourCharCode olarak yazıldılar: Carbon başlıklarını yalnız üç sabit için
+    /// içeri almak gerekmiyor. Değerler `'GURL'` ve `'----'`.
+    static let internetEventClass = AEEventClass(0x4755_524C)
+    static let getURLEventID = AEEventID(0x4755_524C)
+    private static let directObjectKeyword = AEKeyword(0x2D2D_2D2D)
+
     private weak var services: AppServices?
 
     init(services: AppServices) {
         self.services = services
         super.init()
+    }
+
+    /// `termora://…` Apple Event'i (bkz. `AppServices.registerExternalEntryPoints`).
+    ///
+    /// Burada DOĞRULAMA YAPILMAZ: olay yalnız bir URL'e çevrilir ve tek karar noktası olan
+    /// `handleIncomingURL` çağrılır. Çözülemeyen bir olay sessizce düşer — dışarıdan gelen
+    /// bozuk bir olay kullanıcının ekranını kesmemeli.
+    @objc
+    func handleGetURLEvent(_ event: NSAppleEventDescriptor,
+                           withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let string = event.paramDescriptor(forKeyword: Self.directObjectKeyword)?.stringValue,
+              let url = URL(string: string) else { return }
+        services?.handleIncomingURL(url)
     }
 
     /// Info.plist'teki `NSServices ▸ NSMessage` = `FinderService.messageName`.

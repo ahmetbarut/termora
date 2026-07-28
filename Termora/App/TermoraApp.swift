@@ -25,14 +25,6 @@ struct TermoraApp: App {
                 )
                 .syncingTerminalAppearance(settings: services.settings, sessionManager: services.sessionManager)
                 .presentingOnboardingIfNeeded(settings: services.settings)
-                // briefs/2 "Hızlı Açma": `termora://open?path=…`.
-                //
-                // GÜVENLİK: URL burada UYGULANMAZ. `AppServices` onu `TermoraURL.parse`
-                // süzgecinden geçirir (yalnız klasör açma; `command` gibi bir parametre
-                // URL'in TAMAMINI reddettirir) ve isteği park eder; pencere park edilmiş
-                // isteği alır. Böylece doğrulama tek yerde kalır ve çok pencereli durumda
-                // aynı URL için tek sekme açılır.
-                .onOpenURL { services.handleIncomingURL($0) }
         }
         .defaultSize(width: 900, height: 560)
         .commands {
