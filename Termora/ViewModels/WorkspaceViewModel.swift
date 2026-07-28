@@ -49,6 +49,22 @@ struct PendingWorkspaceLaunch: Identifiable, Equatable {
     var commands: [String]
 }
 
+/// Onay bekleyen ETKİLİ bir Docker işlemi (briefs/2: "Silme, durdurma veya yeniden
+/// başlatma gibi etkili işlemlerde kullanıcıdan onay alınmalıdır").
+///
+/// Çalıştırılacak komut bu yapıda DURMAZ (kapanış `Equatable` olamaz); `WorkspaceViewModel`
+/// onu ayrı bir alanda tutar ve onay/iptal ikisi de temizler — `windowCloseApproval` ile
+/// aynı kalıp.
+struct PendingDockerAction: Identifiable, Equatable {
+    var id: UUID
+    /// Diyaloğun başlığı.
+    var title: String
+    /// İşlemin sonucunu açıkça yazan gövde.
+    var message: String
+    /// Onay butonunun etiketi; eylemi adlandırır.
+    var confirmLabel: String
+}
+
 /// Pencere başına bir tane. Sekme ve panel operasyonlarının tek sahibi.
 /// Menü kısayolları @FocusedValue üzerinden key window'un örneğine ulaşır.
 @MainActor
@@ -76,6 +92,9 @@ final class WorkspaceViewModel {
     /// Workspace kayıtları. Workspace ekranı olmayan bağlamlarda (eski testler) nil olabilir;
     /// o durumda açılış çalışır ama "son açılma" damgası ve güven bayrağı kalıcılaşmaz.
     let workspaces: WorkspaceStore?
+    /// Aktif panelin git durumunu ARKA PLANDA ve seyrek yoklayan izleyici (briefs/2).
+    /// Pencere başına bir tane: her pencerenin aktif paneli farklı bir depoda olabilir.
+    let gitStatus: GitStatusMonitor
     /// `lastOpenedAt` damgasının kaynağı; testte sabitlenebilsin diye enjekte edilir.
     private let now: () -> Date
 
@@ -104,15 +123,19 @@ final class WorkspaceViewModel {
         return tabs.first { $0.id == activeTabID }
     }
 
+    /// `gitStatus` varsayılanı init'in İÇİNDE kurulur: varsayılan argüman ifadeleri
+    /// yalıtımsız bağlamda değerlendirilir, `GitStatusMonitor` ise `MainActor`'a bağlıdır.
     init(sessionManager: any SessionManaging,
          settings: SettingsStore,
          profiles: ProfileStore,
          workspaces: WorkspaceStore? = nil,
+         gitStatus: GitStatusMonitor? = nil,
          now: @escaping () -> Date = Date.init) {
         self.sessionManager = sessionManager
         self.settings = settings
         self.profiles = profiles
         self.workspaces = workspaces
+        self.gitStatus = gitStatus ?? GitStatusMonitor()
         self.now = now
     }
 
@@ -546,10 +569,16 @@ final class WorkspaceViewModel {
     struct StatusSnapshot: Equatable {
         var shellName: String
         var workingDirectory: String
+        /// Deponun adı (`.git`'i barındıran klasör); depo değilse nil.
+        var repositoryName: String?
         var branchName: String?
         var columns: Int
         var rows: Int
         var isBusy: Bool
+        /// git'ten okunan detay (değişiklik sayısı, ahead/behind, son commit).
+        /// Yoklama arka planda ve seyrek yapıldığı için ilk saniyelerde nil olabilir —
+        /// çubuk o sırada yalnız depo adını ve dalı gösterir.
+        var gitStatus: GitStatusDetail?
     }
 
     /// Durum çubuğu ayarlardan açık mı? (@Observable okuması sayesinde canlı günceller.)
@@ -581,15 +610,84 @@ final class WorkspaceViewModel {
         let directory = probedDirectory ?? session.workingDirectory
         let size = session.terminalSize ?? (cols: 0, rows: 0)
 
+        // Depo adı ve dal DOSYADAN okunur (`.git` girdisini arayıp HEAD'i okur); git
+        // süreci çalıştırılmaz, bu yüzden 1 Hz'lik bu yolda kalabilir. Tek okuma iki
+        // bilgiyi birden verir — `GitBranchReader` ayrıca çağrılsaydı ağaç iki kez yürünürdü.
+        let repository = directory.flatMap { GitRepositoryReader.info(forDirectory: $0) }
+        // Detay yalnız ÖNBELLEKTEN okunur; yoklamayı `refreshGitStatus()` yapar.
+        let gitDetail = gitStatus.status(forDirectory: directory)
+
         return StatusSnapshot(
             shellName: (session.shellPath as NSString).lastPathComponent,
             workingDirectory: directory.map { PathDisplay.abbreviate($0, home: NSHomeDirectory()) } ?? "—",
-            branchName: directory.flatMap { GitBranchReader.branchName(forDirectory: $0) },
+            repositoryName: repository?.repositoryName,
+            // git'in cevabı otoritedir: `.git/HEAD` rebase/checkout sırasında bayat olabilir.
+            branchName: gitDetail?.branch ?? repository?.branch,
             columns: size.cols,
             rows: size.rows,
-            isBusy: sessionManager.hasRunningProcess(sessionID: sessionID)
+            isBusy: sessionManager.hasRunningProcess(sessionID: sessionID),
+            gitStatus: gitDetail
         )
     }
+
+    /// Aktif panelin git durumunu tazeler. Çağrı ARKA PLANDA çalışır ve `GitStatusMonitor`
+    /// kendi aralık kuralını uygular; durum çubuğu bunu her saniye çağırabilir, gerçek
+    /// `git` çağrısı en fazla birkaç saniyede bir olur (briefs/2 "kontrollü aralıklarla").
+    func refreshGitStatus() async {
+        guard let tab = activeTab,
+              let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),
+              let session = sessionManager.session(id: sessionID) else {
+            await gitStatus.refreshIfNeeded(directory: nil)
+            return
+        }
+        await gitStatus.refreshIfNeeded(directory: session.workingDirectory)
+    }
+
+    // MARK: - Docker etkili işlem onayı (briefs/2)
+
+    /// Onay bekleyen Docker işlemi; nil ise bekleyen yok.
+    private(set) var pendingDockerAction: PendingDockerAction?
+
+    /// Onay verildiğinde çalıştırılacak komut. `pendingDockerAction` ile birlikte kurulur;
+    /// onay da iptal de temizler, böylece aynı onay iki kez tüketilemez.
+    private var dockerApproval: (@MainActor () -> Void)?
+
+    /// Container'ı yeniden başlatma İSTEĞİ. Hiçbir docker komutu burada çalışmaz —
+    /// yalnız onay diyaloğu kurulur (briefs/2 onay kuralı).
+    ///
+    /// - Parameter perform: Kullanıcı onaylarsa çalıştırılacak eylem.
+    func requestDockerRestart(containerName: String,
+                              perform: @escaping @MainActor () -> Void) {
+        // Ekranda başka bir onay varsa araya girilmez: bekleyen kapatma eylemini (ve
+        // pencere kapatma geri çağrısını) ezmek onu sessizce düşürürdü. Bekleyen bir
+        // docker onayı da değiştirilmez — kullanıcı GÖRDÜĞÜ cümleyi onaylar.
+        guard pendingClose == nil, pendingWorkspaceLaunch == nil, pendingDockerAction == nil else { return }
+
+        dockerApproval = perform
+        pendingDockerAction = PendingDockerAction(
+            id: UUID(),
+            title: DockerActionPrompt.restartTitle(containerName: containerName),
+            message: DockerActionPrompt.restartMessage(containerName: containerName),
+            confirmLabel: DockerActionPrompt.restartConfirmLabel)
+    }
+
+    func confirmPendingDockerAction() {
+        guard pendingDockerAction != nil, let approval = dockerApproval else { return }
+        pendingDockerAction = nil
+        dockerApproval = nil
+        approval()
+    }
+
+    func cancelPendingDockerAction() {
+        pendingDockerAction = nil
+        dockerApproval = nil
+    }
+
+    /// Diyalog metinleri. Bekleyen istek yokken boş dönerler; SwiftUI `confirmationDialog`
+    /// başlığı görünüm ağacında her çizimde okunuyor ve orada opsiyonel açmak gürültü olurdu.
+    var pendingDockerActionTitle: String { pendingDockerAction?.title ?? "" }
+    var pendingDockerActionMessage: String { pendingDockerAction?.message ?? "" }
+    var pendingDockerActionConfirmLabel: String { pendingDockerAction?.confirmLabel ?? "" }
 
     // MARK: - Workspace yakalama
 

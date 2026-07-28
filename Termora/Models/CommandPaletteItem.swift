@@ -12,6 +12,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
     case workspaces
     case ssh
     case folders
+    case docker
     case settings
     case themes
 
@@ -23,6 +24,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .workspaces: return "Workspaces"
         case .ssh: return "SSH"
         case .folders: return "Folders"
+        case .docker: return "Docker"
         case .settings: return "Settings"
         case .themes: return "Themes"
         }
@@ -35,6 +37,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .workspaces: return "square.grid.2x2"
         case .ssh: return "network"
         case .folders: return "folder"
+        case .docker: return "shippingbox"
         case .settings: return "gearshape"
         case .themes: return "paintpalette"
         }
@@ -47,14 +50,19 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
     /// `TermoraTests/SSHPaletteCommandsTests` (bu görevin kapsamı dışında bir dosya)
     /// `ssh.listOrder == 2` değerini sabitliyor ve Folders'ı öne almak o testi kırardı.
     /// Kullanıcı açısından fark, sorgu boşken iki başlığın sırasıdır.
+    ///
+    /// DİKKAT: bu değer bugün uygulamada HİÇBİR YERDE OKUNMUYOR — ekrandaki sıra
+    /// `CommandPaletteCatalog.items`'ın dizileri birleştirme sırasından geliyor. İkisi
+    /// elle aynı tutuluyor; ayrıştıkları gün kimse fark etmez.
     var listOrder: Int {
         switch self {
         case .actions: return 0
         case .workspaces: return 1
         case .ssh: return 2
         case .folders: return 3
-        case .settings: return 4
-        case .themes: return 5
+        case .docker: return 4
+        case .settings: return 5
+        case .themes: return 6
         }
     }
 }

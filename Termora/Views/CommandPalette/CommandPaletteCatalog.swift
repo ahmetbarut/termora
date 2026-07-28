@@ -20,11 +20,16 @@ enum CommandPaletteCatalog {
     ///     dayanır. Bilinmiyorsa komut hiç görünmez. Kapanış DEĞİL düz değerdir: dizin
     ///     palet açılırken bir kez okunur — palet açıkken kullanıcı zaten `cd` yapamaz ve
     ///     kapanış her tuş vuruşunda bir süreç sorgusu doğururdu.
+    ///   - docker: çalışan container'lar ve compose servisleri (briefs/2 "Docker
+    ///     Entegrasyonu"). `nil` ise Docker kategorisi hiç çizilmez. Aynı kural: liste
+    ///     BURADA yüklenmez — `ensureLoaded()` bir süreç başlatıyor ve ekranın
+    ///     `onAppear`'ına aittir.
     static func items(workspace: WorkspaceViewModel,
                       settings: SettingsStore,
                       themes: ThemeStore,
                       ssh: SSHHostStore? = nil,
                       folders: RecentFoldersStore? = nil,
+                      docker: DockerStore? = nil,
                       currentDirectory: String? = nil,
                       home: String = NSHomeDirectory(),
                       now: @escaping @MainActor () -> Date = Date.init,
@@ -34,6 +39,7 @@ enum CommandPaletteCatalog {
             + workspaceCommands(workspace: workspace)
             + sshCommands(workspace: workspace, ssh: ssh, now: now)
             + folderCommands(workspace: workspace, folders: folders, home: home, now: now)
+            + dockerCommands(workspace: workspace, docker: docker)
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
     }
@@ -242,6 +248,108 @@ enum CommandPaletteCatalog {
                                symbolName: "star") {
                 // Favoriye almak bir AÇMA değildir: son kullanılanlar listesine yazmaz.
                 folders.addFavorite(directory, at: now())
+            },
+        ]
+    }
+
+    // MARK: - Docker (briefs/2 "Docker Entegrasyonu")
+
+    /// Çalışan container'lar ve compose servisleri. Shell açma ve log gösterme YENİ
+    /// SEKMEDE `docker` çalıştırır; yeniden başlatma önce ONAY ister.
+    ///
+    /// Komutlar her zaman container KİMLİĞİYLE kurulur (onaltılık): kullanıcının
+    /// container adına yazdığı hiçbir şey argüman sınırını geçemez.
+    private static func dockerCommands(workspace: WorkspaceViewModel,
+                                       docker: DockerStore?) -> [CommandPaletteItem] {
+        guard let docker else { return [] }
+
+        // Brief: docker kurulu değilse özellik DÜRÜSTÇE söylesin, çökmesin. Ölü bir satır
+        // bırakmamak için Enter yeniden kontrol eder — kullanıcı bu arada kurmuş olabilir.
+        if docker.availability == .notFound {
+            return [
+                // Başlık `DockerStore.notFoundMessage`'ten TÜRETİLMEZ: o bir durum cümlesi
+                // ("Docker not found"), bu ise bir komut satırı ve palet başlıkları
+                // başlık düzenindedir ("Open Settings", "Close Tab").
+                CommandPaletteItem(id: "docker.unavailable",
+                                   title: "Docker Not Found — Check Again",
+                                   category: .docker,
+                                   symbolName: "exclamationmark.triangle",
+                                   accessibilityLabel: """
+                                       Docker was not found on this Mac. \
+                                       Runs the check again.
+                                       """) {
+                    Task { await docker.refresh() }
+                },
+            ]
+        }
+
+        guard let executablePath = docker.executablePath else { return [] }
+        let running = docker.containers.filter(\.isRunning)
+
+        return running.flatMap { container in
+            containerCommands(container,
+                              workspace: workspace,
+                              docker: docker,
+                              executablePath: executablePath)
+        } + DockerComposeService.services(in: running).map { service in
+            CommandPaletteItem(id: "docker.compose.shell.\(service.id)",
+                               title: "Open Shell in Service “\(service.displayName)”",
+                               category: .docker,
+                               symbolName: "square.stack.3d.up",
+                               accessibilityLabel: """
+                                   Open a shell in the Compose service \
+                                   \(service.service) of project \(service.project)
+                                   """) {
+                workspace.newTab(profile: DockerLaunch.profile(
+                    name: service.service,
+                    executablePath: executablePath,
+                    arguments: DockerCommand.composeOpenShell(configFiles: service.configFiles,
+                                                              project: service.project,
+                                                              service: service.service)))
+            }
+        }
+    }
+
+    private static func containerCommands(_ container: DockerContainer,
+                                          workspace: WorkspaceViewModel,
+                                          docker: DockerStore,
+                                          executablePath: String) -> [CommandPaletteItem] {
+        let name = container.displayName
+        return [
+            CommandPaletteItem(id: "docker.shell.\(container.id)",
+                               title: "Open Shell in “\(name)”",
+                               category: .docker,
+                               symbolName: "terminal",
+                               accessibilityLabel: "Open a shell in the container \(name)") {
+                workspace.newTab(profile: DockerLaunch.profile(
+                    name: name,
+                    executablePath: executablePath,
+                    arguments: DockerCommand.openShell(containerID: container.id)))
+            },
+
+            CommandPaletteItem(id: "docker.logs.\(container.id)",
+                               title: "Show Logs for “\(name)”",
+                               category: .docker,
+                               symbolName: "text.alignleft",
+                               accessibilityLabel: "Follow the logs of the container \(name)") {
+                workspace.newTab(profile: DockerLaunch.profile(
+                    name: "\(name) logs",
+                    executablePath: executablePath,
+                    arguments: DockerCommand.logs(containerID: container.id)))
+            },
+
+            // Başlıktaki "…" bu satırın ÖNCE soracağını söyler (macOS konvansiyonu).
+            CommandPaletteItem(id: "docker.restart.\(container.id)",
+                               title: "Restart “\(name)”…",
+                               category: .docker,
+                               symbolName: "arrow.clockwise",
+                               accessibilityLabel: """
+                                   Restart the container \(name). Asks for confirmation first.
+                                   """) {
+                // briefs/2: etkili işlem — onay alınmadan hiçbir komut çalışmaz.
+                workspace.requestDockerRestart(containerName: name) {
+                    Task { await docker.restart(containerID: container.id) }
+                }
             },
         ]
     }

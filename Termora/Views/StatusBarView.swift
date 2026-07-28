@@ -70,8 +70,17 @@ struct StatusBarView: View {
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
-        .onAppear { snapshot = workspace.statusSnapshot() }
-        .onReceive(ticker) { _ in snapshot = workspace.statusSnapshot() }
+        .onAppear {
+            snapshot = workspace.statusSnapshot()
+            Task { await workspace.refreshGitStatus() }
+        }
+        .onReceive(ticker) { _ in
+            snapshot = workspace.statusSnapshot()
+            // Git yoklaması bu saatin İÇİNDE çalışmaz: çağrı arka plana gider ve
+            // `GitStatusMonitor` onu kendi (çok daha seyrek) aralığına göre kısar.
+            // `statusSnapshot()` yalnız önbelleği okur, yani çizim yolu süreç başlatmaz.
+            Task { await workspace.refreshGitStatus() }
+        }
     }
 
     @ViewBuilder
@@ -88,9 +97,16 @@ struct StatusBarView: View {
                     .help(snapshot.workingDirectory)
                     .accessibilityLabel("Working directory: \(snapshot.workingDirectory)")
 
-                if let branch = snapshot.branchName {
+                if let git = snapshot.gitStatus {
                     separator
-                    item("arrow.triangle.branch", branch, label: "Git branch: \(branch)")
+                    gitDetail(git, repositoryName: snapshot.repositoryName)
+                } else if let branch = snapshot.branchName {
+                    // Detay henüz gelmedi (ya da depo git'e göre okunamadı): dosyadan
+                    // okunan dal yine de gösterilir, çubuk boş kalmaz.
+                    separator
+                    item("arrow.triangle.branch",
+                         branchText(branch: branch, repositoryName: snapshot.repositoryName),
+                         label: "Git branch: \(branch)")
                 }
 
                 Spacer(minLength: 8)
@@ -123,6 +139,49 @@ struct StatusBarView: View {
 
     private var separator: some View {
         Divider().frame(height: 11)
+    }
+
+    /// briefs/2 "Git Entegrasyonu": repository adı, aktif branch, değişiklik durumu ve
+    /// ahead/behind. Son commit özeti tooltip'te ve VoiceOver etiketinde durur — tek
+    /// satırlık bir çubuk brief'in istediği gibi SADE kalmalı.
+    ///
+    /// Erişilebilirlik (brief 3): oklar ve rozet SESLİ OKUNMAZ, bu yüzden satır TEK bir
+    /// öğeye indirilir ve etiket her şeyi kelimelerle söyler.
+    private func gitDetail(_ git: GitStatusDetail, repositoryName: String?) -> some View {
+        let label = git.accessibilityLabel(repositoryName: repositoryName)
+        return HStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.branch")
+                Text(branchText(branch: git.branch, repositoryName: repositoryName))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            // Kirlilik ÜÇ kanaldan anlatılır: ikon (kalem), METİN ("2 changes") ve renk.
+            // Renk kaldırılsa bile diğer ikisi ayakta kalır.
+            if let changes = git.changesText {
+                HStack(spacing: 3) {
+                    Image(systemName: "pencil").imageScale(.small)
+                    Text(changes)
+                }
+                .foregroundStyle(DesignTokens.warning.color)
+            }
+
+            if let sync = git.aheadBehindText {
+                Text(sync).monospacedDigit()
+            }
+        }
+        .help(label)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    /// "Termora/main" — depo adı biliniyorsa dalın önüne konur; aynı adlı iki dal farklı
+    /// pencerelerde ayırt edilebilsin diye. Ayrık HEAD'de dal adı yoktur.
+    private func branchText(branch: String?, repositoryName: String?) -> String {
+        let head = branch ?? "detached HEAD"
+        guard let repositoryName, !repositoryName.isEmpty else { return head }
+        return "\(repositoryName)/\(head)"
     }
 
     /// brief 3 "Sadece renkle durum anlatılmamalı": renk + şekil + metin birlikte.
