@@ -28,8 +28,10 @@ final class WorkspaceTerminalBridge: AITerminalBridging {
         var snapshot = AIContextSnapshot()
         snapshot[.operatingSystem] = Self.operatingSystemDescription
 
-        // Durum çubuğuyla AYNI okuma yolu: shell, cwd ve git dalı tek yerden gelir,
-        // böylece panelin gördüğü ile çubukta yazan hiç ayrışmaz.
+        // Bağlam gönderilmeden önce dizin TAZELENİR: kullanıcı panel açıkken `cd` yapmış
+        // olabilir ve modele yanlış dizini söylemek cevabı sessizce bozar. Durum çubuğu da
+        // aynı ikiliyi çağırır, bu yüzden panelin gördüğü ile çubukta yazan ayrışmaz.
+        workspace.refreshActiveWorkingDirectory()
         if let status = workspace.statusSnapshot() {
             snapshot[.shell] = status.shellName
             // Yol KISALTILMIŞ gider (`~/Projects/pinro`): cevabın doğruluğu için yeterli

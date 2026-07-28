@@ -590,24 +590,42 @@ final class WorkspaceViewModel {
         sessionManager as? any TerminalProcessInfoProviding
     }
 
-    /// Aktif sekmenin aktif paneli için tek seferlik durum okuması. En fazla 1 Hz çağrılır.
+    /// Bir pid'in çalışma dizinini okur. Testler burayı değiştirerek gerçek bir shell
+    /// olmadan yoklama dalını sınayabilir; üretimde libproc'a gider.
+    var directoryProbe: (pid_t) -> String? = ProcessProbe.currentWorkingDirectory
+
+    /// Aktif panelin çalışma dizinini libproc ile TAZELER ve gerekirse otomatik sekme
+    /// başlıklarını eşitler.
+    ///
+    /// Adı yazdığını söylüyor. Eskiden bu iş `statusSnapshot()`'ın içindeydi: "snapshot"
+    /// diye okunan bir çağrı sessizce oturuma yazıyordu ve bir gün `body` içinden
+    /// çağrıldığında SwiftUI güncelleme döngüsü doğuracaktı. Çağıranlar zamanlayıcı ya da
+    /// olay kancasıdır, çizim yolu DEĞİL.
+    func refreshActiveWorkingDirectory() {
+        guard let tab = activeTab,
+              let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),
+              let session = sessionManager.session(id: sessionID),
+              let shellPID = processInfoProvider?.shellPID(sessionID: sessionID),
+              let probed = directoryProbe(shellPID),
+              probed != session.workingDirectory else { return }
+
+        session.workingDirectory = probed
+        // Sekme başlığı da cwd'ye düşebiliyor (Task 11 `syncAutomaticTitles`).
+        // `sessionTitleDigest` cwd'yi kapsadığı için MainWindowView'ın .onChange kancası
+        // zaten uyanır, ama başlığı aynı run-loop turunda kesinleştirmek için burada da
+        // eşitliyoruz.
+        syncAutomaticTitles()
+    }
+
+    /// Aktif sekmenin aktif paneli için tek seferlik durum OKUMASI. Hiçbir şey yazmaz ve
+    /// hiçbir süreç başlatmaz; çizim yolundan çağrılabilir. Dizini tazeleyen
+    /// `refreshActiveWorkingDirectory()`, git detayını tazeleyen `refreshGitStatus()`.
     func statusSnapshot() -> StatusSnapshot? {
         guard let tab = activeTab,
               let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),
               let session = sessionManager.session(id: sessionID) else { return nil }
 
-        let probedDirectory = processInfoProvider
-            .flatMap { $0.shellPID(sessionID: sessionID) }
-            .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
-        if let probedDirectory, probedDirectory != session.workingDirectory {
-            session.workingDirectory = probedDirectory
-            // libproc ile cwd'yi tazeleyen TEK yer burası; sekme başlığı da cwd'ye düşebiliyor
-            // (Task 11 `syncAutomaticTitles`). `sessionTitleDigest` cwd'yi de kapsadığı için
-            // MainWindowView'ın .onChange kancası zaten uyanır, ama başlığı aynı run-loop
-            // turunda kesinleştirmek için burada da eşitliyoruz (aynı 1 Hz bütçesi içinde).
-            syncAutomaticTitles()
-        }
-        let directory = probedDirectory ?? session.workingDirectory
+        let directory = session.workingDirectory
         let size = session.terminalSize ?? (cols: 0, rows: 0)
 
         // Depo adı ve dal DOSYADAN okunur (`.git` girdisini arayıp HEAD'i okur); git
@@ -957,7 +975,7 @@ final class WorkspaceViewModel {
         for leaf in node.leaves {
             let probed = processInfoProvider
                 .flatMap { $0.shellPID(sessionID: leaf.sessionID) }
-                .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
+                .flatMap { directoryProbe($0) }
             result[leaf.sessionID] = probed ?? sessionManager.session(id: leaf.sessionID)?.workingDirectory
         }
         return result

@@ -71,14 +71,17 @@ struct StatusBarView: View {
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .onAppear {
+            workspace.refreshActiveWorkingDirectory()
             snapshot = workspace.statusSnapshot()
             Task { await workspace.refreshGitStatus() }
         }
         .onReceive(ticker) { _ in
+            // Tazeleme ÖNCE, okuma sonra: ikisi ayrı çağrı olduğu için `statusSnapshot()`
+            // saf kalır ve bir gün `body` içinden çağrılırsa güncelleme döngüsü doğmaz.
+            workspace.refreshActiveWorkingDirectory()
             snapshot = workspace.statusSnapshot()
             // Git yoklaması bu saatin İÇİNDE çalışmaz: çağrı arka plana gider ve
             // `GitStatusMonitor` onu kendi (çok daha seyrek) aralığına göre kısar.
-            // `statusSnapshot()` yalnız önbelleği okur, yani çizim yolu süreç başlatmaz.
             Task { await workspace.refreshGitStatus() }
         }
     }
