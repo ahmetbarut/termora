@@ -62,11 +62,10 @@ struct MaskedPayload: Equatable {
 /// toplayan bir tür olmadığı için "yanlışlıkla açık kalmış" bir ayar da olamaz.
 /// (`AIContextTests.thereIsNoWayToAskForTheWholeScrollback` bunu kilitler.)
 ///
-/// Kullanıcının açıkça eklediği dosyalar brief'te sayılıyor ama bu turda YOK; dosya
-/// eklemek bir dosya seçici ve boyut politikası ister, ikisi de brief'te tanımlı değil.
 enum AIContextKind: String, CaseIterable, Codable, Identifiable {
     case selectedCommand
     case selectedOutput
+    case attachedFiles
     case workingDirectory
     case operatingSystem
     case shell
@@ -79,6 +78,7 @@ enum AIContextKind: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .selectedCommand: "Selected command"
         case .selectedOutput: "Selected output"
+        case .attachedFiles: "Attached files"
         case .workingDirectory: "Working directory"
         case .operatingSystem: "Operating system"
         case .shell: "Shell"
@@ -94,6 +94,8 @@ enum AIContextKind: String, CaseIterable, Codable, Identifiable {
             "The command you highlighted in the terminal, so the answer is about that command."
         case .selectedOutput:
             "The output you highlighted, so an error can be explained from what actually happened."
+        case .attachedFiles:
+            "The files you attached yourself, so the answer can refer to what is actually in them."
         case .workingDirectory:
             "The folder the active pane is in, so paths in a suggested command are correct."
         case .operatingSystem:
@@ -111,6 +113,7 @@ enum AIContextKind: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .selectedCommand: "chevron.left.forwardslash.chevron.right"
         case .selectedOutput: "text.alignleft"
+        case .attachedFiles: "paperclip"
         case .workingDirectory: "folder"
         case .operatingSystem: "desktopcomputer"
         case .shell: "terminal"
@@ -126,6 +129,7 @@ enum AIContextKind: String, CaseIterable, Codable, Identifiable {
 struct AIContextPreferences: Codable, Equatable {
     var includesSelectedCommand: Bool = true
     var includesSelectedOutput: Bool = true
+    var includesAttachedFiles: Bool = true
     var includesWorkingDirectory: Bool = true
     var includesOperatingSystem: Bool = true
     var includesShell: Bool = true
@@ -142,6 +146,8 @@ struct AIContextPreferences: Codable, Equatable {
             ?? defaults.includesSelectedCommand
         includesSelectedOutput = try container.decodeIfPresent(Bool.self, forKey: .includesSelectedOutput)
             ?? defaults.includesSelectedOutput
+        includesAttachedFiles = try container.decodeIfPresent(Bool.self, forKey: .includesAttachedFiles)
+            ?? defaults.includesAttachedFiles
         includesWorkingDirectory = try container.decodeIfPresent(Bool.self, forKey: .includesWorkingDirectory)
             ?? defaults.includesWorkingDirectory
         includesOperatingSystem = try container.decodeIfPresent(Bool.self, forKey: .includesOperatingSystem)
@@ -155,6 +161,7 @@ struct AIContextPreferences: Codable, Equatable {
         switch kind {
         case .selectedCommand: includesSelectedCommand
         case .selectedOutput: includesSelectedOutput
+        case .attachedFiles: includesAttachedFiles
         case .workingDirectory: includesWorkingDirectory
         case .operatingSystem: includesOperatingSystem
         case .shell: includesShell
@@ -166,6 +173,7 @@ struct AIContextPreferences: Codable, Equatable {
         switch kind {
         case .selectedCommand: includesSelectedCommand = isIncluded
         case .selectedOutput: includesSelectedOutput = isIncluded
+        case .attachedFiles: includesAttachedFiles = isIncluded
         case .workingDirectory: includesWorkingDirectory = isIncluded
         case .operatingSystem: includesOperatingSystem = isIncluded
         case .shell: includesShell = isIncluded
@@ -242,15 +250,18 @@ struct PreparedAIContext: Equatable {
 /// Ham anlık görüntüden gönderilebilir bağlama giden TEK yol.
 enum AIContextBuilder {
 
-    /// Seçimin gönderilebilecek en büyük boyu, karakter.
+    /// TEK bir bağlam parçasının gönderilebilecek en büyük boyu, karakter.
     ///
     /// # Neden bir sınır var
     ///
     /// briefs/2: "Tüm terminal geçmişi varsayılan olarak AI'a gönderilmemelidir."
     /// Seçim kullanıcının kendi eylemidir, ama ⌘A tek tuşta bütün scrollback'i seçer —
-    /// sınır olmasaydı brief'in yasağı tek kısayolla delinirdi. Kesme burada, yani
-    /// GÜVENLİK SINIRINDA yapılır; köprünün nazik davranmasına güvenilmez.
-    static let selectionCharacterLimit = 4_000
+    /// sınır olmasaydı brief'in yasağı tek kısayolla delinirdi. Aynı sınır eklenen
+    /// dosyalar için de geçerlidir. Kesme burada, yani GÜVENLİK SINIRINDA yapılır;
+    /// köprünün ya da dosya okuyucunun nazik davranmasına güvenilmez.
+    ///
+    /// TEK bir sayı: ikinci bir sınır, akılda tutulacak ikinci bir kural demekti.
+    static let entryCharacterLimit = 4_000
 
     /// Kesildiğinde metnin başına konan işaret. Kullanıcı önizlemede bunu görür ve
     /// modelin neyi görmediğini bilir.
@@ -266,18 +277,25 @@ enum AIContextBuilder {
             guard preferences.includes(kind) else { return nil }
             guard let raw = snapshot[kind]?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !raw.isEmpty else { return nil }
-            let bounded = truncated(raw)
+            let bounded = truncated(raw, kind: kind)
             let masked = MaskedPayload.masking(bounded)
             return AIContextEntry(kind: kind, value: masked.text, findings: masked.findings)
         }
         return PreparedAIContext(entries: entries)
     }
 
-    /// Sondan kesilir: bir komut başarısız olduğunda anlamlı satırlar ÇIKTININ SONUNDADIR
-    /// (hata mesajı, exit kodu). Baştan kesmek tam da gereken kısmı atardı.
-    private static func truncated(_ text: String) -> String {
-        guard text.count > selectionCharacterLimit else { return text }
-        return truncationMarker + "\n" + String(text.suffix(selectionCharacterLimit))
+    /// Kesme YÖNÜ parçanın türüne bağlıdır.
+    ///
+    /// - Terminal çıktısı SONDAN korunur: bir komut başarısız olduğunda anlamlı satırlar
+    ///   çıktının sonundadır (hata mesajı, exit kodu).
+    /// - Eklenen dosya BAŞTAN korunur: import'lar, tip tanımları ve yapı dosyanın
+    ///   başındadır. Aynı yönü kullanmak dosyanın en anlamlı kısmını atardı.
+    private static func truncated(_ text: String, kind: AIContextKind) -> String {
+        guard text.count > entryCharacterLimit else { return text }
+        if kind == .attachedFiles {
+            return String(text.prefix(entryCharacterLimit)) + "\n" + truncationMarker
+        }
+        return truncationMarker + "\n" + String(text.suffix(entryCharacterLimit))
     }
 }
 

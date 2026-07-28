@@ -174,6 +174,8 @@ struct AIPanelView: View {
             .accessibilityLabel("Context to be sent. \(model.contextSummary)")
             .accessibilityHint("Shows the exact text Termora will send")
 
+            attachmentBar
+
             if model.isContextExpanded {
                 if model.preparedContext.isEmpty {
                     Text(AIPanelModel.emptyContextSummary)
@@ -192,6 +194,60 @@ struct AIPanelView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .motionAnimation(.panel, value: model.isContextExpanded)
+    }
+
+    /// briefs/2 "Kullanıcının açıkça eklediği dosyalar". Eklenen her dosya adıyla görünür
+    /// ve tek tıkla kaldırılabilir; ne gönderildiği hiçbir an belirsiz kalmaz.
+    @ViewBuilder
+    private var attachmentBar: some View {
+        HStack(spacing: 6) {
+            Button {
+                model.attachFiles()
+            } label: {
+                Label("Attach Files", systemImage: "paperclip")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Attach files to send with your question")
+
+            if !model.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(model.attachments) { file in
+                            attachmentChip(file)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+
+        if let failure = model.attachmentFailure {
+            // Eklenemeyen dosya SESSİZ kalmaz: kullanıcı gönderdiğini sanabilirdi.
+            Text(failure)
+                .font(.caption2)
+                .foregroundStyle(DesignTokens.warning.color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func attachmentChip(_ file: AIFileAttachment) -> some View {
+        HStack(spacing: 3) {
+            Text(file.name)
+                .font(.caption2)
+                .lineLimit(1)
+            Button {
+                model.removeAttachment(file)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(file.name) from the context")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
     }
 
     private func contextRow(_ entry: AIContextEntry) -> some View {

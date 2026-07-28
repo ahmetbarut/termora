@@ -19,7 +19,7 @@ struct AIContextTests {
     /// briefs/2'nin saydığı bağlamlar; "tüm terminal geçmişi" LİSTEDE YOKTUR.
     @Test func theContextKindsAreExactlyTheOnesTheBriefLists() {
         #expect(AIContextKind.allCases == [
-            .selectedCommand, .selectedOutput, .workingDirectory,
+            .selectedCommand, .selectedOutput, .attachedFiles, .workingDirectory,
             .operatingSystem, .shell, .gitBranch,
         ])
     }
@@ -82,7 +82,7 @@ struct AIContextTests {
     /// ⌘A bütün scrollback'i seçer. Sınır olmasaydı brief'in "tüm geçmiş gönderilmez"
     /// yasağı TEK kısayolla delinirdi; bu yüzden kesme güvenlik sınırında yapılır.
     @Test func aHugeSelectionIsCutDownBeforeItCanBecomeTheWholeHistory() throws {
-        let huge = String(repeating: "x", count: AIContextBuilder.selectionCharacterLimit * 3)
+        let huge = String(repeating: "x", count: AIContextBuilder.entryCharacterLimit * 3)
         let snapshot = AIContextSnapshot([.selectedOutput: huge])
         let prepared = AIContextBuilder.prepare(snapshot, preferences: AIContextPreferences())
         let entry = try #require(prepared.entries.first)
@@ -92,7 +92,7 @@ struct AIContextTests {
 
     /// Sondan kesilir: bir komut başarısız olduğunda anlamlı satırlar SONDADIR.
     @Test func truncationKeepsTheEndWhereTheErrorLives() throws {
-        let filler = String(repeating: "a\n", count: AIContextBuilder.selectionCharacterLimit)
+        let filler = String(repeating: "a\n", count: AIContextBuilder.entryCharacterLimit)
         let snapshot = AIContextSnapshot([.selectedOutput: filler + "fatal: permission denied"])
         let prepared = AIContextBuilder.prepare(snapshot, preferences: AIContextPreferences())
         let entry = try #require(prepared.entries.first)

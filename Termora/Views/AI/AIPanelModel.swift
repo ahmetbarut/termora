@@ -111,6 +111,19 @@ final class AIPanelModel {
     private(set) var preparedContext: PreparedAIContext = .empty
     /// Bağlam listesinin açık olup olmadığı (briefs/2: kullanıcı son içeriği inceleyebilmeli).
     var isContextExpanded = false
+    /// Kullanıcının açıkça eklediği dosyalar (briefs/2 "Terminal Bağlamı").
+    /// Pencere başınadır ve diske YAZILMAZ — konuşmayla aynı kural.
+    private(set) var attachments: [AIFileAttachment] = []
+
+    /// Son ekleme denemesinin başarısızlığı; kullanıcı neden eklenemediğini görür.
+    private(set) var attachmentFailure: String?
+
+    /// Dosya seçme dikişi. Testler gerçek bir panel açmaz.
+    var chooseFiles: () -> [URL] = { AIFilePicker.chooseFiles() }
+
+    /// Diskten okuma dikişi.
+    var readFile: (URL) throws -> Data = { try Data(contentsOf: $0) }
+
     /// Komut alanına odak isteği (briefs/2 "AI komut alanını açma"). Panel görünümü bu
     /// jetonu görünce `@FocusState`'i kurar. Her istekte YENİLENİR: panel zaten açıkken
     /// komutu tekrar çağırmak da imleci yazma alanına götürmeli.
@@ -186,8 +199,44 @@ final class AIPanelModel {
 
     /// Terminalden bağlamı okur, tercihlerden geçirir ve MASKELER.
     /// Panel açılırken, aktif panel değişince ve gönderim öncesi çağrılır.
+    /// briefs/2 "Kullanıcının açıkça eklediği dosyalar". Seçim kullanıcının eylemidir;
+    /// okuma ve boyut kararı `AIFileAttachmentLoader`'ın, maskeleme her zamanki sınırın.
+    ///
+    /// Bir dosya eklenemezse diğerleri YİNE eklenir: tek bozuk dosya yüzünden seçimin
+    /// tamamını atmak, kullanıcıyı hangisinin sorunlu olduğunu aramaya bırakırdı.
+    func attachFiles() {
+        var failures: [String] = []
+        for url in chooseFiles() {
+            switch AIFileAttachmentLoader.load(contentsOf: url, reading: readFile) {
+            case let .success(file):
+                // Aynı dosya iki kez eklenmez: bağlamı sessizce ikiye katlardı.
+                if !attachments.contains(where: { $0.name == file.name && $0.text == file.text }) {
+                    attachments.append(file)
+                }
+            case let .failure(reason):
+                failures.append(reason.message)
+            }
+        }
+        attachmentFailure = failures.isEmpty ? nil : failures.joined(separator: "\n")
+        refreshContext()
+    }
+
+    func removeAttachment(_ file: AIFileAttachment) {
+        attachments.removeAll { $0.id == file.id }
+        refreshContext()
+    }
+
+    func removeAllAttachments() {
+        attachments.removeAll()
+        attachmentFailure = nil
+        refreshContext()
+    }
+
     func refreshContext() {
-        let snapshot = bridge?.captureContext() ?? AIContextSnapshot()
+        var snapshot = bridge?.captureContext() ?? AIContextSnapshot()
+        // Eklenen dosyalar terminalden GELMEZ, panelde durur; bağlam sınırına burada
+        // katılır ki maskeleme ve boyut kuralı onlara da uygulansın.
+        snapshot[.attachedFiles] = AIFileAttachment.combinedText(of: attachments)
         preparedContext = AIContextBuilder.prepare(snapshot,
                                                    preferences: settings.settings.aiContext)
     }
