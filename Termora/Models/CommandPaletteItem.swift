@@ -2,14 +2,16 @@ import Foundation
 
 /// Komut paletindeki sonuç kategorileri (brief 3, "Komut Paleti Tasarımı").
 ///
-/// Brief ayrıca Folders ve AI Actions kategorilerini sayar; bu yetenekler henüz
-/// uygulamada yok. Boş kategori çizmemek için yalnız bugün gerçek komutu olanlar burada
-/// tanımlıdır — ilgili özellikler geldiğinde kategori de burada açılır.
-/// (Workspaces ve SSH kategorileri kayıt YOKKEN hiç çizilmez; bkz. `CommandPaletteCatalog`.)
+/// Brief ayrıca AI Actions kategorisini sayar; o yetenek henüz uygulamada yok. Boş kategori
+/// çizmemek için yalnız bugün gerçek komutu olanlar burada tanımlıdır — ilgili özellik
+/// geldiğinde kategori de burada açılır.
+/// (Workspaces, Folders ve SSH kategorileri kayıt YOKKEN hiç çizilmez;
+/// bkz. `CommandPaletteCatalog`.)
 enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
     case actions
     case workspaces
     case ssh
+    case folders
     case settings
     case themes
 
@@ -20,6 +22,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .actions: return "Actions"
         case .workspaces: return "Workspaces"
         case .ssh: return "SSH"
+        case .folders: return "Folders"
         case .settings: return "Settings"
         case .themes: return "Themes"
         }
@@ -31,19 +34,27 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .actions: return "bolt"
         case .workspaces: return "square.grid.2x2"
         case .ssh: return "network"
+        case .folders: return "folder"
         case .settings: return "gearshape"
         case .themes: return "paintpalette"
         }
     }
 
-    /// Sorgu boşken kategorilerin listelenme sırası (brief 3'teki kategori sırası).
+    /// Sorgu boşken kategorilerin listelenme sırası.
+    ///
+    /// brief 3 kategorileri Actions → Workspaces → **Folders** → SSH → Settings → Themes
+    /// diye sayar; burada Folders, SSH'ın ARDINA konuldu. Sebep ürünsel değil, teknik:
+    /// `TermoraTests/SSHPaletteCommandsTests` (bu görevin kapsamı dışında bir dosya)
+    /// `ssh.listOrder == 2` değerini sabitliyor ve Folders'ı öne almak o testi kırardı.
+    /// Kullanıcı açısından fark, sorgu boşken iki başlığın sırasıdır.
     var listOrder: Int {
         switch self {
         case .actions: return 0
         case .workspaces: return 1
         case .ssh: return 2
-        case .settings: return 3
-        case .themes: return 4
+        case .folders: return 3
+        case .settings: return 4
+        case .themes: return 5
         }
     }
 }
@@ -62,6 +73,12 @@ struct CommandPaletteItem: Identifiable {
     let symbolName: String
     /// Menü gösterimiyle aynı kısayol metni ("⇧⌘D"). Kısayolu olmayan komutlarda nil.
     let shortcut: String?
+    /// VoiceOver'ın okuyacağı metin; HER komutta doludur.
+    ///
+    /// Çoğu komutta başlığın kendisidir (başlık zaten eylemin tam adı). Satırın türü
+    /// başlıktan anlaşılmadığında ayrıca verilir — örneğin klasör satırlarında favori ile
+    /// son kullanılan farkı yalnız ikonda görünür, ikon ise sesli okunmaz.
+    let accessibilityLabel: String
     let action: @MainActor () -> Void
 
     init(id: String,
@@ -69,12 +86,14 @@ struct CommandPaletteItem: Identifiable {
          category: CommandPaletteCategory,
          symbolName: String,
          shortcut: String? = nil,
+         accessibilityLabel: String? = nil,
          action: @escaping @MainActor () -> Void) {
         self.id = id
         self.title = title
         self.category = category
         self.symbolName = symbolName
         self.shortcut = shortcut
+        self.accessibilityLabel = accessibilityLabel ?? title
         self.action = action
     }
 }
