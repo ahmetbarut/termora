@@ -12,49 +12,6 @@ protocol ForegroundProcessNaming: AnyObject {
     func foregroundProcessName(sessionID: UUID) -> String?
 }
 
-/// Reads the foreground command of a shell's controlling terminal.
-///
-/// This would belong next to `ProcessProbe`, but that file is owned elsewhere in this
-/// change, so the syscalls live here. `proc_bsdinfo.e_tpgid` is the kernel's own answer to
-/// `tcgetpgrp(masterFD)` — it is the foreground process group of the shell's controlling
-/// tty — which means the pty master descriptor does not have to be plumbed through.
-enum ForegroundProcessProbe {
-
-    /// Name of the process group leader that owns the terminal right now.
-    /// nil when the shell itself is in the foreground (no command is running) or the pid is gone.
-    nonisolated static func foregroundCommandName(shellPID: pid_t) -> String? {
-        guard shellPID > 0, let shell = bsdInfo(pid: shellPID) else { return nil }
-        let foregroundGroup = pid_t(bitPattern: shell.e_tpgid)
-        guard foregroundGroup > 0,
-              foregroundGroup != pid_t(bitPattern: shell.pbi_pgid),
-              foregroundGroup != shellPID,
-              let leader = bsdInfo(pid: foregroundGroup) else { return nil }
-        return commandName(of: leader)
-    }
-
-    nonisolated private static func bsdInfo(pid: pid_t) -> proc_bsdinfo? {
-        var info = proc_bsdinfo()
-        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
-        return info
-    }
-
-    /// `pbi_name` is the long (up to 32 char) name and is empty for some processes;
-    /// `pbi_comm` is the truncated `argv[0]` basename and is always populated.
-    nonisolated private static func commandName(of info: proc_bsdinfo) -> String? {
-        var info = info
-        let long = withUnsafeBytes(of: &info.pbi_name) { cString(in: $0) }
-        if !long.isEmpty { return long }
-        let short = withUnsafeBytes(of: &info.pbi_comm) { cString(in: $0) }
-        return short.isEmpty ? nil : short
-    }
-
-    nonisolated private static func cString(in raw: UnsafeRawBufferPointer) -> String {
-        guard let base = raw.baseAddress else { return "" }
-        return String(cString: base.assumingMemoryBound(to: CChar.self))
-    }
-}
-
 /// Pure priority chain for a tab's automatic title (brief 3, "Tab Bar"):
 /// the running foreground command, then whatever the shell reports over OSC, then the
 /// working directory, then the profile, and the shell name as a last resort.
