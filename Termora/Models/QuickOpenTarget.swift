@@ -9,7 +9,11 @@ import Foundation
 /// Bu tip dosya sistemine DOKUNMAZ. Varlık kontrolü çağırana (ve enjekte edilebilir bir
 /// kapanışa) bırakılır: hem testler makineden bağımsız kalır hem de URL ayrıştırıcısı
 /// doğrulama sırasını kendisi belirleyebilir.
-enum QuickOpenPath {
+///
+/// `nonisolated`: proje varsayılanı `MainActor` ama burada hiçbir paylaşılan durum yok ve
+/// `directoryExistsOnDisk` bir varsayılan parametre değeri olarak aktarılıyor — MainActor'a
+/// bağlı kalsaydı bu aktarım Swift 6 dilinde HATA olurdu.
+nonisolated enum QuickOpenPath {
 
     /// Ham bir yolu kanonik mutlak yola çevirir.
     ///

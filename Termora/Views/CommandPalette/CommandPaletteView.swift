@@ -23,8 +23,9 @@ struct CommandPaletteView: View {
     var ssh: SSHHostStore?
     /// Folders kategorisi (briefs/2 "Hızlı Açma"); nil ise palet klasör göstermez.
     var folders: RecentFoldersStore?
-    /// Aktif panelin çalışma dizini; favoriye alma komutu buna dayanır.
-    var currentDirectory: @MainActor () -> String? = { nil }
+    /// Aktif panelin çalışma dizini (palet açılırken okunmuş hâli); favoriye alma komutu
+    /// buna dayanır.
+    var currentDirectory: String?
 
     @Environment(\.openSettings) private var openSettings
     @FocusState private var isSearchFocused: Bool

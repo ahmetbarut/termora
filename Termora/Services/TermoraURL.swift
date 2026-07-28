@@ -23,7 +23,9 @@ import Foundation
 /// Açılan klasör kabuğa bir komut olarak GEÇMEZ: `SessionManager` onu
 /// `startProcess(currentDirectory:)`e verir (chdir), yani yol adının içindeki kabuk
 /// meta karakterleri yorumlanamaz.
-enum TermoraURL {
+///
+/// `nonisolated`: saf ayrıştırma, paylaşılan durum yok (bkz. `QuickOpenPath`).
+nonisolated enum TermoraURL {
 
     /// Info.plist'teki `CFBundleURLSchemes` ile AYNI olmalı.
     static let scheme = "termora"
@@ -123,7 +125,7 @@ enum TermoraURL {
 /// tıklandığında Services ▸ Open in Termora görünür.
 ///
 /// Pano içeriği de dışarıdan gelen bir girdidir: `termora://` ile AYNI süzgeçten geçer.
-enum FinderService {
+nonisolated enum FinderService {
 
     /// Info.plist'teki `NSServices ▸ NSMessage` ile AYNI olmalı; sağlayıcı yöntemin adı
     /// bu ada `:` eklenerek türetilir (`openFolderInTermora:userData:error:`).

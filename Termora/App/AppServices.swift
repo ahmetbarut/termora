@@ -156,34 +156,32 @@ final class AppServices {
         Self.registeredEventProvider = provider
         NSApplication.shared.servicesProvider = provider
 
-        NSAppleEventManager.shared().setEventHandler(
-            provider,
-            andSelector: #selector(TermoraServicesProvider.handleGetURLEvent(_:withReplyEvent:)),
-            forEventClass: TermoraServicesProvider.internetEventClass,
-            andEventID: TermoraServicesProvider.getURLEventID)
+        Self.listenForURLEvents(provider)
 
-        // AppKit kendi `GURL` işleyicisini `finishLaunching` sırasında kurar ve
-        // uygulama ÖNCE kurulmuş bir işleyiciyi ezebilir; kayıt açılış bittikten sonra
-        // tazelenir. (Sonradan kurulan `AppServices` için init'teki kayıt zaten yeterli.)
+        // AppKit kendi `GURL` işleyicisini `finishLaunching` sırasında kurar ve daha ÖNCE
+        // kurulmuş bir işleyiciyi ezebilir; kayıt açılış bittikten sonra tazelenir.
+        // (Sonradan kurulan `AppServices` için init'teki kayıt zaten yeterli.)
         launchObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didFinishLaunchingNotification,
             object: nil,
             queue: .main
         ) { [weak provider] _ in
             guard let provider else { return }
-            MainActor.assumeIsolated {
-                NSAppleEventManager.shared().setEventHandler(
-                    provider,
-                    andSelector: #selector(TermoraServicesProvider.handleGetURLEvent(_:withReplyEvent:)),
-                    forEventClass: TermoraServicesProvider.internetEventClass,
-                    andEventID: TermoraServicesProvider.getURLEventID)
-            }
+            MainActor.assumeIsolated { AppServices.listenForURLEvents(provider) }
         }
 
         guard !Self.hasRefreshedServices else { return }
         Self.hasRefreshedServices = true
         // Geliştirme sırasında pbs önbelleği eskiyebiliyor; süreç başına bir tazeleme.
         NSUpdateDynamicServices()
+    }
+
+    private static func listenForURLEvents(_ provider: TermoraServicesProvider) {
+        NSAppleEventManager.shared().setEventHandler(
+            provider,
+            andSelector: #selector(TermoraServicesProvider.handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: TermoraServicesProvider.internetEventClass,
+            andEventID: TermoraServicesProvider.getURLEventID)
     }
 
     // MARK: - Oturumun kaydedilmesi

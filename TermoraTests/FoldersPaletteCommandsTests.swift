@@ -46,7 +46,7 @@ struct FoldersPaletteCommandsTests {
                                     settings: subject.settings,
                                     themes: subject.themes,
                                     folders: folders,
-                                    currentDirectory: { currentDirectory },
+                                    currentDirectory: currentDirectory,
                                     home: Self.home,
                                     now: { Self.moment },
                                     openSettings: {})

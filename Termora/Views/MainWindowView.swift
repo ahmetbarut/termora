@@ -90,7 +90,7 @@ struct MainWindowView: View {
                                    themes: services.themes,
                                    ssh: services.sshHosts,
                                    folders: services.recentFolders,
-                                   currentDirectory: { currentWorkingDirectory() })
+                                   currentDirectory: currentWorkingDirectory())
                     .transition(.opacity)
             }
         }
@@ -299,6 +299,8 @@ struct MainWindowView: View {
 
     /// Aktif panelin çalışma dizini. Önce süreç sorulur (kullanıcı `cd` yapmış olabilir),
     /// okunamazsa oturumun bilinen dizinine düşülür.
+    ///
+    /// Yalnız palet çizilirken çağrılır; palet kapalıyken hiçbir süreç sorgusu olmaz.
     private func currentWorkingDirectory() -> String? {
         guard let tab = workspace.activeTab,
               let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) else { return nil }

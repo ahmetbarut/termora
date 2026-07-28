@@ -17,13 +17,15 @@ enum CommandPaletteCatalog {
     ///     Folders kategorisi hiç çizilmez. Aynı kural: `refreshAvailability()` diske
     ///     bakar ve ekranın `onAppear`'ına aittir, buraya değil.
     ///   - currentDirectory: aktif panelin çalışma dizini; favoriye alma komutu buna
-    ///     dayanır. Bilinmiyorsa komut hiç görünmez.
+    ///     dayanır. Bilinmiyorsa komut hiç görünmez. Kapanış DEĞİL düz değerdir: dizin
+    ///     palet açılırken bir kez okunur — palet açıkken kullanıcı zaten `cd` yapamaz ve
+    ///     kapanış her tuş vuruşunda bir süreç sorgusu doğururdu.
     static func items(workspace: WorkspaceViewModel,
                       settings: SettingsStore,
                       themes: ThemeStore,
                       ssh: SSHHostStore? = nil,
                       folders: RecentFoldersStore? = nil,
-                      currentDirectory: @escaping @MainActor () -> String? = { nil },
+                      currentDirectory: String? = nil,
                       home: String = NSHomeDirectory(),
                       now: @escaping @MainActor () -> Date = Date.init,
                       openSettings: @escaping @MainActor () -> Void) -> [CommandPaletteItem] {
@@ -218,9 +220,9 @@ enum CommandPaletteCatalog {
     /// Aktif panelin klasörünü favorilere alma / favorilerden çıkarma.
     /// İki karşıt komut aynı anda listelenmez: hangisi anlamlıysa o çizilir.
     private static func favoriteCommands(folders: RecentFoldersStore?,
-                                         currentDirectory: @escaping @MainActor () -> String?,
+                                         currentDirectory: String?,
                                          now: @escaping @MainActor () -> Date) -> [CommandPaletteItem] {
-        guard let folders, let directory = currentDirectory() else { return [] }
+        guard let folders, let directory = currentDirectory else { return [] }
         let name = QuickOpenPath.displayName(directory)
 
         if folders.isFavorite(directory) {
