@@ -571,8 +571,16 @@ struct SSHHostEditorView: View {
         Section("Session") {
             TextField("Startup Directory", text: $draft.startupDirectory, prompt: Text("/srv/app"))
                 .accessibilityLabel("Startup Directory")
-            TextField("Startup Command", text: $draft.startupCommand, prompt: Text("docker compose ps"))
-                .accessibilityLabel("Startup Command")
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Startup Command", text: $draft.startupCommand, prompt: Text("docker compose ps"))
+                    .accessibilityLabel("Startup Command")
+
+                // Uzak sunucuda toplu silme briefs/2'nin riskli işlem listesinde; komut
+                // uzakta çalıştığı için geri alma şansı yerelden de azdır.
+                if let warning = DangerousCommand.inspect(draft.startupCommand) {
+                    CommandRiskWarningLabel(warning: warning)
+                }
+            }
             Text("Runs on the remote host, then hands over an interactive shell.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -215,8 +215,7 @@ struct MainWindowView: View {
 
     private var pendingLaunchMessage: String {
         guard let launch = workspace.pendingWorkspaceLaunch else { return "" }
-        let header = WorkspaceLaunchPrompt.message(commandCount: launch.commands.count)
-        return ([header, ""] + launch.commands).joined(separator: "\n")
+        return WorkspaceLaunchPrompt.messageBody(commands: launch.commands)
     }
 
     // MARK: - Açılış
