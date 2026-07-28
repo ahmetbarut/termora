@@ -47,6 +47,24 @@ struct DangerousCommandTests {
         }
     }
 
+    /// Geçici klasörler mutlak yol derinliği kuralının kör noktasıdır: `/tmp/build-cache`
+    /// iki parçadır ama sistem klasörü değildir. Temizlik komutları uyarı üretmemeli.
+    @Test func deletingInsideAScratchFolderIsEverydayWork() {
+        for command in ["rm -rf /tmp/build-cache",
+                        "rm -rf /tmp/*",
+                        "rm -rf /private/tmp/termora-tests",
+                        "rm -rf /var/tmp/composer"] {
+            #expect(DangerousCommand.inspect(command) == nil, "gereksiz uyarı: \(command)")
+        }
+    }
+
+    /// Ama geçici klasörün KENDİSİNİ silmek başka bir şeydir: orada başka uygulamaların
+    /// çalışan dosyaları da vardır.
+    @Test func deletingTheScratchFolderItselfStillWarns() throws {
+        let warning = try #require(DangerousCommand.inspect("rm -rf /tmp"))
+        #expect(warning.risk == .high)
+    }
+
     @Test func aCommandThatOnlyPrintsADangerousStringIsNotFlagged() {
         #expect(DangerousCommand.inspect("echo \"rm -rf /\"") == nil)
         #expect(DangerousCommand.inspect("grep \"DROP DATABASE\" schema.sql") == nil)

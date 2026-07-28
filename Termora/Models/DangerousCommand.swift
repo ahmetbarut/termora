@@ -134,6 +134,12 @@ enum DangerousCommand {
         }
 
         guard target.hasPrefix("/") else { return nil }
+
+        // Geçici klasörlerin İÇİ derinlik kuralının kör noktasıdır: `/tmp/build-cache`
+        // iki parçadır ama sistem klasörü değildir, temizlemek günlük iştir. Klasörün
+        // KENDİSİ (`/tmp`) bu istisnaya girmez — orada başka uygulamaların dosyaları var.
+        if scratchPrefixes.contains(where: { target.hasPrefix($0) }) { return nil }
+
         let components = pathComponents(String(target.dropFirst()))
         if components.count <= 2 { return Finding(risk: .high, reason: .systemWideDelete) }
         if let root = components.first, protectedRoots.contains(root) {
@@ -213,6 +219,10 @@ enum DangerousCommand {
     private static let homePrefixes = ["~/", "$HOME/", "${HOME}/"]
     /// Derinliğe bakılmaksızın korunan kökler (aygıtlar ve sistem çekirdeği).
     private static let protectedRoots: Set<String> = ["System", "private", "dev", "bin", "sbin"]
+    /// İçeriği zaten geçici olan klasörler.
+    private static let scratchPrefixes = [
+        "/tmp/", "/private/tmp/", "/var/tmp/", "/private/var/tmp/", "/var/folders/",
+    ]
     private static let diskFormattingSubcommands: Set<String> = [
         "erasedisk", "erasevolume", "zerodisk", "partitiondisk", "reformat", "eraseoptical", "secureerase",
     ]
