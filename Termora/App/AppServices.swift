@@ -20,6 +20,8 @@ final class AppServices {
     /// same list a window reads when it opens one.
     let workspaces: WorkspaceStore
     let sessionManager: SessionManager
+    /// Önceki oturumun kaydı ve açılış kuyruğu (briefs/2 "Oturum Geri Yükleme").
+    let sessionRestore: SessionRestoreStore
 
     /// Settings is a separate scene, so it cannot reach a window's `WorkspaceViewModel`.
     /// It parks the request here; the key window picks it up and clears it. Per-window view
@@ -30,18 +32,92 @@ final class AppServices {
     /// Pencere yoksa nil kalır ve düzen kopyalama sessizce hiçbir şey yapmaz.
     @ObservationIgnored var capturedLayoutProvider: (() -> [WorkspaceTab])?
 
-    init() {
+    @ObservationIgnored private var terminationObserver: (any NSObjectProtocol)?
+
+    init(defaults: UserDefaults = .standard) {
         // Termora draws its own tab bar (M2); leaving the system tabbing on would add a
         // "Show Tab Bar" menu item and fight ⌘T for the same gesture.
         NSWindow.allowsAutomaticWindowTabbing = false
 
-        let settings = SettingsStore()
+        let settings = SettingsStore(defaults: defaults)
         let themes = ThemeStore()
-        let profiles = ProfileStore()
+        let profiles = ProfileStore(defaults: defaults)
         self.settings = settings
         self.themes = themes
         self.profiles = profiles
-        self.workspaces = WorkspaceStore()
+        self.workspaces = WorkspaceStore(defaults: defaults)
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
+
+        let sessionRestore = SessionRestoreStore(defaults: defaults)
+        self.sessionRestore = sessionRestore
+        // Kuyruk İLK pencere görünmeden hazırlanır: `MainWindowView.onAppear` payını buradan
+        // alır. Ayar kapalıysa kuyruk boş kalır ve diskteki kayıt hiç okunmaz.
+        sessionRestore.prepareRestore(isEnabled: settings.settings.restoresPreviousSession)
+
+        observeApplicationTermination()
+        observeRestoreSettingBeingTurnedOff()
+    }
+
+    // MARK: - Oturumun kaydedilmesi
+
+    /// Uygulama kapanışındaki KESİN yazma.
+    ///
+    /// Kural (macOS konvansiyonu): o an AÇIK olan pencereler geri yüklenir. Kullanıcının
+    /// bilerek kapattığı pencere listeden düşer; hepsini kapatıp çıkarsa uygulama temiz açılır.
+    /// Pencere kapanışındaki `record` yazması yalnız ÇÖKME sigortasıdır.
+    ///
+    /// - Parameter windows: testler için dikiş; nil ise açık pencerelerden toplanır.
+    func persistSessionSnapshot(windows: [SessionWindowSnapshot]? = nil) {
+        guard settings.settings.restoresPreviousSession else {
+            // Gizlilik (briefs/2): kapalı bir özellik kullanıcının çalışma dizinlerini
+            // diskte tutmamalı.
+            sessionRestore.clear()
+            return
+        }
+        sessionRestore.replaceAll(with: windows ?? Self.openWindowSnapshots())
+    }
+
+    /// Açık terminal pencerelerinin anlık görüntüleri, EKRANDAKİ sırayla.
+    /// `WindowCloseCoordinator.live` bir zayıf küme olduğu için sırası belirsizdir; sıra
+    /// `NSApp.windows` üzerinden kurulur, yoksa sekmeler her açılışta pencere değiştirirdi.
+    private static func openWindowSnapshots() -> [SessionWindowSnapshot] {
+        let coordinators = WindowCloseCoordinator.live.filter(\.isOpen)
+        return NSApp.windows
+            .compactMap { window in coordinators.first { $0.owns(window) } }
+            .compactMap { $0.captureSnapshot() }
+    }
+
+    // MARK: - Gözlemciler
+
+    /// Kapanış `applicationWillTerminate` bildiriminden yakalanır: ⌘Q, menü, Dock ve
+    /// `NSApp.terminate` yollarının HEPSİ buradan geçer.
+    private func observeApplicationTermination() {
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // AppKit bu bildirimi her zaman ana iş parçacığında gönderir.
+            MainActor.assumeIsolated { self?.persistSessionSnapshot() }
+        }
+    }
+
+    /// Ayar kapatıldığı ANDA kayıt silinir; kullanıcı bir sonraki çıkışa kadar beklemek
+    /// zorunda kalmamalı (briefs/2 "Gizlilik").
+    private func observeRestoreSettingBeingTurnedOff() {
+        withObservationTracking {
+            _ = settings.settings.restoresPreviousSession
+        } onChange: { [weak self] in
+            // `onChange` değer YAZILMADAN ÖNCE tetiklenir; yeni değeri okumak için bir sonraki
+            // ana-iş-parçacığı turuna geçilir.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if !self.settings.settings.restoresPreviousSession {
+                    self.sessionRestore.clear()
+                }
+                // Takip tek atımlıktır: her değişimden sonra yeniden kurulur.
+                self.observeRestoreSettingBeingTurnedOff()
+            }
+        }
     }
 }

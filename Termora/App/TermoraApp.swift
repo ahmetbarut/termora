@@ -15,7 +15,9 @@ struct TermoraApp: App {
     @State private var services = AppServices()
 
     var body: some Scene {
-        WindowGroup {
+        // Kimlikli grup: oturum geri yüklemede İLK pencere, kayıttaki diğer pencereleri
+        // `openWindow(id:)` ile açar (bkz. `MainWindowView.prepareWindow`).
+        WindowGroup(id: MainWindowScene.groupID) {
             MainWindowView(services: services)
                 .termoraWindowChrome(
                     opacity: SettingsLimits.clampOpacity(services.settings.settings.windowOpacity),

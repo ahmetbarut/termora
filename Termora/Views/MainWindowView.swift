@@ -7,6 +7,20 @@ enum WindowLayout {
     /// Brief'teki alt sınır: bu boyutta sekme çubuğu ve terminal birlikte kullanılabilir kalır.
     static let minWidth: CGFloat = 720
     static let minHeight: CGFloat = 480
+
+    static var minimumSize: CGSize { CGSize(width: minWidth, height: minHeight) }
+
+    /// briefs/3 "Pencere Yönetimi": boyut ve konum, oturum geri yükleme KAPALIYKEN de
+    /// hatırlanmalı. AppKit'in kendi mekanizması kullanılır — kayıt yeri `NSUserDefaults`'tur,
+    /// ikinci bir pencere açıldığında AppKit onu kaydedilen çerçevenin üzerine basmak yerine
+    /// kademelendirir.
+    static let frameAutosaveName = "TermoraMainWindow"
+}
+
+/// Ana pencere sahnesi. Kimliği geri yüklemede gerekir: ilk pencere, kayıttaki DİĞER
+/// pencereleri `openWindow(id:)` ile açar.
+enum MainWindowScene {
+    static let groupID = "termora.main"
 }
 
 struct MainWindowView: View {
@@ -28,6 +42,15 @@ struct MainWindowView: View {
     /// gerçeği yansıtması için saniyede bir tazelenir (durum çubuğuyla aynı bütçe).
     /// `@State`: `Timer.publish(...)` her `body` değerlendirmesinde yeni bir publisher üretir.
     @State private var titleTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    /// Bu pencerenin açılışta kuyruktan aldığı kayıt; yoksa nil (taze pencere).
+    @State private var restoredWindow: SessionWindowSnapshot?
+    /// Açılış hazırlığı (kayıt alma, ilk sekme, ek pencereler) pencere başına BİR kez çalışır.
+    @State private var hasPreparedWindow = false
+    /// Kayıtlı çerçeve bir kez uygulanır; sonrasında pencerenin boyutu kullanıcınındır.
+    @State private var hasPlacedWindow = false
+
+    @Environment(\.openWindow) private var openWindow
 
     @MainActor
     init(services: AppServices) {
@@ -75,7 +98,7 @@ struct MainWindowView: View {
             // Sistemin otomatik pencere sekmelerini kapat: kendi sekme çubuğumuzu çiziyoruz,
             // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
             NSWindow.allowsAutomaticWindowTabbing = false
-            if workspace.tabs.isEmpty { workspace.newTab() }
+            prepareWindow()
         }
         .onChange(of: workspace.sessionTitleDigest, initial: true) { _, _ in
             workspace.syncAutomaticTitles()
@@ -87,7 +110,14 @@ struct MainWindowView: View {
         .background(
             WindowAccessor { window in
                 closeCoordinator.attach(window: window, workspace: workspace)
+                // Ayar kapalıyken pencere kapanışı hiçbir şey YAZMAZ: kapalı bir özellik
+                // kullanıcının çalışma dizinlerini diske bırakmamalı (briefs/2 "Gizlilik").
+                closeCoordinator.recordSession = { snapshot in
+                    guard services.settings.settings.restoresPreviousSession else { return }
+                    services.sessionRestore.record(snapshot)
+                }
                 paletteHotkey.attach(window: window) { palette.toggle() }
+                placeWindowIfNeeded(window)
             }
         )
         .confirmationDialog(
@@ -152,6 +182,57 @@ struct MainWindowView: View {
         guard let launch = workspace.pendingWorkspaceLaunch else { return "" }
         let header = WorkspaceLaunchPrompt.message(commandCount: launch.commands.count)
         return ([header, ""] + launch.commands).joined(separator: "\n")
+    }
+
+    // MARK: - Açılış
+
+    /// Pencerenin açılış hazırlığı (briefs/2 "Oturum Geri Yükleme").
+    ///
+    /// Kuyruk `AppServices` tarafından ilk pencere görünmeden hazırlanır ve ayar kapalıysa
+    /// BOŞTUR — burada ayrıca bir kontrol yoktur, tek karar noktası odur.
+    private func prepareWindow() {
+        guard !hasPreparedWindow else { return }
+        hasPreparedWindow = true
+
+        if let saved = services.sessionRestore.claimWindow() {
+            restoredWindow = saved
+            workspace.restoreSession(from: saved)
+        }
+        // Geri yükleme yoksa ya da kayıttaki her sekme düştüyse pencere boş kalmaz.
+        if workspace.tabs.isEmpty { workspace.newTab() }
+
+        // Kayıtta birden fazla pencere varsa kalanları İLK pencere açar; sayı bir kez
+        // verilir, yoksa geri yükleme için açılan her pencere yeniden pencere isterdi.
+        for _ in 0..<services.sessionRestore.claimAdditionalWindowCount() {
+            openWindow(id: MainWindowScene.groupID)
+        }
+    }
+
+    /// Pencereyi yerleştirir. Sıra önemli: önce AppKit'in hatırladığı çerçeve (ayar kapalıyken
+    /// de çalışan briefs/3 davranışı), sonra —varsa— bu pencerenin kayıtlı çerçevesi.
+    ///
+    /// Tam ekran durumu geri yüklenmez (bkz. `SessionWindowPlacement.shouldEnterFullScreen`);
+    /// tam ekran ÖNCESİ çerçeve uygulanır, böylece pencere tanıdık boyutunda gelir.
+    private func placeWindowIfNeeded(_ window: NSWindow) {
+        // Hatırlanan çerçeveyi tek bir pencere sahiplenir. Aynı autosave adını her pencereye
+        // vermek hepsini üst üste bindirirdi; ikinci ve sonraki pencereler SwiftUI'nin
+        // kademelendirmesiyle açılır.
+        let alreadyClaimed = NSApp.windows.contains {
+            $0 !== window && $0.isVisible && $0.frameAutosaveName == WindowLayout.frameAutosaveName
+        }
+        if !alreadyClaimed, window.frameAutosaveName != WindowLayout.frameAutosaveName {
+            window.setFrameAutosaveName(WindowLayout.frameAutosaveName)
+        }
+
+        // Kayıtlı çerçeve ancak açılış hazırlığı bittiğinde bilinir; `WindowAccessor` bu
+        // kancayı `onAppear`'dan ÖNCE de çağırabildiği için hazırlık beklenir.
+        guard hasPreparedWindow, !hasPlacedWindow else { return }
+        hasPlacedWindow = true
+        guard let saved = restoredWindow?.frame,
+              let frame = SessionWindowPlacement.frame(for: saved,
+                                                       visibleScreenFrames: NSScreen.screens.map(\.visibleFrame),
+                                                       minimumSize: WindowLayout.minimumSize) else { return }
+        window.setFrame(frame, display: true)
     }
 
     /// Klavye odağını aktif panelin terminaline geri verir.
