@@ -117,6 +117,11 @@ struct MainWindowView: View {
                     services.sessionRestore.record(snapshot)
                 }
                 paletteHotkey.attach(window: window) { palette.toggle() }
+                // "Use Current Layout" bu PENCERENİN düzenini okusun: kayıt pencereye
+                // bağlıdır, böylece Ayarlar key iken ön plandaki terminal seçilebilir.
+                services.registerLayoutProvider(for: window) {
+                    workspace.captureWorkspace(name: "", directory: "").tabs
+                }
                 placeWindowIfNeeded(window)
             }
         )
@@ -139,9 +144,6 @@ struct MainWindowView: View {
             guard let request = services.workspaceOpenRequest else { return }
             services.workspaceOpenRequest = nil
             workspace.openWorkspace(request)
-        }
-        .onAppear {
-            services.capturedLayoutProvider = { workspace.captureWorkspace(name: "", directory: "").tabs }
         }
         .confirmationDialog(
             WorkspaceLaunchPrompt.title(workspaceName: workspace.pendingWorkspaceLaunch?.workspace.name ?? ""),

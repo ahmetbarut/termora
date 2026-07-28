@@ -46,7 +46,7 @@ struct TermoraApp: App {
                                profiles: services.profiles,
                                workspaces: services.workspaces,
                                requestOpen: { services.workspaceOpenRequest = $0 },
-                               captureCurrentLayout: { services.capturedLayoutProvider?() ?? [] })
+                               captureCurrentLayout: { services.capturedLayout() })
         }
     }
 }

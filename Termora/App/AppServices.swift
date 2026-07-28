@@ -28,9 +28,31 @@ final class AppServices {
     /// models stay per-window, and a workspace never opens in a window nobody is looking at.
     var workspaceOpenRequest: Workspace?
 
-    /// "Use Current Layout" için: anahtar pencere kendi düzenini buraya bağlar.
-    /// Pencere yoksa nil kalır ve düzen kopyalama sessizce hiçbir şey yapmaz.
-    @ObservationIgnored var capturedLayoutProvider: (() -> [WorkspaceTab])?
+    /// "Use Current Layout" için pencere başına düzen sağlayıcı.
+    ///
+    /// Tek bir closure YETMEZ: her pencerenin kendi `WorkspaceViewModel`'i var ve tek alan
+    /// son AÇILAN pencereyi tutup onu uygulama ömrü boyunca canlı bırakırdı. Ayarlar penceresi
+    /// key iken kullanıcının baktığı terminal `NSApp.mainWindow`'dur; düzen ondan okunur.
+    @ObservationIgnored private var layoutProviders: [ObjectIdentifier: (window: NSWindow, provide: () -> [WorkspaceTab])] = [:]
+
+    func registerLayoutProvider(for window: NSWindow, provide: @escaping () -> [WorkspaceTab]) {
+        layoutProviders[ObjectIdentifier(window)] = (window, provide)
+    }
+
+    func unregisterLayoutProvider(for window: NSWindow) {
+        layoutProviders.removeValue(forKey: ObjectIdentifier(window))
+    }
+
+    /// Ön plandaki terminal penceresinin düzeni; hiçbiri yoksa boş.
+    func capturedLayout() -> [WorkspaceTab] {
+        // Kapanmış pencerelerin kaydı sızmasın.
+        layoutProviders = layoutProviders.filter { $0.value.window.isVisible }
+        let front = NSApp.mainWindow ?? NSApp.keyWindow
+        if let front, let entry = layoutProviders[ObjectIdentifier(front)] {
+            return entry.provide()
+        }
+        return layoutProviders.values.first?.provide() ?? []
+    }
 
     @ObservationIgnored private var terminationObserver: (any NSObjectProtocol)?
 

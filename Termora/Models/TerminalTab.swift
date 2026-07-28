@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Bir sekme: panel ağacı + aktif panel + başlık durumu.
-/// Kalıcı değildir (oturum geri yükleme 2. fazda).
+/// Kendisi kalıcı değildir; oturum geri yükleme düzeni `SessionSnapshot` üzerinden saklar.
 @Observable
 final class TerminalTab: Identifiable {
     let id: UUID
