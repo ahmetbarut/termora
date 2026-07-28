@@ -10,6 +10,7 @@ xcuserdata/
 # Build output
 build/
 DerivedData/
+DD/          # ajan test komutlarının -derivedDataPath'i
 *.moved-aside
 *.hmap
 *.ipa
