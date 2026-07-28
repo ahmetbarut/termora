@@ -231,7 +231,12 @@ final class GitProcessRunner: GitCommandRunning {
 final class GitStatusMonitor {
 
     /// 1 Hz'lik durum çubuğu saatinden bilinçli olarak AYRI ve çok daha seyrek.
-    static let defaultMinimumInterval: TimeInterval = 5
+    ///
+    /// `nonisolated`: bu sabit AŞAĞIDAKİ init'in varsayılan argümanıdır ve varsayılan
+    /// argüman ifadeleri yalıtımsız bağlamda değerlendirilir. Projede
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` olduğu için işaretlenmezse MainActor'a
+    /// bağlanır ve Swift 6 dilinde HATA olur.
+    nonisolated static let defaultMinimumInterval: TimeInterval = 5
 
     /// Önbelleğin ait olduğu dizin. Başka bir dizin sorulduğunda önbellek verilmez.
     private(set) var directory: String?

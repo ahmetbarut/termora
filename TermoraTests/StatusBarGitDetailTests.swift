@@ -19,7 +19,8 @@ struct StatusBarGitDetailTests {
         let repository: URL
     }
 
-    private static let statusOutput = """
+    /// `nonisolated`: aşağıda varsayılan argüman olarak okunuyor.
+    private nonisolated static let statusOutput = """
         # branch.head feature/status
         # branch.upstream origin/feature/status
         # branch.ab +2 -1

@@ -35,10 +35,13 @@ final class SSHHostStore {
     private let defaults: UserDefaults
     private let configLoader: () -> [SSHConfigHost]
 
+    /// `configLoader` varsayılanı init'in İÇİNDE kurulur: varsayılan argüman ifadeleri
+    /// yalıtımsız bağlamda değerlendirilir, `SSHConfigParser.loadUserConfig()` ise
+    /// MainActor'a bağlıdır — varsayılan olarak yazılırsa Swift 6 dilinde HATA olur.
     init(defaults: UserDefaults = .standard,
-         configLoader: @escaping () -> [SSHConfigHost] = { SSHConfigParser.loadUserConfig() }) {
+         configLoader: (() -> [SSHConfigHost])? = nil) {
         self.defaults = defaults
-        self.configLoader = configLoader
+        self.configLoader = configLoader ?? { SSHConfigParser.loadUserConfig() }
         guard let data = defaults.data(forKey: Self.storageKey) else {
             self.hosts = []
             return

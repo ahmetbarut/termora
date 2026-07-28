@@ -4,7 +4,10 @@ import Foundation
 enum OllamaEndpoint {
 
     /// Ollama'nın kendi varsayılanı.
-    static let defaultAddress = "http://localhost:11434"
+    ///
+    /// `nonisolated`: varsayılan argüman ve özellik başlatıcı ifadelerinden okunuyor;
+    /// onlar yalıtımsız bağlamda değerlendirilir (bkz. `SWIFT_DEFAULT_ACTOR_ISOLATION`).
+    nonisolated static let defaultAddress = "http://localhost:11434"
 
     /// Kullanıcının yazdığı adresi kullanılabilir bir taban URL'ine çevirir.
     ///
