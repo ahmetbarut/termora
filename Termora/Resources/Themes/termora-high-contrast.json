@@ -1,0 +1,12 @@
+{
+  "id": "termora-high-contrast",
+  "name": "Termora High Contrast",
+  "background": "#000000",
+  "foreground": "#FFFFFF",
+  "cursor": "#FFFFFF",
+  "selection": "#3A6BC4",
+  "ansi": ["#949494", "#FF6B6B", "#3BE87B", "#FFD75F",
+           "#6FB8FF", "#E48BFF", "#4EE3F2", "#D0D0D0",
+           "#AFAFAF", "#FF9090", "#6CEE9C", "#FFE187",
+           "#93CAFF", "#EBA8FF", "#7AEAF5", "#DCDCDC"]
+}

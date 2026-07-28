@@ -1,21 +1,69 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AppearanceSettingsView: View {
     @Bindable var settings: SettingsStore
     let themes: ThemeStore
 
     @State private var fontMenu = FontCatalog.FontMenu(recommended: [], others: [])
+    /// Son içe/dışa aktarmanın sonucu. Hata SESSİZCE yutulmaz: ya bu cümle ya da
+    /// aşağıdaki hata kutusu görünür (brief 3 "Error State").
+    @State private var themeStatus: String?
+    @State private var themeError: ThemeFileError?
+    @State private var showsTechnicalDetail = false
+    @State private var isConfirmingThemeRemoval = false
+
+    private var selectedTheme: Theme { themes.theme(id: settings.settings.themeID) }
+    private var canRemoveSelectedTheme: Bool { !themes.isBuiltIn(id: selectedTheme.id) }
 
     var body: some View {
         Form {
             Section("Theme") {
                 Picker("Theme", selection: $settings.settings.themeID) {
-                    ForEach(themes.themes) { theme in
+                    // Paket temaları salt okunurdur, kullanıcı temaları silinebilir;
+                    // ayrı gruplar hangi temanın hangisi olduğunu seçmeden önce söyler.
+                    ForEach(themes.builtInThemes) { theme in
                         Text(theme.name).tag(theme.id)
                     }
+                    if !themes.userThemes.isEmpty {
+                        Divider()
+                        ForEach(themes.userThemes) { theme in
+                            Text(theme.name).tag(theme.id)
+                        }
+                    }
                 }
-                ThemePreviewView(theme: themes.theme(id: settings.settings.themeID))
+                ThemePreviewView(theme: selectedTheme)
+
+                HStack(spacing: 8) {
+                    Button("Import Theme…") { importTheme() }
+                        .accessibilityLabel("Import Theme From File")
+                    Button("Export Theme…") { exportTheme() }
+                        .accessibilityLabel("Export Selected Theme To File")
+                    Spacer()
+                    Button("Remove Theme…", role: .destructive) { isConfirmingThemeRemoval = true }
+                        .accessibilityLabel("Remove Selected Theme")
+                        .disabled(!canRemoveSelectedTheme)
+                }
+                .confirmationDialog("Remove the theme “\(selectedTheme.name)”?",
+                                    isPresented: $isConfirmingThemeRemoval) {
+                    Button("Remove Theme", role: .destructive) { removeSelectedTheme() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Its file is deleted from your theme library. Built-in themes are not affected.")
+                }
+
+                if let themeStatus {
+                    Label(themeStatus, systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityElement(children: .combine)
+                }
+
+                if let themeError {
+                    themeErrorBox(themeError)
+                }
             }
 
             Section("Font") {
@@ -99,5 +147,110 @@ struct AppearanceSettingsView: View {
             get: { settings.settings.windowOpacity },
             set: { settings.settings.windowOpacity = SettingsLimits.clampOpacity($0) }
         )
+    }
+
+    // MARK: - Tema dosyaları
+
+    /// brief 3 "Error State": ne başarısız oldu (başlık), muhtemel sebep (açıklama),
+    /// kullanıcı ne yapabilir (öneri) ve teknik detay nasıl görüntülenir (açılır bölüm).
+    private func themeErrorBox(_ error: ThemeFileError) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Durum yalnız renkle anlatılmıyor: ikonun yanında başlık metni de var.
+            Label(error.title, systemImage: "exclamationmark.triangle.fill")
+                .font(.headline)
+                .foregroundStyle(DesignTokens.danger.color)
+
+            Text(error.message)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(error.recovery)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            DisclosureGroup("Technical details", isExpanded: $showsTechnicalDetail) {
+                Text(error.technicalDetail)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(.caption)
+
+            HStack {
+                Spacer()
+                Button("Dismiss") { themeError = nil }
+            }
+        }
+        .font(.callout)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(DesignTokens.danger.color.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(DesignTokens.danger.color.opacity(0.45))
+        )
+    }
+
+    private func importTheme() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.prompt = "Import"
+        panel.message = "Choose a Termora theme file."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        themeStatus = nil
+        themeError = nil
+        showsTechnicalDetail = false
+        do {
+            let result = try themes.importTheme(from: url)
+            // Kullanıcı temayı görsün diye seçili hâle getirilir; aksi hâlde başarı cümlesi
+            // dışında hiçbir şey değişmezdi.
+            settings.settings.themeID = result.theme.id
+            themeStatus = result.statusMessage
+        } catch let error as ThemeFileError {
+            themeError = error
+        } catch {
+            themeError = ThemeFileError(reason: .unreadableFile(error.localizedDescription),
+                                        fileName: url.lastPathComponent)
+        }
+    }
+
+    private func exportTheme() {
+        let theme = selectedTheme
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = ThemeFile.suggestedFileName(for: theme)
+        panel.prompt = "Export"
+        panel.message = "Save “\(theme.name)” as a theme file."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        themeStatus = nil
+        themeError = nil
+        showsTechnicalDetail = false
+        do {
+            try themes.exportTheme(theme, to: url)
+            themeStatus = "Exported “\(theme.name)” to \(url.lastPathComponent)."
+        } catch let error as ThemeFileError {
+            themeError = error
+        } catch {
+            themeError = ThemeFileError(reason: .couldNotSave(error.localizedDescription),
+                                        fileName: url.lastPathComponent)
+        }
+    }
+
+    private func removeSelectedTheme() {
+        let theme = selectedTheme
+        guard !themes.isBuiltIn(id: theme.id) else { return }
+        themes.removeUserTheme(id: theme.id)
+        themeError = nil
+        // Seçim silinen temada kalırsa Picker boş görünürdü.
+        settings.settings.themeID = ThemeStore.fallback.id
+        themeStatus = "Removed “\(theme.name)”."
     }
 }

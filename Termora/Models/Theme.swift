@@ -10,6 +10,11 @@ struct Theme: Codable, Identifiable, Equatable {
     var cursor: String
     var selection: String
     var ansi: [String] // exactly 16 hex strings, ANSI colors 0-15
+
+    /// brief 3 "Erişilebilirlik → Terminal renkleri için yüksek kontrast seçeneği bulunmalı".
+    /// Seçenek ayrı bir bayrak değil, paketle gelen bir temadır: kullanıcı onu diğerleri gibi
+    /// seçer, dışa aktarır ve kendi kopyasını düzenleyebilir.
+    static let highContrastID = "termora-high-contrast"
 }
 
 /// brief 3 "Tema Sistemi" tema başına 8 temel ANSI rengi tanımlar, terminal modeli ise
@@ -53,7 +58,64 @@ enum ThemeColorDerivation {
     }
 }
 
+/// Bir temanın okunabilirliğinin ÖLÇÜLMÜŞ hâli.
+///
+/// brief 3 "Erişilebilirlik → Kontrast oranı korunmalı" ve "Sadece renkle durum
+/// anlatılmamalı": önizleme rengin yanına bu sayıyı da yazar, böylece kullanıcı bir temanın
+/// okunur olup olmadığını gözle tahmin etmek zorunda kalmaz. Kendi temasını içe aktaran
+/// kullanıcı da aynı ölçüyü görür.
+struct ThemeContrastReport: Equatable {
+    /// Metin / arka plan oranı (WCAG 2.1 SC 1.4.3).
+    let textRatio: Double
+    /// Arka plana karşı en zayıf ANSI rengi; tema hiç renk taşımıyorsa `nil`.
+    let lowestAnsiIndex: Int?
+    let lowestAnsiRatio: Double
+
+    var meetsNormalText: Bool { textRatio >= ContrastRatio.normalText }
+    var meetsEnhancedText: Bool { textRatio >= ContrastRatio.enhancedText }
+    var everyAnsiColorMeetsNormalText: Bool { lowestAnsiRatio >= ContrastRatio.normalText }
+
+    /// WCAG seviyesi; arayüzde metin olarak görünür (renkle değil).
+    var level: String {
+        if meetsEnhancedText { return "AAA" }
+        if meetsNormalText { return "AA" }
+        return "Below AA"
+    }
+
+    /// Ekran okuyucunun da okuyabileceği tek cümlelik özet.
+    var summary: String {
+        // Sayı biçimi yerelden bağımsız tutulur: "4,5:1" kontrast oranını okunmaz kılar.
+        let text = String(format: "Text contrast %.1f:1 (%@).", textRatio, level)
+        guard let index = lowestAnsiIndex else { return text }
+        if everyAnsiColorMeetsNormalText {
+            return text + String(format: " Weakest terminal color %.1f:1, above the 4.5:1 minimum.",
+                                 lowestAnsiRatio)
+        }
+        return text + String(format: " Terminal color %d is %.1f:1, below the 4.5:1 minimum.",
+                             index, lowestAnsiRatio)
+    }
+}
+
 extension Theme {
+    /// Temanın kontrastını ölçer. Renk seçmez, düzeltmez — yalnız rapor eder.
+    var contrastReport: ThemeContrastReport {
+        let background = backgroundNSColor
+        var lowestIndex: Int?
+        var lowestRatio = 21.0
+        for (index, hex) in ansi.enumerated() {
+            guard let color = NSColor(hexString: hex) else { continue }
+            let ratio = ContrastRatio.ratio(color, background)
+            if lowestIndex == nil || ratio < lowestRatio {
+                lowestIndex = index
+                lowestRatio = ratio
+            }
+        }
+        return ThemeContrastReport(
+            textRatio: ContrastRatio.ratio(foregroundNSColor, background),
+            lowestAnsiIndex: lowestIndex,
+            lowestAnsiRatio: lowestRatio)
+    }
+
     func swiftTermAnsiColors() -> [SwiftTerm.Color] {
         ansi.map { Self.swiftTermColor(fromHex: $0) }
     }

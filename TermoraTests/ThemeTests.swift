@@ -69,7 +69,7 @@ import Testing
     }
 
     @Test func bundledTermoraDarkMatchesTheBrief() throws {
-        let store = ThemeStore(bundle: .main)
+        let store = ThemeStoreTests.store(bundle: .main)
         let theme = store.theme(id: "termora-dark")
         #expect(theme.name == "Termora Dark")
         #expect(theme.background == DesignTokens.backgroundPrimary.hex)
@@ -84,7 +84,7 @@ import Testing
     }
 
     @Test func bundledTermoraDarkBrightColorsFollowTheDerivationRule() {
-        let theme = ThemeStore(bundle: .main).theme(id: "termora-dark")
+        let theme = ThemeStoreTests.store(bundle: .main).theme(id: "termora-dark")
         #expect(theme.ansi.count == 16)
         for index in 0..<8 {
             guard theme.ansi.indices.contains(index + 8) else { continue }
