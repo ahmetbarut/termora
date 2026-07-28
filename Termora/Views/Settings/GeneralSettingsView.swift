@@ -6,6 +6,7 @@ struct GeneralSettingsView: View {
 
     @State private var shells: [ShellInfo] = []
     @State private var scrollbackText: String = ""
+    @State private var notificationThresholdText: String = ""
 
     var body: some View {
         Form {
@@ -69,15 +70,90 @@ struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            notificationsSection
         }
         .formStyle(.grouped)
         .onAppear {
             shells = ShellService.availableShells()
             scrollbackText = String(settings.settings.scrollbackLines)
+            notificationThresholdText = Self.thresholdText(settings.settings.longCommandThresholdSeconds)
         }
         .onChange(of: settings.settings.scrollbackLines) { _, newValue in
             scrollbackText = String(newValue)
         }
+        .onChange(of: settings.settings.longCommandThresholdSeconds) { _, newValue in
+            notificationThresholdText = Self.thresholdText(newValue)
+        }
+    }
+
+    // MARK: - Notifications (briefs/2 "Bildirimler")
+
+    @ViewBuilder
+    private var notificationsSection: some View {
+        Section("Notifications") {
+            Toggle("Notify when a long-running command finishes",
+                   isOn: $settings.settings.notifiesOnLongCommands)
+                // The permission prompt is the surprising part; say so before it appears.
+                .accessibilityHint("macOS asks for notification permission the first time a command qualifies.")
+
+            HStack(spacing: 8) {
+                Text("Only for commands longer than")
+                Spacer()
+                // The visible label is the `Text` to its left; VoiceOver cannot connect the
+                // two, so the field repeats it.
+                TextField("", text: $notificationThresholdText)
+                    .frame(width: 70)
+                    .multilineTextAlignment(.trailing)
+                    .onSubmit { commitNotificationThreshold() }
+                    .accessibilityLabel("Minimum command duration in seconds")
+                Stepper("", value: thresholdBinding, in: CommandNotificationLimits.thresholdRange, step: 15)
+                    .labelsHidden()
+                    .accessibilityLabel("Minimum command duration in seconds")
+                Text("seconds")
+                    .foregroundStyle(.secondary)
+            }
+            // Only the dependent controls are disabled — putting `.disabled` on the Section
+            // would dim the master switch too and the user could never turn the feature
+            // back on.
+            .disabled(!settings.settings.notifiesOnLongCommands)
+
+            Toggle("Notify for completed commands", isOn: $settings.settings.notifiesOnCommandSuccess)
+                .disabled(!settings.settings.notifiesOnLongCommands)
+            Toggle("Notify for failed commands", isOn: $settings.settings.notifiesOnCommandFailure)
+                .disabled(!settings.settings.notifiesOnLongCommands)
+
+            // Honest about what Termora can observe: it watches the terminal's foreground job,
+            // not the shell's exit status, so most completions carry no success/failure verdict.
+            Text("Termora notices a command by watching which process owns the terminal, "
+                 + "so it reports that a command finished — not whether it succeeded. "
+                 + "Commands are announced only while you are looking at another window or tab, "
+                 + "and a profile can turn them off for its own terminals.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var thresholdBinding: Binding<Double> {
+        Binding(
+            get: { settings.settings.longCommandThresholdSeconds },
+            set: { settings.settings.longCommandThresholdSeconds = CommandNotificationLimits.clampThreshold($0) }
+        )
+    }
+
+    private func commitNotificationThreshold() {
+        let value = CommandNotificationLimits.threshold(
+            fromText: notificationThresholdText,
+            fallback: settings.settings.longCommandThresholdSeconds
+        )
+        settings.settings.longCommandThresholdSeconds = value
+        notificationThresholdText = Self.thresholdText(value)
+    }
+
+    /// Whole seconds: the field takes an integer count, and the stored value is clamped into
+    /// a range whose bounds are whole seconds anyway.
+    private static func thresholdText(_ seconds: Double) -> String {
+        String(Int(CommandNotificationLimits.clampThreshold(seconds).rounded()))
     }
 
     private var scrollbackBinding: Binding<Int> {

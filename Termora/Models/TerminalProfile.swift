@@ -11,8 +11,16 @@ struct TerminalProfile: Codable, Identifiable, Equatable {
     var themeID: String? = nil
     var environment: [String: String] = [:]
 
+    /// briefs/2 "Bildirimler": uzun işlem bildirimleri profil bazında KAPATILABİLİR.
+    ///
+    /// "Devral / aç / kapat" üçlüsü yerine tek yönlü bir susturma: brief yalnızca kapatmayı
+    /// istiyor ve global anahtar kapalıyken bir profilin bildirim AÇMASI, kullanıcının
+    /// "bildirim istemiyorum" kararını profil ayarından sessizce delerdi.
+    var suppressesCommandNotifications: Bool = false
+
     private enum CodingKeys: String, CodingKey {
         case id, name, shellPath, startupDirectory, startupCommand, fontName, fontSize, themeID, environment
+        case suppressesCommandNotifications
     }
 }
 
@@ -40,5 +48,7 @@ extension TerminalProfile {
         fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize)
         themeID = try container.decodeIfPresent(String.self, forKey: .themeID)
         environment = try container.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
+        suppressesCommandNotifications = try container
+            .decodeIfPresent(Bool.self, forKey: .suppressesCommandNotifications) ?? false
     }
 }
