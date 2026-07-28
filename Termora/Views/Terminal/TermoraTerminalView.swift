@@ -13,7 +13,7 @@ import SwiftTerm
 /// enabled/disabled rules can be tested without an NSMenu or a live PTY.
 struct TerminalContextMenuItem: Equatable {
     enum Command: Equatable {
-        case copy, paste, selectAll, clearScreen, splitRight, splitDown
+        case copy, paste, selectAll, explainWithAI, clearScreen, splitRight, splitDown
     }
 
     let command: Command
@@ -39,6 +39,11 @@ enum TerminalContextMenu {
                 TerminalContextMenuItem(command: .copy, title: "Copy", isEnabled: hasSelection),
                 TerminalContextMenuItem(command: .paste, title: "Paste", isEnabled: canPaste),
                 TerminalContextMenuItem(command: .selectAll, title: "Select All", isEnabled: true),
+                // Seçilen metin AI panelinin bağlamına girer, bu yüzden seçim olmadan
+                // anlamsızdır. Brief gereği gizlenmez: menü imlecin altında şekil değiştirmez.
+                TerminalContextMenuItem(command: .explainWithAI,
+                                        title: "Explain with AI",
+                                        isEnabled: hasSelection),
             ],
             [
                 TerminalContextMenuItem(command: .clearScreen, title: "Clear Screen", isEnabled: true),
@@ -73,6 +78,9 @@ final class TermoraTerminalView: LocalProcessTerminalView {
     /// are then shown disabled rather than hidden).
     var onSplitRight: (() -> Void)?
     var onSplitDown: (() -> Void)?
+    /// "Explain with AI". Nil ise öğe menüde kalır ama hiçbir şey yapmaz — AI paneli
+    /// olmayan bir bağlamda (önizleme) çizilen terminal için doğru davranış budur.
+    var onExplainWithAI: (() -> Void)?
 
     init(sessionID: UUID, frame: CGRect) {
         self.sessionID = sessionID
@@ -125,6 +133,7 @@ final class TermoraTerminalView: LocalProcessTerminalView {
         case .copy: return #selector(copy(_:))
         case .paste: return #selector(paste(_:))
         case .selectAll: return #selector(selectAll(_:))
+        case .explainWithAI: return #selector(explainWithAI(_:))
         case .clearScreen: return #selector(clearScreen(_:))
         case .splitRight: return #selector(splitRight(_:))
         case .splitDown: return #selector(splitDown(_:))
@@ -133,6 +142,10 @@ final class TermoraTerminalView: LocalProcessTerminalView {
 
     @objc private func clearScreen(_ sender: Any?) {
         send(txt: TerminalContextMenu.clearScreenInput)
+    }
+
+    @objc private func explainWithAI(_ sender: Any?) {
+        onExplainWithAI?()
     }
 
     @objc private func splitRight(_ sender: Any?) {

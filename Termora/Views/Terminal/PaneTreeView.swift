@@ -166,7 +166,9 @@ private struct PaneLeafView: View {
                          sessionManager: sessionManager,
                          isActive: isActive,
                          onSplitRight: { split(axis: .vertical) },
-                         onSplitDown: { split(axis: .horizontal) })
+                         onSplitDown: { split(axis: .horizontal) },
+                         // Menü AI'a dokunmaz, yalnız istek bırakır; pencere onu karşılar.
+                         onExplainWithAI: { viewModel.requestExplainSelection() })
             // Kimlik HEM oturumu HEM de yeniden başlatma kuşağını içerir:
             // - sessionID: iki sekmenin kök paneli aynı yapısal konumdadır; kimlik yalnız
             //   kuşak olursa (taze oturumlarda hep 0) SwiftUI makeNSView'i çağırmaz ve

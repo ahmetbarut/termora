@@ -25,6 +25,7 @@ struct TerminalHostView: NSViewRepresentable {
     /// re-installed on every update pass so they always close over the current pane.
     var onSplitRight: (() -> Void)?
     var onSplitDown: (() -> Void)?
+    var onExplainWithAI: (() -> Void)?
 
     /// Remembers which session this host last handed first-responder status to, so a routine
     /// re-render does not steal focus on every layout pass.
@@ -56,12 +57,14 @@ struct TerminalHostView: NSViewRepresentable {
         }
         view.onSplitRight = onSplitRight
         view.onSplitDown = onSplitDown
+        view.onExplainWithAI = onExplainWithAI
         return view
     }
 
     func updateNSView(_ nsView: TermoraTerminalView, context: Context) {
         nsView.onSplitRight = onSplitRight
         nsView.onSplitDown = onSplitDown
+        nsView.onExplainWithAI = onExplainWithAI
 
         guard context.coordinator.shouldRequestFocus(sessionID: sessionID, isActive: isActive) else {
             if !isActive { context.coordinator.resignFocusTracking() }

@@ -118,6 +118,12 @@ final class WorkspaceViewModel {
     /// PaneTreeView'ın preference key ile bildirdiği panel çerçeveleri (AppKit koordinatları).
     var paneFrames: [UUID: CGRect] = [:]
 
+    /// Terminal sağ tık menüsünden gelen "Explain with AI" isteği (briefs/3 "Sağ Tık
+    /// Menüleri"). Menü AI'a DOKUNMAZ — yalnız bu jetonu tazeler; pencere jetonu görüp
+    /// paneli açar ve soruyu sorar. Menünün paneli doğrudan çağırması, AI panelinin hiç
+    /// kurulmadığı bağlamlarda (önizleme) kablonun ucunu boşa çıkarırdı.
+    private(set) var explainSelectionRequest: UUID?
+
     var activeTab: TerminalTab? {
         guard let activeTabID else { return nil }
         return tabs.first { $0.id == activeTabID }
@@ -601,6 +607,12 @@ final class WorkspaceViewModel {
     /// diye okunan bir çağrı sessizce oturuma yazıyordu ve bir gün `body` içinden
     /// çağrıldığında SwiftUI güncelleme döngüsü doğuracaktı. Çağıranlar zamanlayıcı ya da
     /// olay kancasıdır, çizim yolu DEĞİL.
+    /// Her çağrı YENİ bir jeton üretir: aynı seçim için ikinci kez "Explain" demek de
+    /// çalışmalı, `onChange` ise aynı değerde uyanmaz.
+    func requestExplainSelection() {
+        explainSelectionRequest = UUID()
+    }
+
     func refreshActiveWorkingDirectory() {
         guard let tab = activeTab,
               let sessionID = tab.root.sessionID(ofPane: tab.activePaneID),

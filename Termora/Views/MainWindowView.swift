@@ -120,6 +120,13 @@ struct MainWindowView: View {
         .onChange(of: workspace.activeTabID) { _, _ in
             if ai.isPresented { ai.refreshContext() }
         }
+        // Terminal sağ tık menüsündeki "Explain with AI" (briefs/3). Menü yalnız bir jeton
+        // bırakır; paneli açan ve soruyu soran yer burasıdır — View ▸ Explain Selection
+        // (⌘⇧E) ile TAM AYNI yol, böylece iki giriş noktası ayrışamaz.
+        .onChange(of: workspace.explainSelectionRequest) { _, request in
+            guard request != nil else { return }
+            Task { await ai.openAndExplainSelection() }
+        }
         // Palet terminalin ÜZERİNDE bir katmandır: oturumlar okumaya/çalışmaya devam eder
         // (brief 3: "Komut paleti açıldığında terminal oturumu durmamalıdır").
         .overlay(alignment: .top) {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Termora
 
@@ -15,7 +16,7 @@ struct TerminalContextMenuTests {
         let sections = TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true)
 
         #expect(sections.count == 3)
-        #expect(sections.first?.map(\.command) == [.copy, .paste, .selectAll])
+        #expect(sections.first?.map(\.command) == [.copy, .paste, .selectAll, .explainWithAI])
         #expect(sections.dropFirst().first?.map(\.command) == [.clearScreen])
         #expect(sections.last?.map(\.command) == [.splitRight, .splitDown])
     }
@@ -23,7 +24,8 @@ struct TerminalContextMenuTests {
     @Test("basliklar Ingilizce ve tek anlamli")
     func titles() {
         let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true))
-        #expect(items.map(\.title) == ["Copy", "Paste", "Select All", "Clear Screen", "Split Right", "Split Down"])
+        #expect(items.map(\.title) == ["Copy", "Paste", "Select All", "Explain with AI",
+                                       "Clear Screen", "Split Right", "Split Down"])
     }
 
     @Test("secim yokken Copy gizlenmez, disabled olur")
@@ -31,7 +33,7 @@ struct TerminalContextMenuTests {
         let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
         let copy = items.first { $0.command == .copy }
         #expect(copy?.isEnabled == false)
-        #expect(items.count == 6)
+        #expect(items.count == 7)
     }
 
     @Test("pano bosken Paste disabled")
@@ -48,6 +50,49 @@ struct TerminalContextMenuTests {
         #expect(items.first { $0.command == .splitDown }?.isEnabled == false)
         #expect(items.first { $0.command == .clearScreen }?.isEnabled == true)
         #expect(items.first { $0.command == .selectAll }?.isEnabled == true)
+    }
+
+    // MARK: - Explain with AI (briefs/3 "Sag Tik Menuleri")
+
+    /// Brief menuye "Explain with AI" koyuyor. Secilen metin AI panelinin baglamina
+    /// girdigi icin oge SECIM olmadan anlamsizdir; brief geregi gizlenmez, disabled olur.
+    @Test("secim yokken Explain with AI gizlenmez, disabled olur")
+    func explainDisabledWithoutSelection() {
+        let items = flat(TerminalContextMenu.sections(hasSelection: false, canPaste: true, canSplit: true))
+        let explain = items.first { $0.command == .explainWithAI }
+        #expect(explain?.isEnabled == false)
+        #expect(explain?.title == "Explain with AI")
+    }
+
+    @Test("secim varken Explain with AI etkin")
+    func explainEnabledWithSelection() {
+        let items = flat(TerminalContextMenu.sections(hasSelection: true, canPaste: true, canSplit: true))
+        #expect(items.first { $0.command == .explainWithAI }?.isEnabled == true)
+    }
+
+    /// Menu ogesi AI'a HICBIR SEY sormaz: yalnizca bir istek jetonu birakir. Panel o jetonu
+    /// gorunce acilir ve sorar. Menunun dogrudan istek atmasi, AI panelinin hic kurulmadigi
+    /// bir baglamda (onizleme) sessiz bir cokme ya da bos bir soru olurdu.
+    @MainActor
+    @Test("Explain istegi bir jeton birakir, kendisi soru sormaz")
+    func explainRequestOnlyRaisesAToken() throws {
+        let suiteName = "termora.explain.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        let workspace = WorkspaceViewModel(sessionManager: MockSessionManager(),
+                                           settings: SettingsStore(defaults: defaults),
+                                           profiles: ProfileStore(defaults: defaults))
+        workspace.newTab()
+
+        #expect(workspace.explainSelectionRequest == nil)
+
+        workspace.requestExplainSelection()
+        let first = try #require(workspace.explainSelectionRequest)
+
+        // Ikinci istek YENI bir jeton uretir; aksi halde ayni secim icin ikinci kez
+        // "Explain" demek hicbir sey yapmazdi (onChange ayni degerde uyanmaz).
+        workspace.requestExplainSelection()
+        #expect(workspace.explainSelectionRequest != first)
     }
 
     /// Ctrl-L PTY'ye gider: shell (readline/zle) ekrani temizleyip promptu YENIDEN CIZER.
