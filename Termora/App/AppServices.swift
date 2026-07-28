@@ -14,6 +14,9 @@ final class AppServices {
     let settings: SettingsStore
     let themes: ThemeStore
     let profiles: ProfileStore
+    /// Saved workspaces. Shared like every other store: the Workspaces settings tab edits the
+    /// same list a window reads when it opens one.
+    let workspaces: WorkspaceStore
     let sessionManager: SessionManager
 
     init() {
@@ -27,6 +30,7 @@ final class AppServices {
         self.settings = settings
         self.themes = themes
         self.profiles = profiles
+        self.workspaces = WorkspaceStore()
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
     }
 }

@@ -40,6 +40,15 @@ enum TabTitleResolver {
     }
 }
 
+/// Onay bekleyen workspace açılışı. Kullanıcıya çalıştırılacak komutlar gösterilir;
+/// onay verilmeden hiçbir shell başlatılmaz (briefs/2 güvenlik kuralı).
+struct PendingWorkspaceLaunch: Identifiable, Equatable {
+    var id: UUID
+    var workspace: Workspace
+    /// Onay ekranında listelenecek komutlar.
+    var commands: [String]
+}
+
 /// Pencere başına bir tane. Sekme ve panel operasyonlarının tek sahibi.
 /// Menü kısayolları @FocusedValue üzerinden key window'un örneğine ulaşır.
 @MainActor
@@ -55,16 +64,27 @@ final class WorkspaceViewModel {
             case tab(UUID)
             case pane(paneID: UUID)
             case window
+            /// Workspace açılışı pencerenin TÜM sekmelerini değiştirir; çalışan işlem
+            /// varsa aynı koruma devreye girer, ayrı bir onay akışı kurulmaz.
+            case workspaceSwitch(name: String)
         }
     }
 
     private let sessionManager: any SessionManaging
     let settings: SettingsStore
     let profiles: ProfileStore
+    /// Workspace kayıtları. Workspace ekranı olmayan bağlamlarda (eski testler) nil olabilir;
+    /// o durumda açılış çalışır ama "son açılma" damgası ve güven bayrağı kalıcılaşmaz.
+    let workspaces: WorkspaceStore?
+    /// `lastOpenedAt` damgasının kaynağı; testte sabitlenebilsin diye enjekte edilir.
+    private let now: () -> Date
 
     private(set) var tabs: [TerminalTab] = []
     var activeTabID: UUID?
     var pendingClose: PendingClose?
+
+    /// Onay bekleyen workspace açılışı; nil ise bekleyen yok.
+    private(set) var pendingWorkspaceLaunch: PendingWorkspaceLaunch?
 
     /// PaneTreeView'ın preference key ile bildirdiği panel çerçeveleri (AppKit koordinatları).
     var paneFrames: [UUID: CGRect] = [:]
@@ -74,10 +94,16 @@ final class WorkspaceViewModel {
         return tabs.first { $0.id == activeTabID }
     }
 
-    init(sessionManager: any SessionManaging, settings: SettingsStore, profiles: ProfileStore) {
+    init(sessionManager: any SessionManaging,
+         settings: SettingsStore,
+         profiles: ProfileStore,
+         workspaces: WorkspaceStore? = nil,
+         now: @escaping () -> Date = Date.init) {
         self.sessionManager = sessionManager
         self.settings = settings
         self.profiles = profiles
+        self.workspaces = workspaces
+        self.now = now
     }
 
     // MARK: - Sekme açma
@@ -120,8 +146,8 @@ final class WorkspaceViewModel {
         case let .pane(paneID):
             guard let tab = tabs.first(where: { $0.root.sessionID(ofPane: paneID) != nil }) else { return }
             closePane(paneID: paneID, in: tab)
-        case .window:
-            // Önce oturumlar sonlandırılır, sonra pencere/uygulama kapatılır:
+        case .window, .workspaceSwitch:
+            // Önce oturumlar sonlandırılır, sonra pencere kapatılır / yeni düzen kurulur:
             // ters sırada shell'ler SessionManager cache'inde öksüz kalırdı.
             closeAllTabs()
             approval?()
@@ -174,6 +200,7 @@ final class WorkspaceViewModel {
         case .tab: return "Do you want to close this tab?"
         case .pane: return "Do you want to close this pane?"
         case .window: return "Do you want to close this window?"
+        case let .workspaceSwitch(name): return "Do you want to open the workspace “\(name)”?"
         case nil: return ""
         }
     }
@@ -192,6 +219,16 @@ final class WorkspaceViewModel {
             return runningProcessSentence(sessionIDs: [sessionID], fallback: "A process is still running in this pane.")
         case .window:
             return "Processes are still running in this window."
+        case let .workspaceSwitch(name):
+            // Sonuç açıkça yazılır: workspace açmak bu penceredeki sekmeleri kapatır.
+            let sessionIDs = tabs.flatMap { $0.root.leaves.map(\.sessionID) }
+            let running = sessionIDs
+                .first { sessionManager.hasRunningProcess(sessionID: $0) }
+                .flatMap { foregroundProcessName(sessionID: $0) }
+            if let running, !running.isEmpty {
+                return "A process is still running: \(running). Opening “\(name)” closes the tabs in this window."
+            }
+            return "Processes are still running in this window. Opening “\(name)” closes them."
         case nil:
             return ""
         }
@@ -203,6 +240,7 @@ final class WorkspaceViewModel {
         case .tab: return "Close Tab"
         case .pane: return "Close Pane"
         case .window: return "Close Window"
+        case .workspaceSwitch: return "Open Workspace"
         case nil: return ""
         }
     }
@@ -541,5 +579,172 @@ final class WorkspaceViewModel {
             rows: size.rows,
             isBusy: sessionManager.hasRunningProcess(sessionID: sessionID)
         )
+    }
+
+    // MARK: - Workspace yakalama
+
+    /// Açık sekme/panel düzenini isimli bir workspace olarak yakalar.
+    /// Kalıcılaştırmaz: kaydı `WorkspaceStore`'a yazmak çağıranın işidir (aynı yakalama
+    /// hem "Save as Workspace" hem "Update Workspace" akışında kullanılır).
+    /// Yalnız kullanıcının verdiği sekme adı saklanır; otomatik başlıklar oturuma bağlıdır
+    /// ve bir sonraki açılışta zaten yeniden hesaplanır.
+    func captureWorkspace(name: String, directory: String) -> Workspace {
+        let capturedTabs = tabs.map { tab in
+            let directories = workingDirectories(in: tab.root)
+            return WorkspaceTab(
+                title: tab.customTitle,
+                layout: WorkspaceSnapshot.layout(from: tab.root) { directories[$0] }
+            )
+        }
+        return Workspace(name: name, directory: directory, tabs: capturedTabs)
+    }
+
+    /// Ağaçtaki oturumların çalışma dizinleri. Sözlük önden toplanır: `WorkspaceSnapshot`
+    /// saf bir dönüşüm olduğu için oturum yöneticisini hiç görmemelidir.
+    private func workingDirectories(in node: PaneNode) -> [UUID: String] {
+        var result: [UUID: String] = [:]
+        for leaf in node.leaves {
+            result[leaf.sessionID] = sessionManager.session(id: leaf.sessionID)?.workingDirectory
+        }
+        return result
+    }
+
+    // MARK: - Workspace açma
+
+    /// Workspace'i açar: mevcut sekmeler kapanır, kayıtlı düzen kurulur, dizinlere geçilir.
+    /// Başlangıç komutu varsa ve kayıt güvenilir işaretlenmemişse ÖNCE onay istenir —
+    /// bu noktada hiçbir shell başlatılmaz (briefs/2 güvenlik kuralı).
+    func openWorkspace(_ workspace: Workspace) {
+        // Ekranda başka bir onay varsa araya girilmez: `pendingClose`'u ezmek bekleyen
+        // kapatma eylemini (ve pencere kapatma geri çağrısını) sessizce düşürürdü.
+        guard pendingClose == nil, pendingWorkspaceLaunch == nil else { return }
+
+        let commands = WorkspaceOpenPlan.startupCommands(for: workspace)
+        guard commands.isEmpty || workspace.trustsStartupCommands else {
+            pendingWorkspaceLaunch = PendingWorkspaceLaunch(id: UUID(),
+                                                           workspace: workspace,
+                                                           commands: commands)
+            return
+        }
+        // Buraya yalnız çalıştırılacak komut yokken ya da kullanıcı bu workspace'e
+        // kalıcı güven vermişken gelinir; her iki durumda da komut çalıştırmak serbesttir.
+        replaceOpenTabs(with: workspace, runStartupCommands: true)
+    }
+
+    /// Onay verildi: komutlar çalışır. `trustFromNowOn` ise kayıt güvenilir işaretlenir
+    /// ve bir daha sorulmaz.
+    func confirmWorkspaceLaunch(trustFromNowOn: Bool) {
+        guard let pending = pendingWorkspaceLaunch else { return }
+        pendingWorkspaceLaunch = nil
+
+        var workspace = pending.workspace
+        if trustFromNowOn {
+            workspace.trustsStartupCommands = true
+            // Depoya yalnız güven bayrağı yazılır: kayıt bu arada Workspaces ekranından
+            // değişmiş olabilir, tüm nesneyi geri yazmak o değişikliği silerdi.
+            if let store = workspaces,
+               let index = store.workspaces.firstIndex(where: { $0.id == workspace.id }) {
+                store.workspaces[index].trustsStartupCommands = true
+            }
+        }
+        replaceOpenTabs(with: workspace, runStartupCommands: true)
+    }
+
+    /// Onay reddedildi: hiçbir şey değişmez, hiçbir komut çalışmaz.
+    func cancelWorkspaceLaunch() {
+        pendingWorkspaceLaunch = nil
+    }
+
+    /// Pencereyi workspace'in düzeniyle değiştirir. Çalışan işlem varsa karar MEVCUT
+    /// onay akışına devredilir: düzen ancak kullanıcı onayladıktan sonra kurulur.
+    private func replaceOpenTabs(with workspace: Workspace, runStartupCommands: Bool) {
+        guard hasAnyRunningProcess() else {
+            closeAllTabs()
+            buildTabs(for: workspace, runStartupCommands: runStartupCommands)
+            return
+        }
+        windowCloseApproval = { [weak self] in
+            self?.buildTabs(for: workspace, runStartupCommands: runStartupCommands)
+        }
+        pendingClose = PendingClose(id: UUID(), target: .workspaceSwitch(name: workspace.name))
+    }
+
+    /// Kayıtlı düzeni kurar: her panel için yeni bir shell başlar ve kendi dizinine geçer.
+    /// Çağrıldığında pencere boştur (`closeAllTabs` ya da onaylı kapatma çalışmıştır).
+    private func buildTabs(for workspace: Workspace, runStartupCommands: Bool) {
+        var opened: [TerminalTab] = []
+        for planned in WorkspaceSnapshot.plan(for: workspace) {
+            let panes = Dictionary(planned.panes.map { ($0.paneID, $0) },
+                                   uniquingKeysWith: { first, _ in first })
+            let root = paneNode(from: planned.layout,
+                                panes: panes,
+                                workspace: workspace,
+                                runStartupCommands: runStartupCommands)
+            guard let firstPaneID = root.leaves.first?.paneID else { continue }
+            let tab = TerminalTab(root: root, activePaneID: firstPaneID)
+            tab.customTitle = planned.title
+            opened.append(tab)
+        }
+
+        tabs = opened
+        activeTabID = opened.first?.id
+        if tabs.isEmpty {
+            // Terminal uygulaması konvansiyonu (`closeTab` ile aynı): pencere boş kalmaz.
+            newTab()
+        }
+        syncAutomaticTitles()
+        workspaces?.markOpened(id: workspace.id, at: now())
+    }
+
+    /// Kayıtlı düzeni canlı ağaca çevirir; her yaprak için oturum açar.
+    /// Panel kimlikleri korunur (yakala → aç → yakala aynı düzeni verir), split kimlikleri
+    /// saklanmadığı için yeniden üretilir.
+    private func paneNode(from layout: WorkspaceLayout,
+                          panes: [UUID: WorkspaceOpenPlan.Pane],
+                          workspace: Workspace,
+                          runStartupCommands: Bool) -> PaneNode {
+        switch layout {
+        case let .pane(pane):
+            let planned = panes[pane.id]
+            let profile = launchProfile(
+                for: workspace,
+                startupCommand: runStartupCommands ? planned?.startupCommand : nil
+            )
+            let session = sessionManager.createSession(profile: profile,
+                                                       workingDirectory: nonBlank(planned?.directory))
+            return .leaf(paneID: pane.id, sessionID: session.id)
+
+        case let .split(axis, ratio, first, second):
+            return .split(
+                id: UUID(),
+                axis: axis,
+                ratio: ratio,
+                first: paneNode(from: first, panes: panes, workspace: workspace,
+                                runStartupCommands: runStartupCommands),
+                second: paneNode(from: second, panes: panes, workspace: workspace,
+                                 runStartupCommands: runStartupCommands))
+        }
+    }
+
+    /// Bir panelin hangi profille açılacağı. `SessionManager` kabuğu, ortamı ve başlangıç
+    /// komutunu profilden okuduğu için workspace'in kendi ortamı ve panelin komutu bu
+    /// profile bindirilir. Hiçbiri yoksa nil döner ve panel varsayılan kabukla açılır.
+    private func launchProfile(for workspace: Workspace, startupCommand: String?) -> TerminalProfile? {
+        let base = workspace.profileID.flatMap { id in profiles.profiles.first { $0.id == id } }
+        guard base != nil || startupCommand != nil || !workspace.environment.isEmpty else { return nil }
+
+        // Kayıtlı profil yoksa yalnız bu açılışa özel geçici bir profil kurulur. Kimliği
+        // workspace'in kimliğidir: ProfileStore'da karşılığı yoktur, bu yüzden görünüm
+        // ayarları global kalır ama oturum hangi workspace'ten geldiği izlenebilir.
+        var profile = base ?? TerminalProfile(id: workspace.id, name: workspace.name)
+        profile.environment.merge(workspace.environment) { _, fromWorkspace in fromWorkspace }
+        if let startupCommand { profile.startupCommand = startupCommand }
+        return profile
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 }

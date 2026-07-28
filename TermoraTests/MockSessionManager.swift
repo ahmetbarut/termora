@@ -19,6 +19,13 @@ final class MockSessionManager: SessionManaging {
     private(set) var createdWorkingDirectories: [String?] = []
     private(set) var restartedSessionIDs: [UUID] = []
 
+    /// Oturumlar açılırken çalıştırılması istenen başlangıç komutları, çağrı sırasıyla.
+    /// Gerçek `SessionManager` komutu profilden okuyup shell'e gönderdiği için (bkz.
+    /// `startShell`), workspace açılışında komutun çalışıp çalışmadığı buradan doğrulanır.
+    var createdStartupCommands: [String?] {
+        createdProfiles.map { $0?.startupCommand }
+    }
+
     func createSession(profile: TerminalProfile?, workingDirectory: String?) -> TerminalSession {
         createdProfiles.append(profile)
         createdWorkingDirectories.append(workingDirectory)
