@@ -77,6 +77,12 @@ final class AppServices {
     /// (zayıf gibi davranır), sahibi burasıdır.
     @ObservationIgnored private var servicesProvider: TermoraServicesProvider?
 
+    /// `NSAppleEventManager` işleyicisini SAHİPLENMEZ; kayıtlı nesne serbest bırakılırsa
+    /// bir sonraki `termora://` olayı ölü bir işaretçiye giderdi. Üretimde `AppServices`
+    /// uygulama ömrü boyunca yaşar, ama testler onu defalarca kurup bırakıyor — bu yüzden
+    /// EN SON kaydedilen sağlayıcı burada da tutulur.
+    @ObservationIgnored private static var registeredEventProvider: TermoraServicesProvider?
+
     @ObservationIgnored private static let logger =
         Logger(subsystem: "com.ahmetbarut.Termora", category: "QuickOpen")
 
@@ -147,6 +153,7 @@ final class AppServices {
     private func registerExternalEntryPoints() {
         let provider = TermoraServicesProvider(services: self)
         servicesProvider = provider
+        Self.registeredEventProvider = provider
         NSApplication.shared.servicesProvider = provider
 
         NSAppleEventManager.shared().setEventHandler(
