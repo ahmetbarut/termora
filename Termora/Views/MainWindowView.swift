@@ -18,6 +18,8 @@ struct MainWindowView: View {
     @State private var closeCoordinator = WindowCloseCoordinator()
 
     /// Komut paleti pencere başına bir tanedir; ⌘K menüden, ⌘⇧P dinleyiciden gelir.
+    /// Onay diyaloğundaki "Always trust this workspace" seçimi.
+    @State private var trustLaunchedWorkspace = false
     @State private var palette = CommandPaletteModel()
     @State private var paletteHotkey = CommandPaletteHotkeyMonitor()
 
@@ -101,6 +103,55 @@ struct MainWindowView: View {
         } message: {
             Text(workspace.pendingCloseMessage)
         }
+        // Ayarlar penceresi kendi terminal penceresine sahip olmadığı için açılış isteğini
+        // servis katmanına park eder; onu buradan alıp bu pencerede açıyoruz.
+        .onChange(of: services.workspaceOpenRequest?.id) { _, _ in
+            guard let request = services.workspaceOpenRequest else { return }
+            services.workspaceOpenRequest = nil
+            workspace.openWorkspace(request)
+        }
+        .onAppear {
+            services.capturedLayoutProvider = { workspace.captureWorkspace(name: "", directory: "").tabs }
+        }
+        .confirmationDialog(
+            WorkspaceLaunchPrompt.title(workspaceName: workspace.pendingWorkspaceLaunch?.workspace.name ?? ""),
+            isPresented: pendingLaunchBinding,
+            titleVisibility: .visible
+        ) {
+            Button(WorkspaceLaunchPrompt.runTitle) {
+                workspace.confirmWorkspaceLaunch(trustFromNowOn: trustLaunchedWorkspace)
+            }
+            Button(WorkspaceLaunchPrompt.skipTitle) {
+                workspace.openWorkspaceWithoutStartupCommands()
+            }
+            Button(WorkspaceLaunchPrompt.cancelTitle, role: .cancel) {
+                workspace.cancelWorkspaceLaunch()
+            }
+        } message: {
+            Text(pendingLaunchMessage)
+        }
+    }
+
+    /// İki diyalog aynı anda açılmamalı: kapatma onayı önceliklidir (kullanıcı zaten
+    /// bir şeyi kapatmaya çalışıyordu), workspace açılışı onun arkasında bekler.
+    private var pendingLaunchBinding: Binding<Bool> {
+        Binding(
+            get: {
+                WorkspaceDialogPresentation.current(
+                    hasPendingClose: workspace.pendingClose != nil,
+                    hasPendingLaunch: workspace.pendingWorkspaceLaunch != nil
+                ) == .startupCommands
+            },
+            set: { isPresented in
+                if !isPresented { workspace.cancelWorkspaceLaunch() }
+            }
+        )
+    }
+
+    private var pendingLaunchMessage: String {
+        guard let launch = workspace.pendingWorkspaceLaunch else { return "" }
+        let header = WorkspaceLaunchPrompt.message(commandCount: launch.commands.count)
+        return ([header, ""] + launch.commands).joined(separator: "\n")
     }
 
     /// Klavye odağını aktif panelin terminaline geri verir.

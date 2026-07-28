@@ -655,6 +655,16 @@ final class WorkspaceViewModel {
         pendingWorkspaceLaunch = nil
     }
 
+    /// "Open Without Commands": düzen kurulur ama hiçbir başlangıç komutu çalışmaz.
+    /// Kayıt diskte değişmez — kullanıcı bu SEFERLİK komutsuz açmayı seçti, workspace'in
+    /// tanımını değiştirmedi.
+    func openWorkspaceWithoutStartupCommands() {
+        guard let pending = pendingWorkspaceLaunch else { return }
+        pendingWorkspaceLaunch = nil
+        let stripped = WorkspaceStartupCommands.removingStartupCommands(from: pending.workspace)
+        replaceOpenTabs(with: stripped, runStartupCommands: false)
+    }
+
     /// Pencereyi workspace'in düzeniyle değiştirir. Çalışan işlem varsa karar MEVCUT
     /// onay akışına devredilir: düzen ancak kullanıcı onayladıktan sonra kurulur.
     private func replaceOpenTabs(with workspace: Workspace, runStartupCommands: Bool) {

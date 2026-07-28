@@ -41,7 +41,10 @@ struct TermoraApp: App {
         Settings {
             SettingsWindowView(settings: services.settings,
                                themes: services.themes,
-                               profiles: services.profiles)
+                               profiles: services.profiles,
+                               workspaces: services.workspaces,
+                               requestOpen: { services.workspaceOpenRequest = $0 },
+                               captureCurrentLayout: { services.capturedLayoutProvider?() ?? [] })
         }
     }
 }
