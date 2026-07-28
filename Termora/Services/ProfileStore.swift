@@ -22,9 +22,20 @@ final class ProfileStore {
             self.profiles = []
             return
         }
-        if let decoded = try? JSONDecoder().decode([TerminalProfile].self, from: data) {
-            self.profiles = decoded
-        } else {
+        do {
+            // Öğe öğe çözülür: tek bozuk profil bütün listeyi silmemeli. Blob'a
+            // DOKUNULMAZ (yedeğe taşınmaz, silinmez) — atlanan kaydın ham verisi, bir
+            // sonraki yazmaya kadar diskte kalsın ki ileriki bir sürüm okuyabilsin.
+            let decoded = try JSONDecoder().decode(LenientArray<TerminalProfile>.self, from: data)
+            if !decoded.failures.isEmpty {
+                Self.logger.error("""
+                    Skipped \(decoded.failures.count, privacy: .public) undecodable profile(s), \
+                    kept \(decoded.elements.count, privacy: .public): \(decoded.failureSummary, privacy: .public)
+                    """)
+            }
+            self.profiles = decoded.elements
+        } catch {
+            // Blob'un kendisi bozuk (geçersiz JSON ya da dizi değil): eski davranış aynen.
             defaults.set(data, forKey: Self.backupKey)
             defaults.removeObject(forKey: Self.storageKey)
             Self.logger.error("Corrupt profiles blob moved to \(Self.backupKey, privacy: .public); falling back to empty list")

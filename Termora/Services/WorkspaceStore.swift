@@ -25,9 +25,20 @@ final class WorkspaceStore {
             self.workspaces = []
             return
         }
-        if let decoded = try? JSONDecoder().decode([Workspace].self, from: data) {
-            self.workspaces = decoded
-        } else {
+        do {
+            // Öğe öğe çözülür: tek bozuk workspace bütün listeyi silmemeli. Blob'a
+            // DOKUNULMAZ (yedeğe taşınmaz, silinmez) — atlanan kaydın ham verisi, bir
+            // sonraki yazmaya kadar diskte kalsın ki ileriki bir sürüm okuyabilsin.
+            let decoded = try JSONDecoder().decode(LenientArray<Workspace>.self, from: data)
+            if !decoded.failures.isEmpty {
+                Self.logger.error("""
+                    Skipped \(decoded.failures.count, privacy: .public) undecodable workspace(s), \
+                    kept \(decoded.elements.count, privacy: .public): \(decoded.failureSummary, privacy: .public)
+                    """)
+            }
+            self.workspaces = decoded.elements
+        } catch {
+            // Blob'un kendisi bozuk (geçersiz JSON ya da dizi değil): eski davranış aynen.
             defaults.set(data, forKey: Self.backupKey)
             defaults.removeObject(forKey: Self.storageKey)
             Self.logger.error("Corrupt workspaces blob moved to \(Self.backupKey, privacy: .public); falling back to empty list")
