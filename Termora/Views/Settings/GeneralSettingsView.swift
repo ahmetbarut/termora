@@ -56,15 +56,13 @@ struct GeneralSettingsView: View {
                 Toggle("Show status bar", isOn: $settings.settings.showStatusBar)
             }
 
-            Section("Startup") {
+            Section("Session") {
                 Toggle("Restore windows and tabs from last session",
                        isOn: $settings.settings.restoresPreviousSession)
-                    // Vaadin sınırı açıkça yazılır (briefs/2): süreçler devam etmez.
-                    // Aynı cümle VoiceOver'a da gider; durum yalnız anahtarın görünümünden
-                    // anlaşılmasın diye açıklama etikete bağlanır.
-                    .accessibilityHint("Reopens your windows, tabs and split panes in their "
-                                       + "saved folders. New shells are started, and startup "
-                                       + "commands are not run again.")
+                    // Vaadin sınırı hem görsel açıklamada hem VoiceOver ipucunda durur:
+                    // anahtarın durumu tek başına "süreçler devam eder mi?" sorusunu
+                    // cevaplamaz (briefs/2).
+                    .accessibilityHint("New shells are started; startup commands are not run again.")
                 Text("Windows, tabs and split panes reopen in their saved folders. "
                      + "New shells are started — running commands do not continue — "
                      + "and startup commands are not run again.")

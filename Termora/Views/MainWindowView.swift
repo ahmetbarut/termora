@@ -203,8 +203,12 @@ struct MainWindowView: View {
 
         // Kayıtta birden fazla pencere varsa kalanları İLK pencere açar; sayı bir kez
         // verilir, yoksa geri yükleme için açılan her pencere yeniden pencere isterdi.
-        for _ in 0..<services.sessionRestore.claimAdditionalWindowCount() {
-            openWindow(id: MainWindowScene.groupID)
+        // Sayı ŞİMDİ alınır (hak bir kez verilir), pencereler bir sonraki tura bırakılır:
+        // görünüm güncellenirken kardeş pencere açmak bu turu gereksiz uzatır.
+        let additional = services.sessionRestore.claimAdditionalWindowCount()
+        guard additional > 0 else { return }
+        DispatchQueue.main.async {
+            for _ in 0..<additional { openWindow(id: MainWindowScene.groupID) }
         }
     }
 
@@ -228,11 +232,16 @@ struct MainWindowView: View {
         // kancayı `onAppear`'dan ÖNCE de çağırabildiği için hazırlık beklenir.
         guard hasPreparedWindow, !hasPlacedWindow else { return }
         hasPlacedWindow = true
-        guard let saved = restoredWindow?.frame,
-              let frame = SessionWindowPlacement.frame(for: saved,
-                                                       visibleScreenFrames: NSScreen.screens.map(\.visibleFrame),
-                                                       minimumSize: WindowLayout.minimumSize) else { return }
-        window.setFrame(frame, display: true)
+        guard let restored = restoredWindow else { return }
+
+        if let frame = SessionWindowPlacement.frame(for: restored.frame,
+                                                    visibleScreenFrames: NSScreen.screens.map(\.visibleFrame),
+                                                    minimumSize: WindowLayout.minimumSize) {
+            window.setFrame(frame, display: true)
+        }
+        if SessionWindowPlacement.shouldEnterFullScreen(restoring: restored) {
+            window.toggleFullScreen(nil)
+        }
     }
 
     /// Klavye odağını aktif panelin terminaline geri verir.
