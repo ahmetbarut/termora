@@ -3,13 +3,101 @@ import Foundation
 import Observation
 import os
 
-/// Bir `docker` çağrısının sonucu.
-nonisolated struct DockerCLIResult: Equatable, Sendable {
+/// Bir dış komutun sonucu.
+nonisolated struct ExternalCommandResult: Equatable, Sendable {
     var standardOutput: String
     var standardError: String
     var exitCode: Int32
 
     var isSuccess: Bool { exitCode == 0 }
+}
+
+/// `docker` çağrısının sonucu; tip dış komutlarla ortaktır.
+typealias DockerCLIResult = ExternalCommandResult
+
+/// Dış bir komutu çalıştırmanın TEK kopyası. `DockerProcessRunner` ve
+/// `GitProcessRunner` ikisi de buradan geçer — süreç yönetiminin ince yerleri
+/// (boru kilitlenmesi, zaman aşımı) iki yerde ayrı ayrı doğrulanamaz.
+nonisolated enum ExternalCommand {
+
+    private static let queue = DispatchQueue(label: "com.ahmetbarut.Termora.external-command",
+                                             qos: .utility,
+                                             attributes: .concurrent)
+
+    /// Komutu ARKA PLANDA çalıştırır; çağıran aktör bloke olmaz, yalnız askıya alınır.
+    static func run(executablePath: String,
+                    arguments: [String],
+                    currentDirectory: String? = nil,
+                    environment: [String: String]? = nil,
+                    timeout: TimeInterval) async -> ExternalCommandResult {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: execute(executablePath: executablePath,
+                                                       arguments: arguments,
+                                                       currentDirectory: currentDirectory,
+                                                       environment: environment,
+                                                       timeout: timeout))
+            }
+        }
+    }
+
+    /// İki boruyu AYNI ANDA boşaltır: biri dolup bloke olursa süreç asla bitmez
+    /// (borular 64 KB'de dolar ve `waitUntilExit` sonsuza kadar bekler).
+    private static func execute(executablePath: String,
+                                arguments: [String],
+                                currentDirectory: String?,
+                                environment: [String: String]?,
+                                timeout: TimeInterval) -> ExternalCommandResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+        if let currentDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory, isDirectory: true)
+        }
+        if let environment {
+            process.environment = environment
+        }
+        let outPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = errorPipe
+
+        do {
+            try process.run()
+        } catch {
+            return ExternalCommandResult(standardOutput: "",
+                                         standardError: error.localizedDescription,
+                                         exitCode: -1)
+        }
+
+        let errorBox = DataBox()
+        let group = DispatchGroup()
+        group.enter()
+        queue.async {
+            errorBox.value = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            group.leave()
+        }
+
+        // Kilitlenmiş bir daemon ya da ağ dosya sistemi uygulamayı süresiz bekletemez.
+        let watchdog = DispatchWorkItem {
+            if process.isRunning { process.terminate() }
+        }
+        queue.asyncAfter(deadline: .now() + timeout, execute: watchdog)
+
+        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+        group.wait()
+        process.waitUntilExit()
+        watchdog.cancel()
+
+        return ExternalCommandResult(standardOutput: String(decoding: outData, as: UTF8.self),
+                                     standardError: String(decoding: errorBox.value, as: UTF8.self),
+                                     exitCode: process.terminationStatus)
+    }
+
+    /// Kuyruklar arası tek yazar / tek okuyucu aktarımı; `group.wait()` sıralamayı garanti eder.
+    private final class DataBox: @unchecked Sendable {
+        var value = Data()
+    }
 }
 
 /// `docker` CLI çağrılarının TEK kapısı (briefs/2: daemon ile karmaşık bir API
@@ -74,9 +162,6 @@ final class DockerProcessRunner: DockerCommandRunning {
 
     /// Kilitlenmiş bir daemon uygulamayı süresiz bekletemez: süre dolunca süreç sonlandırılır.
     private let timeout: TimeInterval
-    private static let queue = DispatchQueue(label: "com.ahmetbarut.Termora.docker",
-                                             qos: .utility,
-                                             attributes: .concurrent)
 
     /// Çözülen yol önbelleğe ALINMAZ: kullanıcı Docker'ı uygulama açıkken kurabilir
     /// ve `access` çağrısı zaten mikrosaniyeler sürüyor.
@@ -92,63 +177,7 @@ final class DockerProcessRunner: DockerCommandRunning {
         guard let path = DockerExecutableLocator.resolve() else {
             return DockerCLIResult(standardOutput: "", standardError: "Docker not found", exitCode: -1)
         }
-        let timeout = self.timeout
-        return await withCheckedContinuation { continuation in
-            Self.queue.async {
-                continuation.resume(returning: Self.execute(path: path,
-                                                            arguments: arguments,
-                                                            timeout: timeout))
-            }
-        }
-    }
-
-    /// İki boruyu AYNI ANDA boşaltır: biri dolup bloke olursa süreç asla bitmez
-    /// (borular 64 KB'de dolar ve `waitUntilExit` sonsuza kadar bekler).
-    nonisolated private static func execute(path: String,
-                                            arguments: [String],
-                                            timeout: TimeInterval) -> DockerCLIResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
-        let outPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errorPipe
-
-        do {
-            try process.run()
-        } catch {
-            return DockerCLIResult(standardOutput: "",
-                                   standardError: error.localizedDescription,
-                                   exitCode: -1)
-        }
-
-        let errorBox = DataBox()
-        let group = DispatchGroup()
-        group.enter()
-        queue.async {
-            errorBox.value = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            group.leave()
-        }
-
-        let watchdog = DispatchWorkItem {
-            if process.isRunning { process.terminate() }
-        }
-        queue.asyncAfter(deadline: .now() + timeout, execute: watchdog)
-
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        group.wait()
-        process.waitUntilExit()
-        watchdog.cancel()
-
-        return DockerCLIResult(standardOutput: String(decoding: outData, as: UTF8.self),
-                               standardError: String(decoding: errorBox.value, as: UTF8.self),
-                               exitCode: process.terminationStatus)
-    }
-
-    /// Kuyruklar arası tek yazar / tek okuyucu aktarımı; `group.wait()` sıralamayı garanti eder.
-    private final class DataBox: @unchecked Sendable {
-        var value = Data()
+        return await ExternalCommand.run(executablePath: path, arguments: arguments, timeout: timeout)
     }
 }
 
