@@ -22,12 +22,21 @@ struct TermoraApp: App {
                     backgroundColor: services.themes.theme(id: services.settings.settings.themeID).backgroundNSColor
                 )
                 .syncingTerminalAppearance(settings: services.settings, sessionManager: services.sessionManager)
+                .presentingOnboardingIfNeeded(settings: services.settings)
         }
         .defaultSize(width: 900, height: 560)
         .commands {
             AppCommands()
             ProfileCommands(profiles: services.profiles)
         }
+
+        // brief 3 "İlk Açılış Akışı": ayrı bir pencere; sheet olsaydı ana pencereyi
+        // kilitlerdi. Kapatıldığında terminal normal şekilde kullanılmaya devam eder.
+        Window("Welcome to Termora", id: OnboardingScene.windowID) {
+            OnboardingWindowView(settings: services.settings, themes: services.themes)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
 
         Settings {
             SettingsWindowView(settings: services.settings,
