@@ -26,3 +26,4 @@ Packages/
 timeline.xctimeline
 playground.xcworkspace
 .claude/
+build/
