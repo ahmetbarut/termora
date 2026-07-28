@@ -8,8 +8,22 @@ private final class FixtureBundleToken {}
 @Suite struct ThemeStoreTests {
     private var fixtureBundle: Bundle { Bundle(for: FixtureBundleToken.self) }
 
+    /// Paket temalarını sınayan her testin kullanıcı klasörü BOŞ olmalı. Uygulama sandbox'sız
+    /// olduğu için varsayılan klasör geliştiricinin gerçek Application Support'udur; oradan
+    /// okuyan bir test makineden makineye farklı sonuç verirdi.
+    static func store(bundle: Bundle) -> ThemeStore {
+        ThemeStore(bundle: bundle, userThemesDirectory: emptyDirectory())
+    }
+
+    /// Var olmayan benzersiz bir yol: `ThemeStore` okuyamadığı klasörü boş sayar,
+    /// böylece test diske hiçbir şey bırakmaz.
+    static func emptyDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("termora-no-user-themes-\(UUID().uuidString)", isDirectory: true)
+    }
+
     @Test func loadsValidFixtureTheme() {
-        let store = ThemeStore(bundle: fixtureBundle)
+        let store = Self.store(bundle: fixtureBundle)
         let theme = store.theme(id: "fixture-valid")
         #expect(theme.id == "fixture-valid")
         #expect(theme.name == "Fixture Valid")
@@ -17,12 +31,12 @@ private final class FixtureBundleToken {}
     }
 
     @Test func skipsBrokenFixtureTheme() {
-        let store = ThemeStore(bundle: fixtureBundle)
+        let store = Self.store(bundle: fixtureBundle)
         #expect(!store.themes.contains { $0.id == "fixture-broken" })
     }
 
     @Test func unknownIDReturnsFallback() {
-        let store = ThemeStore(bundle: fixtureBundle)
+        let store = Self.store(bundle: fixtureBundle)
         let theme = store.theme(id: "no-such-theme")
         #expect(theme == ThemeStore.fallback)
         #expect(theme.id == "termora-dark")
@@ -35,7 +49,7 @@ private final class FixtureBundleToken {}
     }
 
     @Test func appBundleShipsFiveThemes() {
-        let store = ThemeStore(bundle: .main)
+        let store = Self.store(bundle: .main)
         let ids = Set(store.themes.map(\.id))
         #expect(ids.isSuperset(of: ["termora-dark", "termora-light", "dracula", "nord", "tokyo-night"]))
     }

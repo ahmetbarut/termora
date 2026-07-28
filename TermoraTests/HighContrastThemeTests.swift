@@ -12,10 +12,14 @@ import Testing
 @Suite("Yüksek kontrast teması")
 struct HighContrastThemeTests {
 
-    private var theme: Theme { ThemeStore(bundle: .main).theme(id: Theme.highContrastID) }
+    /// Kullanıcı klasörü kasten BOŞ: ölçülen şey paketle gelen dosyanın kendisidir,
+    /// geliştiricinin makinesinde duran temalar sonucu değiştirmemeli.
+    private var theme: Theme {
+        ThemeStoreTests.store(bundle: .main).theme(id: Theme.highContrastID)
+    }
 
     @Test func theHighContrastThemeShipsWithTheApp() {
-        let store = ThemeStore(bundle: .main)
+        let store = ThemeStoreTests.store(bundle: .main)
         #expect(store.themes.contains { $0.id == Theme.highContrastID })
         #expect(store.isBuiltIn(id: Theme.highContrastID))
         #expect(theme.name == "Termora High Contrast")
