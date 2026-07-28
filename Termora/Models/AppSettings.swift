@@ -43,6 +43,10 @@ struct AppSettings: Codable, Equatable {
     /// brief 3 "İlk Açılış Akışı": ilk açılış akışı yalnızca bir kez gösterilir.
     /// Akış tamamlandığında **ve atlandığında** true olur.
     var hasCompletedOnboarding: Bool = false
+    /// briefs/2 "Oturum Geri Yükleme": önceki oturum İSTEĞE BAĞLI geri yüklenir.
+    /// Varsayılan KAPALI — açıkken uygulama, açık pencerelerin çalışma dizinlerini
+    /// diske yazar; bu, kullanıcının açıkça istemesi gereken bir iz bırakmadır.
+    var restoresPreviousSession: Bool = false
 
     init() {}
 
@@ -69,5 +73,9 @@ struct AppSettings: Codable, Equatable {
         showStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showStatusBar) ?? defaults.showStatusBar
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding)
             ?? defaults.hasCompletedOnboarding
+        // Güvenlik/gizlilik: bayrak eksikse KAPALI kabul edilir. Eksik veri asla oturum
+        // kaydını kendiliğinden açmamalı.
+        restoresPreviousSession = try container.decodeIfPresent(Bool.self, forKey: .restoresPreviousSession)
+            ?? defaults.restoresPreviousSession
     }
 }

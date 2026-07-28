@@ -20,6 +20,8 @@ import Testing
         #expect(settings.showStatusBar == true)
         // brief 3 "İlk Açılış Akışı": ilk açılışta onboarding gösterilir.
         #expect(settings.hasCompletedOnboarding == false)
+        // briefs/2 "Oturum Geri Yükleme": isteğe bağlı; kullanıcı açıkça istemeli.
+        #expect(settings.restoresPreviousSession == false)
     }
 
     @Test func codableRoundTrip() throws {
@@ -35,10 +37,12 @@ import Testing
         settings.startupDirectory = "/Users/me"
         settings.showStatusBar = false
         settings.hasCompletedOnboarding = true
+        settings.restoresPreviousSession = true
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
         #expect(decoded == settings)
         #expect(decoded.hasCompletedOnboarding == true)
+        #expect(decoded.restoresPreviousSession == true)
     }
 
     /// Eski (onboarding alanı olmayan) bloblar hâlâ çözülmeli; aksi hâlde güncelleyen
@@ -48,6 +52,9 @@ import Testing
         let decoded = try JSONDecoder().decode(AppSettings.self, from: legacy)
         #expect(decoded.themeID == "nord")
         #expect(decoded.hasCompletedOnboarding == false)
+        // Eksik bayrak KAPALI demektir: güncelleyen kullanıcı için oturum kaydı
+        // kendiliğinden açılmaz.
+        #expect(decoded.restoresPreviousSession == false)
     }
 
     @Test func cursorStyleMapsToSwiftTermForAllSixCases() {
