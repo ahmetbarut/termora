@@ -82,6 +82,10 @@ final class WindowCloseCoordinator: NSObject, NSWindowDelegate {
     /// GERÇEKLENMEYEN seçiciler için devreye girer).
     private func observeWindowNotifications(_ window: NSWindow) {
         let center = NotificationCenter.default
+        // Başka bir pencereye bağlanılıyorsa eskisinin gözlemcileri düşer: eski pencerenin
+        // kapanışı aksi hâlde bu koordinatörü "kapalı" işaretlerdi.
+        for observer in windowObservers { center.removeObserver(observer) }
+        windowObservers.removeAll()
         windowObservers.append(center.addObserver(
             forName: NSWindow.willEnterFullScreenNotification, object: window, queue: .main
         ) { [weak self, weak window] _ in

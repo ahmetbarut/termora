@@ -207,7 +207,10 @@ enum SessionRestorePlan {
     }
 
     /// Diskte gerçekten var olan bir DİZİN mi? Geri yüklemede varsayılan denetim budur.
-    static func directoryExistsOnDisk(_ path: String) -> Bool {
+    ///
+    /// `nonisolated`: proje varsayılanı `MainActor` olduğu için aksi hâlde bu saf işlev de
+    /// aktöre bağlanır ve varsayılan argüman olarak geçirilmesi Swift 6 kipinde HATA olur.
+    nonisolated static func directoryExistsOnDisk(_ path: String) -> Bool {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
         return exists && isDirectory.boolValue
