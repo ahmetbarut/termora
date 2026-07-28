@@ -68,6 +68,19 @@ struct AppSettings: Codable, Equatable {
     /// Bu süreden KISA işlemler bildirilmez (briefs/2). Saniye.
     var longCommandThresholdSeconds: Double = CommandNotificationLimits.defaultThreshold
 
+    // MARK: - AI (briefs/2 "AI Asistanı")
+
+    /// Ollama sunucusunun adresi. Yerel çalışır ve API anahtarı İSTEMEZ — bu yüzden
+    /// burada saklanabilir, Keychain'e gerek yoktur (saklanan bir sır yok).
+    var aiEndpoint: String = OllamaEndpoint.defaultAddress
+
+    /// Kullanıcının seçtiği model. `nil`: henüz seçilmemiş ya da seçilen silinmiş.
+    /// Termora bir model ADI uydurmaz; liste sunucudan gelir.
+    var aiModel: String? = nil
+
+    /// AI'a hangi bağlamların gönderileceği (briefs/2 "Terminal Bağlamı").
+    var aiContext: AIContextPreferences = AIContextPreferences()
+
     init() {}
 
     /// Elle yazılmış çözücü: Swift'in ürettiği `init(from:)` eksik anahtarlarda
@@ -107,5 +120,12 @@ struct AppSettings: Codable, Equatable {
             ?? defaults.notifiesOnCommandFailure
         longCommandThresholdSeconds = try container.decodeIfPresent(Double.self, forKey: .longCommandThresholdSeconds)
             ?? defaults.longCommandThresholdSeconds
+        aiEndpoint = try container.decodeIfPresent(String.self, forKey: .aiEndpoint) ?? defaults.aiEndpoint
+        aiModel = try container.decodeIfPresent(String.self, forKey: .aiModel)
+        // Bağlam tercihleri KENDİ ileri uyumlu çözücüsüne sahiptir; ileride eklenen bir
+        // bağlam türü eski blobu bozmaz. Blok tamamen bozuksa varsayılana düşer —
+        // gizlilik açısından güvenli yön budur (varsayılanlar geçmişi göndermiyor).
+        aiContext = (try? container.decodeIfPresent(AIContextPreferences.self, forKey: .aiContext))
+            .flatMap { $0 } ?? defaults.aiContext
     }
 }
