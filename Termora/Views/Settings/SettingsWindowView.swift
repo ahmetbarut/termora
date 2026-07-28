@@ -10,6 +10,7 @@ enum SettingsTab: String, CaseIterable {
     case profiles
     case workspaces
     case ssh
+    case ai
     case privacy
 
     var title: String {
@@ -19,6 +20,7 @@ enum SettingsTab: String, CaseIterable {
         case .profiles: "Profiles"
         case .workspaces: "Workspaces"
         case .ssh: "SSH"
+        case .ai: "AI"
         case .privacy: "Privacy"
         }
     }
@@ -30,6 +32,7 @@ enum SettingsTab: String, CaseIterable {
         case .profiles: "person.crop.rectangle.stack"
         case .workspaces: CommandPaletteCategory.workspaces.symbolName
         case .ssh: CommandPaletteCategory.ssh.symbolName
+        case .ai: "sparkles"
         case .privacy: "hand.raised"
         }
     }
@@ -51,6 +54,10 @@ struct SettingsWindowView: View {
     var ssh: SSHHostStore = .shared
     /// Ayarlar penceresinin terminali yok; bağlanma isteği anahtar pencereye iletilir.
     var connectSSH: ((SSHTarget) -> Void)?
+    /// Kurulu Ollama modelleri. Panelle AYNI mantığı paylaşır (bkz. `AIModelCatalog`),
+    /// böylece iki ekran "model yok" durumunu aynı cümlelerle anlatır.
+    /// Verilmezse `AppServices`'in kaydettiği kataloğa düşer.
+    var aiCatalog: AIModelCatalog?
 
     var body: some View {
         TabView {
@@ -71,6 +78,11 @@ struct SettingsWindowView: View {
 
             SSHSettingsView(hosts: ssh, connect: connectSSH)
                 .tabItem { label(for: .ssh) }
+
+            if let catalog = aiCatalog ?? AIModelCatalog.current {
+                AISettingsView(catalog: catalog, settings: settings)
+                    .tabItem { label(for: .ai) }
+            }
 
             PrivacySettingsView()
                 .tabItem { label(for: .privacy) }

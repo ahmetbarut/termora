@@ -30,6 +30,14 @@ final class AppServices {
     /// paylaşılır: hangi pencere klasör açarsa açsın geçmiş TEKTİR.
     let recentFolders: RecentFoldersStore
 
+    /// AI sağlayıcısı (briefs/2 "AI Asistanı"). Durumsuzdur ve uç noktayı her istekte
+    /// ayarlardan okur, bu yüzden pencereler arasında paylaşılabilir. Konuşma paylaşılmaz:
+    /// her pencerenin kendi `AIPanelModel`'i vardır.
+    let aiProvider: any AIProviding
+
+    /// Kurulu model listesi. Panel ve Ayarlar ▸ AI aynı listeye bakar.
+    let aiCatalog: AIModelCatalog
+
     /// Settings is a separate scene, so it cannot reach a window's `WorkspaceViewModel`.
     /// It parks the request here; the key window picks it up and clears it. Per-window view
     /// models stay per-window, and a workspace never opens in a window nobody is looking at.
@@ -105,6 +113,17 @@ final class AppServices {
         self.sshHosts = SSHHostStore(defaults: defaults)
         self.recentFolders = RecentFoldersStore(defaults: defaults)
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
+
+        // Uç nokta bir KAPANIŞ olarak verilir, dize olarak değil: kullanıcı Ayarlar ▸ AI'da
+        // adresi değiştirdiğinde istemcinin yeniden kurulması gerekmez.
+        let aiProvider = OllamaClient(endpoint: { settings.settings.aiEndpoint },
+                                      transport: URLSessionAITransport())
+        self.aiProvider = aiProvider
+        let aiCatalog = AIModelCatalog(provider: aiProvider, settings: settings)
+        self.aiCatalog = aiCatalog
+        // Ayarlar penceresini kuran `TermoraApp` bu görevin kapsamı dışında; katalog oraya
+        // argüman olarak geçirilemediği için burada kaydedilir (bkz. `AIModelCatalog.current`).
+        AIModelCatalog.current = aiCatalog
 
         let sessionRestore = SessionRestoreStore(defaults: defaults)
         self.sessionRestore = sessionRestore
