@@ -281,6 +281,8 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         let view = makeView(sessionID: id)
         views[id] = view
 
+        startForegroundSamplingIfNeeded()
+
         // The pane's `TerminalHostView` is keyed on this, so SwiftUI drops the dead NSView and
         // hosts the new one; the session id — and therefore the pane and the tab — stays put.
         session.restartGeneration += 1
