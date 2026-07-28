@@ -119,6 +119,11 @@ struct AISettingsView: View {
         .onAppear {
             endpointDraft = settings.settings.aiEndpoint
         }
+        .task {
+            // Sayfa açıldığında liste bir kez sorulur; yoksa kullanıcı gerekçesiz bir
+            // "No model available" satırına bakar ve ne yapacağını bilemez.
+            if catalog.availability == .idle { await catalog.refresh() }
+        }
     }
 
     @ViewBuilder

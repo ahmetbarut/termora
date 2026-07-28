@@ -128,6 +128,21 @@ struct AIPanelModelTests {
         #expect(model.selectedModel == "a")
     }
 
+    /// Panel ve Ayarlar ▸ AI AYNI listeye bakmalı. Ayrı katalogları olsaydı biri
+    /// "model yok" derken diğeri hiçbir şey söylemezdi (görsel doğrulamada yakalandı).
+    @Test func thePanelAndSettingsShareOneModelList() async {
+        let provider = FakeAIProvider()
+        let (settings, suite) = makeSettings()
+        defer { clean(suite) }
+        let catalog = AIModelCatalog(provider: provider, settings: settings)
+        let model = AIPanelModel(provider: provider, settings: settings, catalog: catalog)
+
+        await model.refreshModels()
+
+        #expect(catalog.availability == model.availability)
+        #expect(provider.modelQueries == 1, "aynı liste iki kez soruldu")
+    }
+
     // MARK: - Model YOKKEN dürüst durum (bu makinenin gerçek hâli)
 
     @Test func noModelsInstalledIsExplainedWithTheCommandThatFixesIt() async throws {

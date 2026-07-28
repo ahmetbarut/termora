@@ -84,7 +84,9 @@ struct MainWindowView: View {
 
         let bridge = WorkspaceTerminalBridge(workspace: workspace,
                                              sessionManager: services.sessionManager)
-        let panel = AIPanelModel(provider: services.aiProvider, settings: services.settings)
+        let panel = AIPanelModel(provider: services.aiProvider,
+                                 settings: services.settings,
+                                 catalog: services.aiCatalog)
         panel.bridge = bridge
         _terminalBridge = State(initialValue: bridge)
         _ai = State(initialValue: panel)

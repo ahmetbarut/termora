@@ -114,10 +114,13 @@ final class AIPanelModel {
     /// Onay bekleyen komut. Doluyken terminale HİÇBİR ŞEY yazılmamıştır.
     private(set) var pendingRun: AICommandSuggestion?
 
-    init(provider: any AIProviding, settings: SettingsStore) {
+    /// - Parameter catalog: verilmezse kendi kataloğunu kurar. Üretimde `AppServices`'in
+    ///   kataloğu geçirilir; aksi hâlde Ayarlar ▸ AI ile panel AYRI listelere bakar ve
+    ///   biri "model yok" derken diğeri hiçbir şey söylemez (görsel doğrulamada yakalandı).
+    init(provider: any AIProviding, settings: SettingsStore, catalog: AIModelCatalog? = nil) {
         self.provider = provider
         self.settings = settings
-        self.catalog = AIModelCatalog(provider: provider, settings: settings)
+        self.catalog = catalog ?? AIModelCatalog(provider: provider, settings: settings)
     }
 
     // MARK: - Model seçimi
