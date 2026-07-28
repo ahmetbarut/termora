@@ -48,6 +48,26 @@ struct AppSettings: Codable, Equatable {
     /// diske yazar; bu, kullanıcının açıkça istemesi gereken bir iz bırakmadır.
     var restoresPreviousSession: Bool = false
 
+    /// briefs/2 "Bildirimler": uzun süren bir işlem bittiğinde İSTEĞE BAĞLI bildirim.
+    ///
+    /// Varsayılan KAPALI. İki gerekçe: (1) briefs/3 "Ses Kullanımı" uygulamanın varsayılan
+    /// olarak sessiz olmasını istiyor ve bildirim de sessizliğin bir parçası; (2) ilk bildirim
+    /// macOS izin sayfasını açar — kullanıcının istemediği bir özellik için sistem izni sormak
+    /// kabalıktır. Kullanıcı anahtarı açtığında izin sorusunu kendisi davet etmiş olur.
+    var notifiesOnLongCommands: Bool = false
+
+    /// briefs/2: başarılı ve başarısız işlemler AYRI ayarlanabilir. Ana anahtar açıkken
+    /// ikisi de açık gelir — "bildir" diyen kullanıcı sessizlik değil bildirim bekler.
+    ///
+    /// Çıkış durumu gözlenemeyen komutlar (bugün hepsi, bkz. `CommandOutcome`) bu anahtara
+    /// bağlıdır: Termora başarısızlığı KANITLAYAMADIĞI için onları "başarısız" filtresine
+    /// koymak, yalnız hataları duymak isteyen kullanıcıya her komutu bildirmek olurdu.
+    var notifiesOnCommandSuccess: Bool = true
+    var notifiesOnCommandFailure: Bool = true
+
+    /// Bu süreden KISA işlemler bildirilmez (briefs/2). Saniye.
+    var longCommandThresholdSeconds: Double = CommandNotificationLimits.defaultThreshold
+
     init() {}
 
     /// Elle yazılmış çözücü: Swift'in ürettiği `init(from:)` eksik anahtarlarda
@@ -77,5 +97,15 @@ struct AppSettings: Codable, Equatable {
         // kaydını kendiliğinden açmamalı.
         restoresPreviousSession = try container.decodeIfPresent(Bool.self, forKey: .restoresPreviousSession)
             ?? defaults.restoresPreviousSession
+        // Aynı gerekçe: bayrak eksikse KAPALI. Güncelleyen kullanıcıya, istemediği bir özellik
+        // için macOS bildirim izni sorusu kendiliğinden çıkmamalı.
+        notifiesOnLongCommands = try container.decodeIfPresent(Bool.self, forKey: .notifiesOnLongCommands)
+            ?? defaults.notifiesOnLongCommands
+        notifiesOnCommandSuccess = try container.decodeIfPresent(Bool.self, forKey: .notifiesOnCommandSuccess)
+            ?? defaults.notifiesOnCommandSuccess
+        notifiesOnCommandFailure = try container.decodeIfPresent(Bool.self, forKey: .notifiesOnCommandFailure)
+            ?? defaults.notifiesOnCommandFailure
+        longCommandThresholdSeconds = try container.decodeIfPresent(Double.self, forKey: .longCommandThresholdSeconds)
+            ?? defaults.longCommandThresholdSeconds
     }
 }

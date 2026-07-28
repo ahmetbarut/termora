@@ -44,6 +44,20 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
     private var sessions: [UUID: TerminalSession] = [:]
     @ObservationIgnored private var views: [UUID: TermoraTerminalView] = [:]
 
+    /// briefs/2 "Bildirimler". Lives here because this is the only object that owns both the
+    /// shell pids and the AppKit views — the two things needed to answer "did a command just
+    /// finish?" and "is the user looking at it?".
+    @ObservationIgnored private let notifier: CommandCompletionNotifier
+
+    /// How often the foreground process group is sampled. One second matches the tickers the
+    /// window already runs for tab titles and the status bar, and it bounds the error on a
+    /// reported duration to a single second.
+    static let foregroundSampleInterval: Duration = .seconds(1)
+
+    /// Runs only while at least one session exists. Holds `self` weakly so the manager can be
+    /// released; the loop then ends on its own.
+    @ObservationIgnored private var samplingTask: Task<Void, Never>?
+
     /// `profiles` is injected from day one: `restartSession` needs the session's profile to
     /// bring the shell back up with the same environment, and Task 19 resolves the per-profile
     /// theme/font override through the same store. Every call site (AppServices, tests) is
@@ -52,12 +66,14 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         settings: SettingsStore,
         themes: ThemeStore,
         profiles: ProfileStore,
-        escalationDelay: TimeInterval = 1.5
+        escalationDelay: TimeInterval = 1.5,
+        notifier: CommandCompletionNotifier? = nil
     ) {
         self.settings = settings
         self.themes = themes
         self.profiles = profiles
         self.escalationDelay = escalationDelay
+        self.notifier = notifier ?? CommandCompletionNotifier(settings: settings)
     }
 
     // MARK: - SessionManaging
@@ -91,6 +107,7 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
             workingDirectory: directory
         )
 
+        startForegroundSamplingIfNeeded()
         return session
     }
 
@@ -100,6 +117,10 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
 
     func terminateSession(id: UUID) {
         sessions[id] = nil
+        // Before the view goes: whatever was running in this pane did not "complete", the user
+        // closed it. `sessionEnded` drops it without announcing anything.
+        notifier.sessionEnded(sessionID: id)
+        defer { stopForegroundSamplingIfIdle() }
         guard let view = views.removeValue(forKey: id) else { return }
         view.processDelegate = nil
         killProcess(of: view)
@@ -108,6 +129,65 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
     func hasRunningProcess(sessionID: UUID) -> Bool {
         guard let process = views[sessionID]?.process else { return false }
         return ProcessProbe.hasForegroundJob(masterFD: process.childfd, shellPID: process.shellPid)
+    }
+
+    // MARK: - Command completion notifications (briefs/2 "Bildirimler")
+
+    /// One sampling pass over every live session: who owns each pty right now?
+    ///
+    /// Internal rather than private so a test can step it deterministically instead of racing
+    /// the one-second loop. `ForegroundProcessProbe` answers "the shell itself" with nil, which
+    /// is exactly the idle state `CommandActivityTracker` expects.
+    func sampleForegroundCommands(now: Date = Date()) {
+        for sessionID in views.keys {
+            let command = shellPID(sessionID: sessionID).flatMap {
+                ForegroundProcessProbe.foregroundCommandName(shellPID: $0)
+            }
+            notifier.sample(
+                sessionID: sessionID,
+                foregroundCommand: command,
+                profile: profile(forSession: sessionID),
+                isTerminalVisibleToUser: isTerminalVisibleToUser(sessionID: sessionID),
+                now: now
+            )
+        }
+    }
+
+    /// True only when the user can actually see this pane's output right now: the app is
+    /// active, the pane is in the key window and nothing is covering it in the view tree
+    /// (an inactive tab's pane is hidden or has no window at all).
+    ///
+    /// This is the one genuinely untestable input of the notification decision, which is why
+    /// it is a single expression and the rule that consumes it is pure.
+    private func isTerminalVisibleToUser(sessionID: UUID) -> Bool {
+        guard NSApp.isActive,
+              let view = views[sessionID],
+              let window = view.window,
+              window.isKeyWindow
+        else { return false }
+        return !view.isHiddenOrHasHiddenAncestor
+    }
+
+    /// Sampling costs one `proc_pidinfo` per session per second and runs regardless of the
+    /// notification setting: it has to, otherwise a command already running when the user
+    /// flips the switch on would have no start time and could never be announced.
+    private func startForegroundSamplingIfNeeded() {
+        guard samplingTask == nil else { return }
+        samplingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.foregroundSampleInterval)
+                // `weak self` keeps the loop from holding the manager alive; once it is gone
+                // there is nothing left to sample.
+                guard !Task.isCancelled, let self else { return }
+                self.sampleForegroundCommands()
+            }
+        }
+    }
+
+    private func stopForegroundSamplingIfIdle() {
+        guard views.isEmpty else { return }
+        samplingTask?.cancel()
+        samplingTask = nil
     }
 
     // MARK: - Shell lifecycle
@@ -179,6 +259,9 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
 
     func restartSession(id: UUID, forceDefaultShell: Bool) {
         guard let session = sessions[id] else { return }
+
+        // The old shell — and anything it was running — is about to be killed on purpose.
+        notifier.sessionEnded(sessionID: id)
 
         if let oldView = views.removeValue(forKey: id) {
             // Clear the delegate first: `terminate()` fires processTerminated on the main queue

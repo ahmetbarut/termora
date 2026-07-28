@@ -22,6 +22,14 @@ import Testing
         #expect(settings.hasCompletedOnboarding == false)
         // briefs/2 "Oturum Geri Yükleme": isteğe bağlı; kullanıcı açıkça istemeli.
         #expect(settings.restoresPreviousSession == false)
+        // briefs/2 "Bildirimler" isteğe bağlı + briefs/3 "Ses Kullanımı" varsayılan sessiz:
+        // ana anahtar KAPALI gelir, böylece macOS izin sorusu istenmeden çıkmaz.
+        #expect(settings.notifiesOnLongCommands == false)
+        // Ana anahtar açıldığında iki alt filtre de açıktır: kullanıcı "bildir" dediğinde
+        // sessizlik değil, bildirim bekler.
+        #expect(settings.notifiesOnCommandSuccess == true)
+        #expect(settings.notifiesOnCommandFailure == true)
+        #expect(Double(settings.longCommandThresholdSeconds) == 30)
     }
 
     @Test func codableRoundTrip() throws {
@@ -38,11 +46,19 @@ import Testing
         settings.showStatusBar = false
         settings.hasCompletedOnboarding = true
         settings.restoresPreviousSession = true
+        settings.notifiesOnLongCommands = true
+        settings.notifiesOnCommandSuccess = false
+        settings.notifiesOnCommandFailure = false
+        settings.longCommandThresholdSeconds = 120
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
         #expect(decoded == settings)
         #expect(decoded.hasCompletedOnboarding == true)
         #expect(decoded.restoresPreviousSession == true)
+        #expect(decoded.notifiesOnLongCommands == true)
+        #expect(decoded.notifiesOnCommandSuccess == false)
+        #expect(decoded.notifiesOnCommandFailure == false)
+        #expect(Double(decoded.longCommandThresholdSeconds) == 120)
     }
 
     /// Eski (onboarding alanı olmayan) bloblar hâlâ çözülmeli; aksi hâlde güncelleyen
@@ -55,6 +71,12 @@ import Testing
         // Eksik bayrak KAPALI demektir: güncelleyen kullanıcı için oturum kaydı
         // kendiliğinden açılmaz.
         #expect(decoded.restoresPreviousSession == false)
+        // Aynı gerekçe bildirimler için de geçerli: güncelleyen kullanıcıya izin sorusu
+        // kendiliğinden sorulmaz.
+        #expect(decoded.notifiesOnLongCommands == false)
+        #expect(decoded.notifiesOnCommandSuccess == true)
+        #expect(decoded.notifiesOnCommandFailure == true)
+        #expect(Double(decoded.longCommandThresholdSeconds) == 30)
     }
 
     @Test func cursorStyleMapsToSwiftTermForAllSixCases() {

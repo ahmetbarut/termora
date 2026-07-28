@@ -13,11 +13,13 @@ import Testing
         profile.fontSize = 14
         profile.themeID = "nord"
         profile.environment = ["FOO": "bar"]
+        profile.suppressesCommandNotifications = true
 
         let data = try JSONEncoder().encode(profile)
         let decoded = try JSONDecoder().decode(TerminalProfile.self, from: data)
         #expect(decoded == profile)
         #expect(decoded.id == profile.id)
+        #expect(decoded.suppressesCommandNotifications == true)
     }
 
     @Test func minimalProfileHasExpectedDefaults() {
@@ -30,6 +32,19 @@ import Testing
         #expect(profile.fontSize == nil)
         #expect(profile.themeID == nil)
         #expect(profile.environment.isEmpty)
+        // briefs/2 "Bildirimler": profil bazında KAPATILABİLİR. Varsayılan olarak kapatılmaz —
+        // profil, global ayarı devralır.
+        #expect(profile.suppressesCommandNotifications == false)
+    }
+
+    /// Bildirim alanı olmayan eski bloblar çözülmeye devam etmeli; aksi hâlde `ProfileStore`
+    /// o kaydı bozuk sayar ve kullanıcının profili kaybolur.
+    @Test func legacyProfileWithoutNotificationFlagStillDecodes() throws {
+        let id = UUID()
+        let legacy = Data(#"{"id":"\#(id.uuidString)","name":"Legacy","environment":{}}"#.utf8)
+        let decoded = try JSONDecoder().decode(TerminalProfile.self, from: legacy)
+        #expect(decoded.name == "Legacy")
+        #expect(decoded.suppressesCommandNotifications == false)
     }
 
     @Test func newProfilesGetDistinctIDs() {
