@@ -1,15 +1,26 @@
 import AppKit
 import SwiftUI
 
-/// Ekran 3.
+/// Ekran 3 — "İsteğe Bağlı Özellikler" (briefs/2).
 ///
-/// Brief bu ekranda üç isteğe bağlı özellik listeler (Open in Finder, Shell Integration,
-/// Restore Previous Sessions). Üçü de bugün uygulamada YOK; hiçbir şey yapmayan anahtar
-/// koymak kullanıcıyı yanıltır. Bu yüzden ekran, yapılan seçimleri özetleyip gerçekten
-/// çalışan kısayolları gösterir ve "Open Termora" ile kapanır.
+/// Brief burada üç şey sayıyor: Shell integration kurulumu, Finder entegrasyonu ve AI
+/// sağlayıcısı bağlantısı. Bugünkü gerçek:
+/// - **AI sağlayıcısı:** VAR. Aşağıda bir durum satırı olarak gösteriliyor; kurulum
+///   ZORUNLU değildir (briefs/3), bu yüzden ekran hiçbir cevabı beklemez.
+/// - **Finder entegrasyonu:** VAR ama bir anahtarı yok — `termora://` şeması ve Finder ▸
+///   Services girdisi uygulama paketinin parçası, kullanıcı açıp kapatamaz. Kapatılamayan
+///   bir şey için anahtar koymak yalan olurdu.
+/// - **Shell integration:** bugün uygulamada YOK. Hiçbir şey yapmayan bir anahtar
+///   kullanıcıyı yanıltır, o yüzden satırı da yok.
+///
+/// Geri kalanı yapılan seçimleri özetler, gerçekten çalışan kısayolları gösterir ve
+/// "Open Termora" ile kapanır.
 struct OnboardingSummaryView: View {
     let state: OnboardingState
     let themes: ThemeStore
+    /// AI durumu. Nil ise satır hiç çizilmez — AI'ı hiç kurmamış bir bağlamda (testler,
+    /// önizleme) "bulunamadı" demek yanlış olurdu; bilinmiyor demek doğrusu.
+    var aiCatalog: AIModelCatalog? = AIModelCatalog.current
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -20,6 +31,11 @@ struct OnboardingSummaryView: View {
                 summaryRow("Shell", value: shellSummary)
                 summaryRow("Font", value: fontSummary)
                 summaryRow("Theme", value: themes.theme(id: state.selections.themeID).name)
+            }
+
+            if let aiCatalog {
+                Divider()
+                aiRow(aiCatalog)
             }
 
             Divider()
@@ -42,6 +58,28 @@ struct OnboardingSummaryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(24)
+    }
+
+    /// Durum satırı. Sunucuya sorulur ama CEVABI BEKLENMEZ: `.task` arka planda çalışır,
+    /// "Open Termora" düğmesi hiçbir an devre dışı kalmaz (briefs/3: AI kurulumu ilk açılış
+    /// için zorunlu değildir).
+    private func aiRow(_ catalog: AIModelCatalog) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(OnboardingAIContent.title)
+                .font(.system(size: 13, weight: .medium))
+            Text(OnboardingAIContent.summary(for: catalog.availability,
+                                             providerName: catalog.providerName))
+                .font(.system(size: 12))
+            Text(OnboardingAIContent.optionalNote)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+        .task {
+            // Yalnız hiç sorulmadıysa sorulur; ekrana her dönüşte yeni bir istek açmaz.
+            if catalog.availability == .idle { await catalog.refresh() }
+        }
     }
 
     private var shellSummary: String {
