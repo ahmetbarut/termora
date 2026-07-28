@@ -83,6 +83,16 @@ final class WorkspaceViewModel {
     var activeTabID: UUID?
     var pendingClose: PendingClose?
 
+    /// Bu pencerenin oturum kaydındaki kimliği. Geri yüklenen pencere kayıttaki kimliği
+    /// DEVRALIR (`restoreSession`); aksi hâlde `SessionRestoreStore.record` upsert'i şaşar
+    /// ve aynı pencere her açılışta bir kez daha kaydedilirdi.
+    private(set) var sessionWindowID = UUID()
+
+    /// Pencerede o an açık olan workspace kaydı; hiç açılmadıysa nil.
+    /// Yalnız oturum kaydında saklanır — geri yüklemede workspace'in ORTAMI ve profili
+    /// yeniden uygulanmaz (bkz. `restoreSession`).
+    private(set) var openWorkspaceID: UUID?
+
     /// Onay bekleyen workspace açılışı; nil ise bekleyen yok.
     private(set) var pendingWorkspaceLaunch: PendingWorkspaceLaunch?
 
@@ -703,6 +713,7 @@ final class WorkspaceViewModel {
             newTab()
         }
         syncAutomaticTitles()
+        openWorkspaceID = workspace.id
         workspaces?.markOpened(id: workspace.id, at: now())
     }
 
@@ -756,5 +767,101 @@ final class WorkspaceViewModel {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
         return trimmed
+    }
+
+    // MARK: - Oturum geri yükleme (briefs/2)
+
+    /// Pencerenin o anki hâlini diske yazılabilir bir anlık görüntüye çevirir.
+    ///
+    /// Sekme KİMLİKLERİ korunur (workspace yakalamadan farkı budur): `activeTabID` ancak
+    /// kimlikler hayatta kalırsa geri yüklemede bir şeye işaret eder. Panel dizinleri canlı
+    /// oturumlardan okunur — kullanıcı `cd` yaptıysa kayda giden dizin de odur.
+    func captureSessionWindow(frame: SessionWindowFrame? = nil,
+                              isFullScreen: Bool = false) -> SessionWindowSnapshot {
+        let captured = tabs.map { tab -> SessionTabSnapshot in
+            let directories = liveWorkingDirectories(in: tab.root)
+            return SessionTabSnapshot(
+                tab: WorkspaceTab(id: tab.id,
+                                  title: tab.customTitle,
+                                  layout: WorkspaceSnapshot.layout(from: tab.root) { directories[$0] }),
+                activePaneID: tab.activePaneID)
+        }
+        return SessionWindowSnapshot(id: sessionWindowID,
+                                     tabs: captured,
+                                     activeTabID: activeTabID,
+                                     frame: frame,
+                                     isFullScreen: isFullScreen,
+                                     workspaceID: openWorkspaceID)
+    }
+
+    /// Kayıtlı bir pencereyi kurar: her panel için YENİ bir shell başlar ve kayıtlı dizine
+    /// geçilir. Süreç devamlılığı taklit EDİLMEZ (briefs/2).
+    ///
+    /// Güvenlik (briefs/2): hiçbir başlangıç komutu çalıştırılmaz. İki kilit birlikte durur —
+    /// `SessionRestorePlan` komutları düzenden söker, buradaki `createSession` çağrısı da
+    /// profili her zaman `nil` geçer. `SessionManager` komutu YALNIZ profilden okuduğu için
+    /// bu yolda çalıştırılabilecek bir komut kalmaz; workspace'in profili/ortamı da bilerek
+    /// yeniden uygulanmaz (profilin kendi `startupCommand`'i geri kapıyı açardı).
+    ///
+    /// - Returns: en az bir sekme kurulduysa `true`; kayıt boşsa hiçbir şeye dokunulmaz.
+    @discardableResult
+    func restoreSession(from window: SessionWindowSnapshot,
+                        directoryExists: (String) -> Bool = SessionRestorePlan.directoryExistsOnDisk) -> Bool {
+        let planned = SessionRestorePlan.tabs(for: window, directoryExists: directoryExists)
+        guard !planned.isEmpty else { return false }
+
+        var opened: [TerminalTab] = []
+        for plan in planned {
+            let root = restoredPaneNode(from: plan.layout)
+            guard let firstPaneID = root.leaves.first?.paneID else { continue }
+            let tab = TerminalTab(id: plan.id,
+                                  root: root,
+                                  activePaneID: plan.activePaneID ?? firstPaneID)
+            tab.customTitle = plan.title
+            opened.append(tab)
+        }
+        guard !opened.isEmpty else { return false }
+
+        tabs = opened
+        // Kayıttaki aktif sekme doğrulanır: çözülemeyen bir sekme atlanmış olabilir ve
+        // hiçbir sekmeye işaret etmeyen bir kimlik pencereyi boş gösterirdi.
+        activeTabID = opened.first { $0.id == window.activeTabID }?.id ?? opened.first?.id
+        sessionWindowID = window.id
+        openWorkspaceID = window.workspaceID
+        syncAutomaticTitles()
+        return true
+    }
+
+    /// Temizlenmiş düzeni canlı ağaca çevirir. Split kimlikleri saklanmadığı için yeniden
+    /// üretilir; panel kimlikleri korunur, böylece yakala → geri yükle → yakala aynı düzeni verir.
+    private func restoredPaneNode(from layout: WorkspaceLayout) -> PaneNode {
+        switch layout {
+        case let .pane(pane):
+            // Profil DAİMA nil: bkz. `restoreSession` güvenlik notu.
+            let session = sessionManager.createSession(profile: nil,
+                                                       workingDirectory: pane.startupDirectory)
+            return .leaf(paneID: pane.id, sessionID: session.id)
+        case let .split(axis, ratio, first, second):
+            return .split(id: UUID(),
+                          axis: axis,
+                          ratio: ratio,
+                          first: restoredPaneNode(from: first),
+                          second: restoredPaneNode(from: second))
+        }
+    }
+
+    /// Ağaçtaki oturumların GÜNCEL çalışma dizinleri. Aktif olmayan panellerin `cd`'si
+    /// `TerminalSession.workingDirectory`'ye yansımamış olabilir (durum çubuğu yalnız aktif
+    /// paneli 1 Hz'de yoklar), bu yüzden kayıt alınırken her panel için pid üzerinden
+    /// tazelenir. Yoklama başarısızsa oturumun bildiği son dizin kullanılır.
+    private func liveWorkingDirectories(in node: PaneNode) -> [UUID: String] {
+        var result: [UUID: String] = [:]
+        for leaf in node.leaves {
+            let probed = processInfoProvider
+                .flatMap { $0.shellPID(sessionID: leaf.sessionID) }
+                .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
+            result[leaf.sessionID] = probed ?? sessionManager.session(id: leaf.sessionID)?.workingDirectory
+        }
+        return result
     }
 }
