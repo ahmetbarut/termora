@@ -294,3 +294,41 @@ enum DockerCommand {
         SSHCommand.commandLine([executablePath] + arguments)
     }
 }
+
+// MARK: - Sekmede başlatma
+
+/// Bir docker komutunu YENİ BİR SEKMEDE çalıştırmak için gereken profil (`SSHLaunch` ile
+/// aynı kalıp). Kabuk kullanıcının varsayılanı kalır ve docker onun İÇİNDE çalışır:
+/// container'dan çıkıldığında sekme kapanmaz, aynı satırla yeniden girilebilir.
+enum DockerLaunch {
+
+    /// Kimliği her seferinde tazedir ve `ProfileStore`'da karşılığı YOKTUR: bu bir
+    /// kullanıcı profili değil, tek seferlik bir başlatma tarifidir.
+    static func profile(name: String, executablePath: String, arguments: [String]) -> TerminalProfile {
+        TerminalProfile(name: name,
+                        startupCommand: DockerCommand.commandLine(executablePath: executablePath,
+                                                                  arguments: arguments))
+    }
+}
+
+// MARK: - Onay metinleri
+
+/// briefs/2: "Silme, durdurma veya yeniden başlatma gibi etkili işlemlerde kullanıcıdan
+/// onay alınmalıdır." Diyalogda görünen metinler burada saf tutulur ki test edilebilsin.
+///
+/// brief 3 "Uygulama Metin Dili": belirsiz "OK"/"Yes" yok; buton eylemi adlandırır.
+enum DockerActionPrompt {
+
+    static let restartConfirmLabel = "Restart Container"
+    static let cancelLabel = "Cancel"
+
+    static func restartTitle(containerName: String) -> String {
+        "Restart the container “\(containerName)”?"
+    }
+
+    /// Sonuç açıkça yazılır: yeniden başlatmak container'ı DURDURUP tekrar başlatır.
+    static func restartMessage(containerName: String) -> String {
+        "Docker stops “\(containerName)” and starts it again. "
+            + "Anything running inside the container is interrupted."
+    }
+}

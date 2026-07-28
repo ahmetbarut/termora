@@ -49,6 +49,22 @@ struct PendingWorkspaceLaunch: Identifiable, Equatable {
     var commands: [String]
 }
 
+/// Onay bekleyen ETKİLİ bir Docker işlemi (briefs/2: "Silme, durdurma veya yeniden
+/// başlatma gibi etkili işlemlerde kullanıcıdan onay alınmalıdır").
+///
+/// Çalıştırılacak komut bu yapıda DURMAZ (kapanış `Equatable` olamaz); `WorkspaceViewModel`
+/// onu ayrı bir alanda tutar ve onay/iptal ikisi de temizler — `windowCloseApproval` ile
+/// aynı kalıp.
+struct PendingDockerAction: Identifiable, Equatable {
+    var id: UUID
+    /// Diyaloğun başlığı.
+    var title: String
+    /// İşlemin sonucunu açıkça yazan gövde.
+    var message: String
+    /// Onay butonunun etiketi; eylemi adlandırır.
+    var confirmLabel: String
+}
+
 /// Pencere başına bir tane. Sekme ve panel operasyonlarının tek sahibi.
 /// Menü kısayolları @FocusedValue üzerinden key window'un örneğine ulaşır.
 @MainActor
@@ -590,6 +606,52 @@ final class WorkspaceViewModel {
             isBusy: sessionManager.hasRunningProcess(sessionID: sessionID)
         )
     }
+
+    // MARK: - Docker etkili işlem onayı (briefs/2)
+
+    /// Onay bekleyen Docker işlemi; nil ise bekleyen yok.
+    private(set) var pendingDockerAction: PendingDockerAction?
+
+    /// Onay verildiğinde çalıştırılacak komut. `pendingDockerAction` ile birlikte kurulur;
+    /// onay da iptal de temizler, böylece aynı onay iki kez tüketilemez.
+    private var dockerApproval: (@MainActor () -> Void)?
+
+    /// Container'ı yeniden başlatma İSTEĞİ. Hiçbir docker komutu burada çalışmaz —
+    /// yalnız onay diyaloğu kurulur (briefs/2 onay kuralı).
+    ///
+    /// - Parameter perform: Kullanıcı onaylarsa çalıştırılacak eylem.
+    func requestDockerRestart(containerName: String,
+                              perform: @escaping @MainActor () -> Void) {
+        // Ekranda başka bir onay varsa araya girilmez: bekleyen kapatma eylemini (ve
+        // pencere kapatma geri çağrısını) ezmek onu sessizce düşürürdü. Bekleyen bir
+        // docker onayı da değiştirilmez — kullanıcı GÖRDÜĞÜ cümleyi onaylar.
+        guard pendingClose == nil, pendingWorkspaceLaunch == nil, pendingDockerAction == nil else { return }
+
+        dockerApproval = perform
+        pendingDockerAction = PendingDockerAction(
+            id: UUID(),
+            title: DockerActionPrompt.restartTitle(containerName: containerName),
+            message: DockerActionPrompt.restartMessage(containerName: containerName),
+            confirmLabel: DockerActionPrompt.restartConfirmLabel)
+    }
+
+    func confirmPendingDockerAction() {
+        guard pendingDockerAction != nil, let approval = dockerApproval else { return }
+        pendingDockerAction = nil
+        dockerApproval = nil
+        approval()
+    }
+
+    func cancelPendingDockerAction() {
+        pendingDockerAction = nil
+        dockerApproval = nil
+    }
+
+    /// Diyalog metinleri. Bekleyen istek yokken boş dönerler; SwiftUI `confirmationDialog`
+    /// başlığı görünüm ağacında her çizimde okunuyor ve orada opsiyonel açmak gürültü olurdu.
+    var pendingDockerActionTitle: String { pendingDockerAction?.title ?? "" }
+    var pendingDockerActionMessage: String { pendingDockerAction?.message ?? "" }
+    var pendingDockerActionConfirmLabel: String { pendingDockerAction?.confirmLabel ?? "" }
 
     // MARK: - Workspace yakalama
 
