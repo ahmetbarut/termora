@@ -27,10 +27,16 @@ struct ProfileEnvironmentEditor: View {
             }
 
             ForEach($entries) { $entry in
+                // Satır başına bir "eksi" düğmesi var; etiket hangi değişkeni sildiğini
+                // söylemezse VoiceOver kullanıcısı için hepsi aynı düğmedir.
+                let named = entry.key.isEmpty ? "the empty row" : entry.key
+
                 HStack(spacing: 8) {
                     TextField("KEY", text: $entry.key)
                         .frame(width: 150)
+                        .accessibilityLabel("Variable name")
                     TextField("value", text: $entry.value)
+                        .accessibilityLabel("Value of \(named)")
                     Button {
                         remove(id: entry.id)
                     } label: {
@@ -38,6 +44,7 @@ struct ProfileEnvironmentEditor: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Remove this variable")
+                    .accessibilityLabel("Remove \(named)")
                 }
             }
 

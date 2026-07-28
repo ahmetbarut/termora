@@ -39,12 +39,17 @@ struct AppearanceSettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
+                    // Değer ayrı bir `Text`'te gösteriliyor; ekran okuyucu onu kaydırıcıya
+                    // bağlayamadığı için değer açıkça bildirilir.
                     Slider(value: lineSpacingBinding, in: SettingsLimits.lineSpacingRange, step: 0.05) {
                         Text("Line height")
                     }
+                    .accessibilityValue(String(format: "%.2f times", settings.settings.lineSpacing))
+
                     Text(String(format: "%.2f×", settings.settings.lineSpacing))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -59,9 +64,13 @@ struct AppearanceSettingsView: View {
                     Slider(value: opacityBinding, in: SettingsLimits.opacityRange, step: 0.05) {
                         Text("Window opacity")
                     }
+                    .accessibilityValue(
+                        "\(Int((settings.settings.windowOpacity * 100).rounded())) percent opaque")
+
                     Text("\(Int((settings.settings.windowOpacity * 100).rounded()))% opaque")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
             }
         }

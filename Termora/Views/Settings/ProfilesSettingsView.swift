@@ -29,12 +29,15 @@ struct ProfilesSettingsView: View {
                 Divider()
 
                 HStack(spacing: 4) {
+                    // brief 3 "Tüm butonlarda VoiceOver etiketi bulunmalı": ikon-yalnız
+                    // düğmelerin görünen etiketi yok, konuşulan etiketi olmak zorunda.
                     Button {
                         addProfile()
                     } label: {
                         Image(systemName: "plus")
                     }
                     .help("Add profile")
+                    .accessibilityLabel("Add Profile")
 
                     Button {
                         removeSelectedProfile()
@@ -42,6 +45,7 @@ struct ProfilesSettingsView: View {
                         Image(systemName: "minus")
                     }
                     .help("Delete selected profile")
+                    .accessibilityLabel("Delete Selected Profile")
                     .disabled(selection == nil)
 
                     Spacer()
