@@ -159,7 +159,10 @@ extension WorkspaceLayout {
             let nested = try container.nestedContainer(keyedBy: SplitKey.self, forKey: .split)
             // Eksen ve oran yalnız GEOMETRİDİR, veri değil: eksiklerse varsayılana düşmek
             // hiçbir paneli kaybettirmez. ⌘D'nin ürettiği yan yana bölme varsayılandır.
-            let axis = try nested.decodeIfPresent(SplitAxis.self, forKey: .axis) ?? .vertical
+            // Eksen ham değerden okunur: ileride eklenen bir eksen enum'a doğrudan
+            // çözdürülseydi bütün sekme düşerdi.
+            let axis = try nested.decodeIfPresent(String.self, forKey: .axis)
+                .flatMap(SplitAxis.init(rawValue:)) ?? .vertical
             let ratio = try nested.decodeIfPresent(Double.self, forKey: .ratio) ?? 0.5
             self = .split(axis: axis,
                           ratio: ratio,

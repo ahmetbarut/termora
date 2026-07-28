@@ -56,7 +56,11 @@ struct AppSettings: Codable, Equatable {
         fontName = try container.decodeIfPresent(String.self, forKey: .fontName) ?? defaults.fontName
         fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize) ?? defaults.fontSize
         lineSpacing = try container.decodeIfPresent(Double.self, forKey: .lineSpacing) ?? defaults.lineSpacing
-        cursorStyle = try container.decodeIfPresent(CursorStyleSetting.self, forKey: .cursorStyle) ?? defaults.cursorStyle
+        // Ham değer üzerinden okunur: ileride eklenen bir imleç stili (`RawValue` eşleşmez)
+        // enum'a doğrudan çözdürülseydi TÜM ayarlar çözülemez, `SettingsStore` blob'u
+        // yedeğe atar ve kullanıcının her ayarı sıfırlanırdı. Yalnız bu alan düşer.
+        cursorStyle = try container.decodeIfPresent(String.self, forKey: .cursorStyle)
+            .flatMap(CursorStyleSetting.init(rawValue:)) ?? defaults.cursorStyle
         themeID = try container.decodeIfPresent(String.self, forKey: .themeID) ?? defaults.themeID
         windowOpacity = try container.decodeIfPresent(Double.self, forKey: .windowOpacity) ?? defaults.windowOpacity
         scrollbackLines = try container.decodeIfPresent(Int.self, forKey: .scrollbackLines) ?? defaults.scrollbackLines

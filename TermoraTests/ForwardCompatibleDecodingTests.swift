@@ -34,6 +34,17 @@ import Testing
         #expect(decoded.scrollbackLines == AppSettings().scrollbackLines)
     }
 
+    /// Yeni sürümde eklenmiş bir imleç stili eski sürümde okunduğunda YALNIZ o alan
+    /// varsayılana düşmeli. Aksi hâlde tüm `AppSettings` çözülemez, `SettingsStore`
+    /// blob'u yedeğe atar ve kullanıcının BÜTÜN ayarları sıfırlanır.
+    @Test func appSettingsFallsBackForUnknownCursorStyleAndKeepsOtherFields() throws {
+        let future = json(#"{"cursorStyle":"laserBeam","themeID":"nord","fontSize":17}"#)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: future)
+        #expect(decoded.cursorStyle == AppSettings().cursorStyle)
+        #expect(decoded.themeID == "nord")
+        #expect(decoded.fontSize == 17)
+    }
+
     // MARK: - TerminalProfile
 
     /// Eski blob (`environment` alanı henüz yokken yazılmış) çözülmeli ve
@@ -158,6 +169,19 @@ import Testing
         }
         #expect(axis == .vertical)
         #expect(ratio == 0.5)
+    }
+
+    /// Bilinmeyen bölme ekseni de geometridir: panel kaybettirmemeli.
+    @Test func splitLayoutFallsBackForUnknownAxis() throws {
+        let future = json(#"{"split":{"axis":"diagonal","ratio":0.4,"first":{"pane":{"_0":{"id":"\#(Self.idA)"}}},"second":{"pane":{"_0":{"id":"\#(Self.idB)"}}}}}"#)
+        let decoded = try JSONDecoder().decode(WorkspaceLayout.self, from: future)
+        #expect(decoded.panes.count == 2)
+        guard case let .split(axis, ratio, _, _) = decoded else {
+            Issue.record("Expected a split layout")
+            return
+        }
+        #expect(axis == .vertical)
+        #expect(ratio == 0.4)
     }
 
     /// Tek bozuk sekme workspace'i düşürmez: çözülebilen sekmeler korunur.
