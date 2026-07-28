@@ -25,6 +25,8 @@ struct CommandPaletteView: View {
     var folders: RecentFoldersStore?
     /// Docker kategorisi (briefs/2 "Docker Entegrasyonu"); nil ise palet Docker göstermez.
     var docker: DockerStore?
+    /// AI Actions kategorisi (briefs/3); nil ise palet AI satırı göstermez.
+    var ai: AIPanelModel?
     /// Aktif panelin çalışma dizini (palet açılırken okunmuş hâli); favoriye alma komutu
     /// buna dayanır.
     var currentDirectory: String?
@@ -40,6 +42,7 @@ struct CommandPaletteView: View {
                                     ssh: ssh,
                                     folders: folders,
                                     docker: docker,
+                                    ai: ai,
                                     currentDirectory: currentDirectory,
                                     openSettings: { openSettings() })
     }

@@ -15,6 +15,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
     case docker
     case settings
     case themes
+    case aiActions
 
     var id: String { rawValue }
 
@@ -27,6 +28,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .docker: return "Docker"
         case .settings: return "Settings"
         case .themes: return "Themes"
+        case .aiActions: return "AI Actions"
         }
     }
 
@@ -40,6 +42,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .docker: return "shippingbox"
         case .settings: return "gearshape"
         case .themes: return "paintpalette"
+        case .aiActions: return "sparkles"
         }
     }
 

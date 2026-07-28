@@ -32,6 +32,13 @@ struct AIPanelView: View {
             if model.availability == .idle { await model.refreshModels() }
             model.refreshContext()
         }
+        // "Ask the AI Assistant" (palet / menü) yalnız bir jeton bırakır; odağı kuran yer
+        // burasıdır. Bir sonraki tura ERTELENİR: @FocusState'i eklendiği güncelleme
+        // turunda atamak güvenilir değil (aynı tuzak palet ve arama çubuğunda yaşandı).
+        .onChange(of: model.promptFocusRequest) { _, request in
+            guard request != nil else { return }
+            DispatchQueue.main.async { isPromptFocused = true }
+        }
         .confirmationDialog(
             AIRunPrompt.title,
             isPresented: pendingRunBinding,

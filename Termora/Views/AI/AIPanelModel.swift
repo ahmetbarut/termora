@@ -111,6 +111,11 @@ final class AIPanelModel {
     private(set) var preparedContext: PreparedAIContext = .empty
     /// Bağlam listesinin açık olup olmadığı (briefs/2: kullanıcı son içeriği inceleyebilmeli).
     var isContextExpanded = false
+    /// Komut alanına odak isteği (briefs/2 "AI komut alanını açma"). Panel görünümü bu
+    /// jetonu görünce `@FocusState`'i kurar. Her istekte YENİLENİR: panel zaten açıkken
+    /// komutu tekrar çağırmak da imleci yazma alanına götürmeli.
+    private(set) var promptFocusRequest: UUID?
+
     /// Onay bekleyen komut. Doluyken terminale HİÇBİR ŞEY yazılmamıştır.
     private(set) var pendingRun: AICommandSuggestion?
 
@@ -163,6 +168,13 @@ final class AIPanelModel {
     }
 
     /// Menüden "Explain Selection with AI": paneli açar, bağlamı tazeler ve sorar.
+    /// Paneli açar ve imleci komut alanına götürür. Yalnız açmak, kullanıcıyı klavyeden
+    /// fareye gönderirdi — brief "komut alanını açma" diyor, "paneli gösterme" değil.
+    func openPromptField() {
+        isPresented = true
+        promptFocusRequest = UUID()
+    }
+
     func openAndExplainSelection() async {
         isPresented = true
         await prepareIfNeeded()

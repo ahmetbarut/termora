@@ -138,6 +138,7 @@ struct MainWindowView: View {
                                    ssh: services.sshHosts,
                                    folders: services.recentFolders,
                                    docker: DockerStore.shared,
+                                   ai: ai,
                                    currentDirectory: currentWorkingDirectory())
                     .transition(.opacity)
             }

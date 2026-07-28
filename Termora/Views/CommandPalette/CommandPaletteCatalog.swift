@@ -30,6 +30,7 @@ enum CommandPaletteCatalog {
                       ssh: SSHHostStore? = nil,
                       folders: RecentFoldersStore? = nil,
                       docker: DockerStore? = nil,
+                      ai: AIPanelModel? = nil,
                       currentDirectory: String? = nil,
                       home: String = NSHomeDirectory(),
                       now: @escaping @MainActor () -> Date = Date.init,
@@ -42,6 +43,40 @@ enum CommandPaletteCatalog {
             + dockerCommands(workspace: workspace, docker: docker)
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
+            + aiCommands(ai: ai)
+    }
+
+    // MARK: - AI Actions (briefs/3 "Sonuç kategorileri", briefs/2 "AI komut alanını açma")
+
+    /// Satırlar hiçbir soru SORMAZ ve hiçbir komut ÇALIŞTIRMAZ: paneli açar ya da panelin
+    /// kendi Explain yolunu çağırır. Model seçimi, maskeleme ve Run onayı panelin işidir.
+    ///
+    /// `ai` nil ise kategori hiç çizilmez — tıklanınca hiçbir şey yapmayan bir satır,
+    /// olmayan bir satırdan daha kötüdür.
+    private static func aiCommands(ai: AIPanelModel?) -> [CommandPaletteItem] {
+        guard let ai else { return [] }
+        return [
+            CommandPaletteItem(id: "ai.openPrompt",
+                               title: "Ask the AI Assistant",
+                               category: .aiActions,
+                               symbolName: "sparkles",
+                               accessibilityLabel: """
+                                   Open the AI assistant and put the cursor in the question field.
+                                   """) {
+                ai.openPromptField()
+            },
+            // "…" bu satırın ÖNCE bir şey soracağını değil, cevabın gelmesini beklettiğini
+            // söylemez; seçim yoksa panel sessizce hiçbir istek göndermez (AIPanelModel).
+            CommandPaletteItem(id: "ai.explainSelection",
+                               title: "Explain Selection with AI",
+                               category: .aiActions,
+                               symbolName: "text.magnifyingglass",
+                               accessibilityLabel: """
+                                   Ask the AI assistant to explain the selected terminal output.
+                                   """) {
+                Task { await ai.openAndExplainSelection() }
+            },
+        ]
     }
 
     // MARK: - Actions
