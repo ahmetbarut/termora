@@ -17,6 +17,10 @@ struct MainWindowView: View {
     /// başka bir sahibi olmazsa ilk yerleşimden hemen sonra yok olur.
     @State private var closeCoordinator = WindowCloseCoordinator()
 
+    /// Komut paleti pencere başına bir tanedir; ⌘K menüden, ⌘⇧P dinleyiciden gelir.
+    @State private var palette = CommandPaletteModel()
+    @State private var paletteHotkey = CommandPaletteHotkeyMonitor()
+
     /// Sekme başlığı artık çalışan komutu da gösteriyor; komutun başlaması/bitmesi ne OSC
     /// başlığını ne de cwd'yi değiştirdiği için `sessionTitleDigest` değişmez. Başlığın
     /// gerçeği yansıtması için saniyede bir tazelenir (durum çubuğuyla aynı bütçe).
@@ -47,6 +51,24 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: WindowLayout.minWidth, minHeight: WindowLayout.minHeight)
+        // Palet terminalin ÜZERİNDE bir katmandır: oturumlar okumaya/çalışmaya devam eder
+        // (brief 3: "Komut paleti açıldığında terminal oturumu durmamalıdır").
+        .overlay(alignment: .top) {
+            if palette.isPresented {
+                CommandPaletteView(model: palette,
+                                   workspace: workspace,
+                                   settings: services.settings,
+                                   themes: services.themes)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: palette.isPresented)
+        .focusedSceneValue(\.commandPalette, palette)
+        .onChange(of: palette.isPresented) { _, isPresented in
+            // Palet kapanınca klavye terminale geri döner; yoksa tuşlar hiçbir yere gitmez.
+            if !isPresented { focusActiveTerminal() }
+        }
+        .onDisappear { paletteHotkey.detach() }
         .onAppear {
             // Sistemin otomatik pencere sekmelerini kapat: kendi sekme çubuğumuzu çiziyoruz,
             // aksi hâlde macOS "Show Tab Bar" öğesini ekler ve ⌘T ile çakışır.
@@ -63,6 +85,7 @@ struct MainWindowView: View {
         .background(
             WindowAccessor { window in
                 closeCoordinator.attach(window: window, workspace: workspace)
+                paletteHotkey.attach(window: window) { palette.toggle() }
             }
         )
         .confirmationDialog(
@@ -78,6 +101,13 @@ struct MainWindowView: View {
         } message: {
             Text(workspace.pendingCloseMessage)
         }
+    }
+
+    /// Klavye odağını aktif panelin terminaline geri verir.
+    private func focusActiveTerminal() {
+        guard let tab = workspace.activeTab,
+              let sessionID = tab.root.sessionID(ofPane: tab.activePaneID) else { return }
+        services.sessionManager.focusTerminal(sessionID: sessionID)
     }
 
     private var pendingCloseBinding: Binding<Bool> {

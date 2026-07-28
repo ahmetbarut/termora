@@ -5,17 +5,38 @@ struct WorkspaceFocusedKey: FocusedValueKey {
     typealias Value = WorkspaceViewModel
 }
 
+/// Komut paleti de key window'a aittir; menü öğesi ona @FocusedValue ile ulaşır.
+struct CommandPaletteFocusedKey: FocusedValueKey {
+    typealias Value = CommandPaletteModel
+}
+
 extension FocusedValues {
     var workspace: WorkspaceViewModel? {
         get { self[WorkspaceFocusedKey.self] }
         set { self[WorkspaceFocusedKey.self] = newValue }
     }
+
+    var commandPalette: CommandPaletteModel? {
+        get { self[CommandPaletteFocusedKey.self] }
+        set { self[CommandPaletteFocusedKey.self] = newValue }
+    }
 }
 
 struct AppCommands: Commands {
     @FocusedValue(\.workspace) private var workspace
+    @FocusedValue(\.commandPalette) private var commandPalette
 
     var body: some Commands {
+        // Paletin ikinci kısayolu (⌘⇧P) menüye ikinci bir öğe eklemez; pencere düzeyinde
+        // `CommandPaletteHotkeyMonitor` karşılar (menü öğesi tek kısayol taşıyabilir).
+        CommandGroup(after: .toolbar) {
+            Button("Command Palette…") {
+                commandPalette?.toggle()
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .disabled(commandPalette == nil)
+        }
+
         CommandGroup(after: .newItem) {
             Button("New Tab") {
                 workspace?.newTab()
