@@ -202,6 +202,21 @@ import Testing
         #expect(defaults.data(forKey: ProfileStore.backupKey) == nil)
     }
 
+    /// `null` ya da yanlış türde öğe (dizi, sayı) de atlanmalı — ve çözücü ilerlemeli,
+    /// yani süreç ASILMAMALI.
+    @Test func profileStoreSkipsNullAndWronglyTypedElements() throws {
+        let (defaults, suiteName) = Self.makeDefaults("ProfileStoreNullElement")
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let blob = json("""
+        [null, {"id":"\(Self.idA)","name":"Work"}, 42, ["nested"], {"id":"\(Self.idC)","name":"Deploy"}]
+        """)
+        defaults.set(blob, forKey: ProfileStore.storageKey)
+
+        let store = ProfileStore(defaults: defaults)
+        #expect(store.profiles.map(\.name) == ["Work", "Deploy"])
+    }
+
     /// Eski profiller (yeni alan yok) tam listeyle korunmalı.
     @Test func profileStoreLoadsLegacyProfilesWithoutNewFields() throws {
         let (defaults, suiteName) = Self.makeDefaults("ProfileStoreLegacy")

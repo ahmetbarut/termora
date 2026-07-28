@@ -23,11 +23,21 @@ struct LenientArray<Element: Decodable>: Decodable {
             elements.reserveCapacity(count)
         }
         while !container.isAtEnd {
+            let indexBeforeElement = container.currentIndex
             switch try container.decode(FailableElement<Element>.self).result {
             case let .success(element):
                 elements.append(element)
             case let .failure(error):
                 failures.append(error)
+            }
+            // Güvenlik ağı: imleç ilerlemezse döngü sonsuza girer ve uygulama açılışta
+            // DONAR. `FailableElement` fırlatmadığı için bu olmamalı; yine de donmak
+            // yerine blob'u bozuk sayıp çağırana bırakıyoruz.
+            guard container.currentIndex > indexBeforeElement else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: container.codingPath,
+                        debugDescription: "Decoder did not advance past element \(indexBeforeElement)"))
             }
         }
         self.elements = elements
