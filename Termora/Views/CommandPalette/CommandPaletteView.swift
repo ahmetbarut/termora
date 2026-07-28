@@ -19,6 +19,8 @@ struct CommandPaletteView: View {
     let workspace: WorkspaceViewModel
     let settings: SettingsStore
     let themes: ThemeStore
+    /// SSH kategorisi; nil ise palet SSH göstermez (testlerdeki varsayılan).
+    var ssh: SSHHostStore?
 
     @Environment(\.openSettings) private var openSettings
     @FocusState private var isSearchFocused: Bool
@@ -28,6 +30,7 @@ struct CommandPaletteView: View {
         CommandPaletteCatalog.items(workspace: workspace,
                                     settings: settings,
                                     themes: themes,
+                                    ssh: ssh,
                                     openSettings: { openSettings() })
     }
 

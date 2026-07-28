@@ -19,6 +19,9 @@ final class AppServices {
     /// Saved workspaces. Shared like every other store: the Workspaces settings tab edits the
     /// same list a window reads when it opens one.
     let workspaces: WorkspaceStore
+    /// Kayıtlı SSH profilleri + ~/.ssh/config hostları. Ayarlar ekranı ve komut paleti
+    /// AYNI listeyi görmeli, bu yüzden depo burada yaşar (paylaşılan tekil değil).
+    let sshHosts: SSHHostStore
     let sessionManager: SessionManager
     /// Önceki oturumun kaydı ve açılış kuyruğu (briefs/2 "Oturum Geri Yükleme").
     let sessionRestore: SessionRestoreStore
@@ -27,6 +30,9 @@ final class AppServices {
     /// It parks the request here; the key window picks it up and clears it. Per-window view
     /// models stay per-window, and a workspace never opens in a window nobody is looking at.
     var workspaceOpenRequest: Workspace?
+
+    /// Ayarlar ▸ SSH'tan gelen bağlanma isteği; anahtar pencere alır ve yeni sekmede açar.
+    var sshConnectRequest: SSHTarget?
 
     /// "Use Current Layout" için pencere başına düzen sağlayıcı.
     ///
@@ -68,6 +74,7 @@ final class AppServices {
         self.themes = themes
         self.profiles = profiles
         self.workspaces = WorkspaceStore(defaults: defaults)
+        self.sshHosts = SSHHostStore(defaults: defaults)
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
 
         let sessionRestore = SessionRestoreStore(defaults: defaults)

@@ -22,7 +22,10 @@ struct WorkspacesSettingsView: View {
                 list
             }
         }
-        .sheet(item: $draft) { _ in editorSheet }
+        // `.sheet(item:)`in VERDİĞİ taslak kullanılır. `{ _ in ... }` deyip dışarıdaki
+        // `$draft`'ı yeniden okumak, sayfanın kapanışı durum yazılmadan önceki görünüm
+        // değerini yakaladığında BOŞ bir sayfa çizer (canlı uygulamada görüldü).
+        .sheet(item: $draft) { presented in editorSheet(presented) }
     }
 
     // MARK: - Liste
@@ -100,20 +103,23 @@ struct WorkspacesSettingsView: View {
         draft = WorkspaceDraft(editing: item)
     }
 
-    @ViewBuilder
-    private var editorSheet: some View {
-        if let binding = Binding($draft) {
-            WorkspaceEditorView(
-                draft: binding,
-                captureCurrentLayout: captureCurrentLayout,
-                onSave: {
-                    workspaces.upsert(binding.wrappedValue.makeWorkspace())
-                    draft = nil
-                },
-                onCancel: { draft = nil }
-            )
-            .frame(width: 520, height: 460)
-        }
+    private func editorSheet(_ presented: WorkspaceDraft) -> some View {
+        // Sayfa kendi taslağını sunar; düzenlemeler `draft`'a yazılır, okurken de oraya
+        // bakılır — `draft` bir an için boşalırsa sunulan değere düşülür.
+        let binding = Binding<WorkspaceDraft>(
+            get: { draft ?? presented },
+            set: { draft = $0 }
+        )
+        return WorkspaceEditorView(
+            draft: binding,
+            captureCurrentLayout: captureCurrentLayout,
+            onSave: {
+                workspaces.upsert(binding.wrappedValue.makeWorkspace())
+                draft = nil
+            },
+            onCancel: { draft = nil }
+        )
+        .frame(width: 520, height: 460)
     }
 }
 

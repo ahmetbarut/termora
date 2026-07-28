@@ -83,7 +83,8 @@ struct MainWindowView: View {
                 CommandPaletteView(model: palette,
                                    workspace: workspace,
                                    settings: services.settings,
-                                   themes: services.themes)
+                                   themes: services.themes,
+                                   ssh: services.sshHosts)
                     .transition(.opacity)
             }
         }
@@ -144,6 +145,15 @@ struct MainWindowView: View {
             guard let request = services.workspaceOpenRequest else { return }
             services.workspaceOpenRequest = nil
             workspace.openWorkspace(request)
+        }
+        // Ayarlar ▸ SSH'tan gelen bağlanma isteği: açık sekmelere DOKUNMAZ, yeni sekme açar.
+        .onChange(of: services.sshConnectRequest?.id) { _, _ in
+            guard let target = services.sshConnectRequest else { return }
+            services.sshConnectRequest = nil
+            CommandPaletteCatalog.connect(to: target,
+                                          workspace: workspace,
+                                          ssh: services.sshHosts,
+                                          at: Date())
         }
         .confirmationDialog(
             WorkspaceLaunchPrompt.title(workspaceName: workspace.pendingWorkspaceLaunch?.workspace.name ?? ""),

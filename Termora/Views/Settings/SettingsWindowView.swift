@@ -14,6 +14,8 @@ struct SettingsWindowView: View {
     /// `TermoraApp` bu görevin kapsamı dışında olduğu için depo oradan geçirilemiyor
     /// (bkz. `SSHHostStore.shared`).
     var ssh: SSHHostStore = .shared
+    /// Ayarlar penceresinin terminali yok; bağlanma isteği anahtar pencereye iletilir.
+    var connectSSH: ((SSHTarget) -> Void)?
 
     var body: some View {
         TabView {
@@ -32,7 +34,7 @@ struct SettingsWindowView: View {
                                    captureCurrentLayout: captureCurrentLayout)
                 .tabItem { Label("Workspaces", systemImage: CommandPaletteCategory.workspaces.symbolName) }
 
-            SSHSettingsView(hosts: ssh)
+            SSHSettingsView(hosts: ssh, connect: connectSSH)
                 .tabItem { Label("SSH", systemImage: CommandPaletteCategory.ssh.symbolName) }
         }
         .frame(width: 560, height: 480)
