@@ -21,9 +21,10 @@ struct PrivacySection: Identifiable, Equatable {
 
 /// briefs/2 "Gizlilik" bölümünün sayfa karşılığı.
 ///
-/// Kural: **var olmayan bir özellik "kapalı" diye gösterilmez.** Telemetri ve AI bu
-/// sürümde YOK; onları kapalı bir anahtarla göstermek, kullanıcının kapatabileceği bir
-/// şey varmış izlenimi verirdi. Bunun yerine ayrı bir bölümde durumları yazıyla anlatılır.
+/// Kural: **var olmayan bir özellik "kapalı" diye gösterilmez** — ve aynı kuralın diğer
+/// yüzü: **var olan bir özellik "yok" diye gösterilmez.** AI asistanı geldi; sayfanın
+/// "AI bağlı değil" demesi artık kullanıcıyı yanıltırdı. Telemetri ve bulut sağlayıcılar
+/// hâlâ yok, onlar kendi bölümlerinde sebebiyle duruyor.
 enum PrivacyContent {
 
     static let defaultsSection = PrivacySection(
@@ -60,6 +61,21 @@ enum PrivacyContent {
                     + "ones are marked before you confirm them.",
                 symbolName: "checkmark.shield"
             ),
+            PrivacyStatement(
+                id: "ai-on-request",
+                title: "The assistant answers only when you ask",
+                detail: "Termora talks to an Ollama server on this Mac, and only when you send a "
+                    + "question. It shows the exact terminal context before it is sent, and your "
+                    + "whole terminal history is never part of it.",
+                symbolName: "sparkles"
+            ),
+            PrivacyStatement(
+                id: "ai-no-auto-run",
+                title: "A command the assistant writes never runs by itself",
+                detail: "Suggested commands are shown with Copy, Insert, Explain and Run. Run asks "
+                    + "first, and a destructive command is marked before you confirm it.",
+                symbolName: "hand.raised"
+            ),
         ]
     )
 
@@ -90,6 +106,14 @@ enum PrivacyContent {
                     + "you enter. Private key contents are never copied into Termora.",
                 symbolName: "network"
             ),
+            PrivacyStatement(
+                id: "stored-ai",
+                title: "AI address and model",
+                detail: "Only the Ollama address and the model name you picked are saved, so the panel "
+                    + "opens ready. The conversation itself is not written anywhere and is gone when "
+                    + "the window closes.",
+                symbolName: "sparkles"
+            ),
         ]
     )
 
@@ -107,18 +131,18 @@ enum PrivacyContent {
                 symbolName: "chart.bar.xaxis"
             ),
             PrivacyStatement(
-                id: "no-ai",
-                title: "The AI assistant is not connected",
-                detail: "No AI provider ships in this version. When one does, it will run only when you "
-                    + "ask for it, show you the exact text it is about to send, and support a local "
-                    + "Ollama model.",
-                symbolName: "sparkles"
+                id: "no-cloud-ai",
+                title: "No cloud AI provider",
+                detail: "The assistant talks to Ollama on this Mac and nowhere else. Cloud providers "
+                    + "are not built, so no question and no terminal context can leave this machine.",
+                symbolName: "cloud.slash"
             ),
             PrivacyStatement(
                 id: "keychain",
-                title: "Provider keys will live in the Keychain",
-                detail: "Termora stores no API keys today. When AI settings arrive, the keys belong in "
-                    + "the macOS Keychain and never in Termora's preferences.",
+                title: "No API keys, so nothing to keep in the Keychain",
+                detail: "Ollama runs locally and asks for no credentials, so Termora stores no API "
+                    + "keys at all. A provider that needs one would keep it in the macOS Keychain, "
+                    + "never in Termora's preferences.",
                 symbolName: "key"
             ),
         ]

@@ -87,6 +87,8 @@ final class AIPanelModel {
 
     private let provider: any AIProviding
     let settings: SettingsStore
+    /// Model listesi Ayarlar ▸ AI ile PAYLAŞILAN mantıktır; bkz. `AIModelCatalog`.
+    let catalog: AIModelCatalog
 
     /// Pencere kurulduğunda takılır. `nil` iken panel çizilir ama terminale dokunan
     /// eylemler hiçbir şey yapmaz (Ayarlar penceresinden açılan bir önizleme gibi).
@@ -103,7 +105,6 @@ final class AIPanelModel {
     var isPresented = false
     var conversation = AIConversation()
     var prompt = ""
-    private(set) var availability: AIModelAvailability = .idle
     private(set) var sendState: AISendState = .idle
     /// Gönderilecek son içerik. `refreshContext()` ile tazelenir; panel açıkken
     /// prompt alanının üstünde durur.
@@ -116,61 +117,39 @@ final class AIPanelModel {
     init(provider: any AIProviding, settings: SettingsStore) {
         self.provider = provider
         self.settings = settings
+        self.catalog = AIModelCatalog(provider: provider, settings: settings)
     }
 
     // MARK: - Model seçimi
 
+    var availability: AIModelAvailability { catalog.availability }
+
     var selectedModel: String? {
-        get { settings.settings.aiModel }
-        set { settings.settings.aiModel = newValue }
+        get { catalog.selectedModel }
+        set { catalog.selectedModel = newValue }
     }
 
-    var installedModels: [AIModel] {
-        if case let .ready(models) = availability { return models }
-        return []
-    }
+    var installedModels: [AIModel] { catalog.installedModels }
 
-    var providerName: String { provider.kind.displayName }
+    var providerName: String { catalog.providerName }
 
-    var endpointDescription: String { provider.endpointDescription }
+    var endpointDescription: String { catalog.endpointDescription }
 
     /// Gösterilecek hata; hata yoksa nil. Model listesi ve gönderim hataları AYNI yerden
-    /// okunur, böylece panelde iki ayrı hata alanı olmaz.
+    /// okunur, böylece panelde iki ayrı hata alanı olmaz. Gönderim hatası önceliklidir:
+    /// kullanıcının az önce yaptığı şeyle ilgilidir.
     var status: AIPanelStatus? {
         if case let .failed(error) = sendState { return AIPanelStatus(error) }
-        if case let .unavailable(error) = availability { return AIPanelStatus(error) }
-        return nil
+        return catalog.status
     }
 
     var isBusy: Bool {
-        availability == .loading || sendState == .sending
+        catalog.isLoading || sendState == .sending
     }
 
     /// Kurulu modelleri sorar. Her yolda sonuç durumuna varır — `loading`'de kalmaz.
     func refreshModels() async {
-        availability = .loading
-        do {
-            let models = try await provider.availableModels()
-            availability = .ready(models)
-            reconcileSelectedModel(with: models)
-        } catch let error as AIProviderError {
-            availability = .unavailable(error)
-        } catch {
-            availability = .unavailable(.malformedResponse(error.localizedDescription))
-        }
-    }
-
-    /// Seçili model kurulu değilse kurulu olana düşer. Sessizce korunsaydı ilk istek
-    /// 404 ile patlar, kullanıcı sebebini göremezdi.
-    private func reconcileSelectedModel(with models: [AIModel]) {
-        guard let first = models.first else {
-            selectedModel = nil
-            return
-        }
-        guard let selected = selectedModel, models.contains(where: { $0.name == selected }) else {
-            selectedModel = first.name
-            return
-        }
+        await catalog.refresh()
     }
 
     // MARK: - Bağlam
