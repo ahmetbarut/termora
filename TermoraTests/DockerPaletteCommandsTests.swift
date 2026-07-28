@@ -152,16 +152,20 @@ struct DockerPaletteCommandsTests {
         #expect(rows.first?.accessibilityLabel.contains("Docker") == true)
     }
 
+    /// Kullanıcı bu arada Docker'ı kurmuş olabilir: satır varlığı YENİDEN sorar.
     @Test func theUnavailableRowRechecksInsteadOfDoingNothing() async throws {
         let subject = try await makeSubject(executablePath: nil)
-        let before = subject.runner.invocations.count
+        let before = subject.runner.locateCallCount
+        subject.runner.executablePath = "/usr/local/bin/docker"
 
         try item("docker.unavailable", in: subject).action()
         // Eylem arka planda çalışıyor; kontrolün tamamlanmasını bekle.
-        await Task.yield()
+        while subject.runner.locateCallCount == before { await Task.yield() }
+        while subject.docker.isRefreshing { await Task.yield() }
 
-        #expect(subject.docker.hasLoaded)
-        #expect(subject.runner.invocations.count >= before)
+        #expect(subject.runner.locateCallCount > before)
+        #expect(subject.docker.availability == .available(path: "/usr/local/bin/docker"))
+        #expect(subject.docker.containers.count == 2)
     }
 
     // MARK: - Shell ve loglar yeni sekmede

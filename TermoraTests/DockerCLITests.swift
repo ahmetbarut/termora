@@ -13,8 +13,13 @@ final class FakeDockerRunner: DockerCommandRunning {
     var results: [String: DockerCLIResult] = [:]
     var defaultResult = DockerCLIResult(standardOutput: "", standardError: "", exitCode: 0)
     private(set) var invocations: [[String]] = []
+    /// Docker'ın var olup olmadığının kaç kez sorulduğu.
+    private(set) var locateCallCount = 0
 
-    func locateExecutable() async -> String? { executablePath }
+    func locateExecutable() async -> String? {
+        locateCallCount += 1
+        return executablePath
+    }
 
     func run(_ arguments: [String]) async -> DockerCLIResult {
         invocations.append(arguments)

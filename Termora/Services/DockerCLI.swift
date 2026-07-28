@@ -206,8 +206,14 @@ final class DockerStore {
     private(set) var containers: [DockerContainer] = []
     /// Son başarısız çağrının mesajı; başarılı çağrı temizler.
     private(set) var lastErrorMessage: String?
-    private(set) var isRefreshing = false
     private(set) var hasLoaded = false
+
+    /// SAYAÇ, bayrak değil: `refresh()` yeniden girilebilir (kullanıcı iki kez
+    /// tetikleyebilir) ve tek bir `Bool`'da ilk bitişin `defer`'i, hâlâ çalışan ikinci
+    /// tazelemeyi "bitti" gösterirdi.
+    private(set) var activeRefreshCount = 0
+
+    var isRefreshing: Bool { activeRefreshCount > 0 }
 
     private let runner: any DockerCommandRunning
     private static let logger = Logger(subsystem: "com.ahmetbarut.Termora", category: "DockerStore")
@@ -248,8 +254,8 @@ final class DockerStore {
     /// Listeyi tazeler. Docker kurulu değilse hiçbir süreç başlatılmaz.
     func refresh() async {
         hasLoaded = true
-        isRefreshing = true
-        defer { isRefreshing = false }
+        activeRefreshCount += 1
+        defer { activeRefreshCount -= 1 }
 
         guard let path = await runner.locateExecutable() else {
             availability = .notFound
