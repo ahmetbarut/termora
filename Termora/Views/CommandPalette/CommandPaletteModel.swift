@@ -55,12 +55,6 @@ final class CommandPaletteModel {
         selectedIndex = min(max(selectedIndex + delta, 0), resultCount - 1)
     }
 
-    /// Fare imleci bir satırın üzerine geldiğinde seçim oraya taşınır.
-    func select(index: Int, resultCount: Int) {
-        guard index >= 0, index < resultCount else { return }
-        selectedIndex = index
-    }
-
     /// Sonuç listesi kısaldığında seçimi geçerli aralığa çeker.
     func clampSelection(resultCount: Int) {
         guard resultCount > 0 else {

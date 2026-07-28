@@ -86,14 +86,6 @@ struct CommandPaletteModelTests {
         #expect(model.selectedIndex == 0)
     }
 
-    @Test func hoverSelectionIgnoresOutOfRangeIndices() {
-        let (model, _) = makeModel()
-        model.select(index: 3, resultCount: 2)
-        #expect(model.selectedIndex == 0)
-        model.select(index: 1, resultCount: 2)
-        #expect(model.selectedIndex == 1)
-    }
-
     // MARK: - Çalıştırma ve son kullanılanlar
 
     @Test func runningAnItemClosesThePaletteAndInvokesTheAction() {
