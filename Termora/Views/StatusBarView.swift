@@ -52,6 +52,11 @@ struct StatusBarView: View {
 
     @State private var snapshot: WorkspaceViewModel.StatusSnapshot?
 
+    /// briefs/3 "Küçük Pencere Davranışı" ▸ ilk adım: status bar bilgileri azaltılır.
+    /// Hangi bilginin önce düşeceğine `CompactionLevel` karar verir; burası yalnız
+    /// genişliği ölçüp uygular.
+    @State private var level = CompactionLevel.full
+
     /// `@State` bilerek: `Timer.publish(...)` her `body` değerlendirmesinde YENİ bir publisher
     /// üretir; `let` özellik olarak tutulsaydı `onReceive` her yeniden çizimde yeniden abone
     /// olur ve 1 sn'lik sayaç sürekli baştan başlardı (sık çizimde hiç tetiklenmeyebilirdi).
@@ -67,6 +72,13 @@ struct StatusBarView: View {
                 .frame(height: 22)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.bar)
+                // Genişlik GÖRÜNÜMDEN okunur, pencereden değil: çubuk sidebar ve AI
+                // paneli açıkken pencereden dar olur ve kararı asıl o genişlik verir.
+                .background(GeometryReader { proxy in
+                    Color.clear.onChange(of: proxy.size.width, initial: true) { _, width in
+                        level = CompactionLevel(availableWidth: width)
+                    }
+                })
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
@@ -100,10 +112,10 @@ struct StatusBarView: View {
                     .help(snapshot.workingDirectory)
                     .accessibilityLabel("Working directory: \(snapshot.workingDirectory)")
 
-                if let git = snapshot.gitStatus {
+                if let git = snapshot.gitStatus, level.showsGitDetail {
                     separator
                     gitDetail(git, repositoryName: snapshot.repositoryName)
-                } else if let branch = snapshot.branchName {
+                } else if let branch = snapshot.branchName, level.showsGitDetail {
                     // Detay henüz gelmedi (ya da depo git'e göre okunamadı): dosyadan
                     // okunan dal yine de gösterilir, çubuk boş kalmaz.
                     separator
@@ -127,13 +139,15 @@ struct StatusBarView: View {
 
                 Spacer(minLength: 8)
 
-                Text("\(snapshot.columns)×\(snapshot.rows)")
-                    .monospacedDigit()
-                    .help("Terminal size (columns × rows)")
-                    .accessibilityLabel(
-                        "Terminal size: \(snapshot.columns) columns by \(snapshot.rows) rows")
+                if level.showsTerminalSize {
+                    Text("\(snapshot.columns)×\(snapshot.rows)")
+                        .monospacedDigit()
+                        .help("Terminal size (columns × rows)")
+                        .accessibilityLabel(
+                            "Terminal size: \(snapshot.columns) columns by \(snapshot.rows) rows")
 
-                separator
+                    separator
+                }
 
                 activityIndicator(ProcessActivity(isBusy: snapshot.isBusy))
             }

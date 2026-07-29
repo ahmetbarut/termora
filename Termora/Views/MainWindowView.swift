@@ -168,6 +168,16 @@ struct MainWindowView: View {
         .frame(minWidth: WindowLayout.minWidth(withAIPanel: ai.isPresented,
                                                withSidebar: services.settings.settings.isSidebarVisible),
                minHeight: WindowLayout.minHeight)
+        // briefs/3 "Küçük Pencere Davranışı" ▸ dördüncü adım: sidebar otomatik kapanabilmeli.
+        // Ölçüt pencerenin sidebar'ı TAŞIYIP taşıyamadığı; taşıyamıyorsa terminal alanı
+        // korunur (beşinci adım) ve sidebar çekilir.
+        .background(GeometryReader { proxy in
+            Color.clear.onChange(of: proxy.size.width) { _, width in
+                guard services.settings.settings.isSidebarVisible,
+                      CompactionLevel.shouldCloseSidebar(availableWidth: width) else { return }
+                services.settings.settings.isSidebarVisible = false
+            }
+        })
         .motionAnimation(.panel, value: ai.isPresented)
         .motionAnimation(.panel, value: services.settings.settings.isSidebarVisible)
         .motionAnimation(.panel, value: services.settings.settings.isCommandBlockPanelVisible)
