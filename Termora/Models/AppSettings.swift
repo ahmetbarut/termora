@@ -63,6 +63,14 @@ struct AppSettings: Codable, Equatable {
     /// varsayılan KAPALI — ve brief ayrıca "terminal kullanımını yavaşlatmamalı" diyor.
     var showsNewTabLauncher: Bool = false
 
+    /// briefs/3 "Ses Kullanımı": açık olan sesler. Boş küme = tamamen sessiz, yani
+    /// varsayılan. Kapalı olanları da yazmak yerine yalnız AÇIK olanları saklamak,
+    /// eksik verinin sessizliğe düşmesini garanti eder.
+    var enabledSounds: Set<String> = []
+
+    /// Sesi kapalı tutan kullanıcı için bell'in görsel karşılığı.
+    var usesVisualBell: Bool = false
+
     /// briefs/2 "Ayarlar Ekranı" ▸ Keybindings: kullanıcının değiştirdiği kısayollar.
     ///
     /// Anahtar komut KİMLİĞİ (`AppShortcut.id`), değer `AppShortcut.stroke` biçimi.
@@ -164,6 +172,10 @@ struct AppSettings: Codable, Equatable {
         showsNewTabLauncher = try container.decodeIfPresent(
             Bool.self, forKey: .showsNewTabLauncher
         ) ?? defaults.showsNewTabLauncher
+        enabledSounds = try container.decodeIfPresent(Set<String>.self, forKey: .enabledSounds)
+            ?? defaults.enabledSounds
+        usesVisualBell = try container.decodeIfPresent(Bool.self, forKey: .usesVisualBell)
+            ?? defaults.usesVisualBell
         sidebarWidth = SettingsLimits.clampSidebarWidth(
             try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
         )
@@ -237,5 +249,19 @@ extension AppSettings {
 
     mutating func aiModel(for kind: AIProviderKind, is value: String?) {
         aiModelsByProvider[kind.rawValue] = value
+    }
+}
+
+
+// MARK: - Ses ayarları (briefs/3 "Ses Kullanımı")
+
+extension AppSettings {
+    func isSoundEnabled(_ event: SoundEvent) -> Bool {
+        enabledSounds.contains(event.rawValue)
+    }
+
+    mutating func setSoundEnabled(_ event: SoundEvent, _ isEnabled: Bool) {
+        if isEnabled { enabledSounds.insert(event.rawValue) }
+        else { enabledSounds.remove(event.rawValue) }
     }
 }

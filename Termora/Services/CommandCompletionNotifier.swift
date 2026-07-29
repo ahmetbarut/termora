@@ -42,7 +42,9 @@ final class UserNotificationDeliverer: CommandNotificationDelivering {
         let content = UNMutableNotificationContent()
         content.title = message.title
         content.body = message.body
-        // nil, not `.default`: briefs/3 wants the app silent unless the user asks otherwise.
+        // Bildirimin KENDİ sesi hep nil. Ses ayrı bir ayardır (briefs/3 "Ses Kullanımı":
+        // her ses ayrı ayrı kapatılabilmeli) ve bildirimin sesini `.default` yapmak, ses
+        // anahtarı kapalıyken de ses çıkarırdı.
         content.sound = nil
 
         // nil trigger = deliver now.
@@ -194,6 +196,10 @@ final class CommandCompletionNotifier {
             }
 
             let next = pending.removeFirst()
+            // briefs/3 "Ses Kullanımı" ▸ "Uzun işlem tamamlandı". Ses bildirimin KENDİ
+            // sesi değil ayrı bir ayardır: bildirimi açık ama sesi kapalı tutan kullanıcı
+            // sessizce bildirilmeli.
+            SoundPlayer.play(.longCommand, settings: settings.settings)
             await deliverer.deliver(next.message, identifier: next.identifier)
         }
     }

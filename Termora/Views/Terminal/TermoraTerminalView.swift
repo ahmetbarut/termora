@@ -115,6 +115,17 @@ final class TermoraTerminalView: LocalProcessTerminalView {
     /// çalışır.
     var onDataReceived: ((ArraySlice<UInt8>) -> Void)?
 
+    /// briefs/3 "Ses Kullanımı" ▸ Terminal bell.
+    ///
+    /// Nil iken hiçbir şey olmaz — ses de görsel bell de kapalıysa terminal tam eskisi
+    /// gibi, sessizce çalışır.
+    var onBell: (() -> Void)?
+
+    override func bell(source: Terminal) {
+        super.bell(source: source)
+        onBell?()
+    }
+
     /// Musluk ÖNCE terminale verir: blok kaydı bir gün hata verse bile terminalin kendisi
     /// baytları almış olur. Terminal her şeyden önce terminaldir.
     override func dataReceived(slice: ArraySlice<UInt8>) {

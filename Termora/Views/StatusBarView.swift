@@ -117,6 +117,12 @@ struct StatusBarView: View {
                 if let ssh = snapshot.sshConnection {
                     separator
                     sshIndicator(ssh)
+                        // Ses durumun DEĞİŞTİĞİ anda çalar; her çizimde çalsaydı bağlantı
+                        // koptuğu sürece saniyede bir ses çıkardı.
+                        .onChange(of: ssh) { previous, current in
+                            guard previous != current, current.canReconnect else { return }
+                            SoundPlayer.play(.sshDisconnected, settings: workspace.settings.settings)
+                        }
                 }
 
                 Spacer(minLength: 8)

@@ -133,6 +133,8 @@ struct GeneralSettingsView: View {
             }
 
             notificationsSection
+
+            soundsSection
         }
         .formStyle(.grouped)
         .onAppear {
@@ -175,6 +177,44 @@ struct GeneralSettingsView: View {
                 + error.localizedDescription
         }
         isIntegrationInstalled = installer.isInstalled(for: family)
+    }
+
+    // MARK: - Sounds (briefs/3 "Ses Kullanımı")
+
+    /// briefs/3 "Ses Kullanımı": *Uygulama varsayılan olarak sessiz olmalıdır* ve
+    /// *her ses ayrı ayrı kapatılabilmelidir.*
+    @ViewBuilder
+    private var soundsSection: some View {
+        Section {
+            ForEach(SoundEvent.allCases) { event in
+                VStack(alignment: .leading, spacing: 1) {
+                    Toggle(event.title, isOn: Binding(
+                        get: { settings.settings.isSoundEnabled(event) },
+                        set: { settings.settings.setSoundEnabled(event, $0) }
+                    ))
+                    Text(event.explanation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Toggle("Flash the terminal instead of ringing",
+                       isOn: $settings.settings.usesVisualBell)
+                Text("A short flash when a program rings the bell. Works whether or not the "
+                     + "bell sound is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text("Sounds")
+        } footer: {
+            Text("Termora is silent until you turn something on here.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Notifications (briefs/2 "Bildirimler")

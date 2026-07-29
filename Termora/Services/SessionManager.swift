@@ -207,7 +207,24 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         applyAppearance(to: view, sessionID: sessionID)
         registerShellIntegrationHandler(on: view, sessionID: sessionID)
         registerCommandBlockRecorder(on: view, sessionID: sessionID)
+        registerBell(on: view)
         return view
+    }
+
+    /// briefs/3 "Ses Kullanımı": bell duyulur ya da GÖRÜLÜR, ikisi de kapalıysa hiçbir
+    /// şey olmaz. Sesi kapalı tutan kullanıcı için görsel karşılık şart: bell bir bilgi
+    /// taşır ve sessizlik onu tamamen yutmamalı.
+    private func registerBell(on view: TermoraTerminalView) {
+        view.onBell = { [weak self, weak view] in
+            guard let self else { return }
+            SoundPlayer.play(.bell, settings: settings.settings)
+            guard settings.settings.usesVisualBell, let view else { return }
+            view.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.25).cgColor
+            // Kısa bir parlama: briefs/3 animasyon süresi 120–180 ms.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) { [weak view] in
+                view?.layer?.backgroundColor = nil
+            }
+        }
     }
 
     /// Ham baytları komut bloğu kaydedicisine akıtır (briefs/2 "Komut Blokları").
