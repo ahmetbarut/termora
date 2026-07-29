@@ -130,3 +130,42 @@ struct UpdateControllerTests {
         #expect(spy.checkCount == 1)
     }
 }
+
+/// briefs/2 "Ayarlar Ekranı" ▸ Updates sayfasının METİNLERİ.
+///
+/// Bu sayfanın da değeri dürüstlüğünde (gizlilik sayfasıyla aynı kural): appcast adresi
+/// olmayan bir yapıda "otomatik kontrol açık" demek, hiçbir şey kontrol etmeyen bir
+/// anahtar göstermek olurdu.
+@MainActor
+@Suite("Güncelleme sayfası içeriği")
+struct UpdatesSettingsContentTests {
+
+    @Test func thePageSaysWhatItDoesWhenTheBuildCannotUpdateItself() {
+        let text = UpdatesContent.notConfiguredNote.lowercased()
+        #expect(text.contains("not"))
+        #expect(UpdatesContent.notConfiguredNote.hasSuffix("."))
+    }
+
+    /// Hazır yapıda sayfa güncellemenin NE gönderdiğini söyler: brief'in gizlilik
+    /// kriteri kullanıcının görebileceği bir cümle olmadan denetlenemez.
+    @Test func thePageStatesThatTheCheckSendsNoProfile() {
+        let text = UpdatesContent.privacyNote.lowercased()
+        #expect(text.contains("no") || text.contains("never"))
+        #expect(text.contains("version"))
+    }
+
+    /// briefs/2: *İmzası doğrulanamayan paket kurulmuyor.* Sayfa bunu YAZAR — kullanıcı
+    /// imza doğrulamasının var olduğunu görebilmeli.
+    @Test func thePageStatesThatUnsignedPackagesAreRefused() {
+        #expect(UpdatesContent.signatureNote.lowercased().contains("signature"))
+    }
+
+    @Test func everyNoteIsAsentence() {
+        for note in [UpdatesContent.notConfiguredNote,
+                     UpdatesContent.privacyNote,
+                     UpdatesContent.signatureNote] {
+            #expect(note.count > 40)
+            #expect(note.hasSuffix("."))
+        }
+    }
+}

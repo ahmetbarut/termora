@@ -140,3 +140,22 @@ xcrun stapler validate "$DMG" || fail "Stapler validation failed"
 
 print -P "\n%F{green}✓ Release ready: $DMG%f"
 print "Verified: signed with Developer ID, notarized, stapled, accepted by Gatekeeper."
+
+# --- Homebrew cask --------------------------------------------------------
+# The checksum is computed from the DMG that was just notarized, so the cask can never
+# claim a checksum for a build that does not exist.
+step "Homebrew cask"
+"$PROJECT_ROOT/scripts/update-cask.sh" "$DMG" || fail "Cask update failed"
+
+# --- appcast reminder -----------------------------------------------------
+# The DMG is ready to hand out, but existing installs learn about it only through the
+# Sparkle appcast — and that step needs the EdDSA private key, which lives in your login
+# Keychain and deliberately never enters this script (see docs/updates.md).
+if /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$APP/Contents/Info.plist" >/dev/null 2>&1; then
+  print -P "\n%F{yellow}Next: sign this release into the appcast.%f"
+  print "  ./bin/generate_appcast <releases-dir>/   # from the Sparkle release archive"
+  print "Until the appcast is updated, installed copies will not see this version."
+else
+  print -P "\n%F{yellow}This build carries no SUFeedURL — installed copies cannot update themselves.%f"
+  print "See docs/updates.md to set SUFeedURL and SUPublicEDKey."
+fi

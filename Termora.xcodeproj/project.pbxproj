@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1FB09E01301781D200585465 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 1FB09E03301781D200585465 /* SwiftTerm */; };
 		1FB09E04301781D200585465 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 1FB09E05301781D200585465 /* SwiftTerm */; };
+		1FB09F01301781D200585465 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 1FB09F03301781D200585465 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +59,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1FB09E01301781D200585465 /* SwiftTerm in Frameworks */,
+				1FB09F01301781D200585465 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -120,6 +122,7 @@
 			name = Termora;
 			packageProductDependencies = (
 				1FB09E03301781D200585465 /* SwiftTerm */,
+				1FB09F03301781D200585465 /* Sparkle */,
 			);
 			productName = Termora;
 			productReference = 1FB09D55301781CF00585465 /* Termora.app */;
@@ -206,6 +209,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1FB09E02301781D200585465 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				1FB09F02301781D200585465 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FB09D56301781CF00585465 /* Products */;
@@ -599,6 +603,14 @@
 				minimumVersion = 1.15.0;
 			};
 		};
+		1FB09F02301781D200585465 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -611,6 +623,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1FB09E02301781D200585465 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
+		};
+		1FB09F03301781D200585465 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FB09F02301781D200585465 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

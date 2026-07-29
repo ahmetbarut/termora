@@ -114,7 +114,7 @@ struct SettingsWindowView: View {
             LicenseSettingsView(license: license)
                 .tabItem { label(for: .license) }
 
-            UpdatesSettingsView()
+            UpdatesSettingsView(settings: settings)
                 .tabItem { label(for: .updates) }
 
             AboutSettingsView()

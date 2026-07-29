@@ -4,7 +4,20 @@ macOS için native terminal uygulaması: sekmeler, bölünebilir paneller, arama
 profiller. SwiftUI kabuğu + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.15.0.
 
 - Gereksinim: macOS 14.0+, Xcode 16+ (Swift 5, Swift Testing)
-- Bağımlılık: SwiftTerm (SPM, ilk açılışta Xcode kendisi çözer)
+- Bağımlılık: SwiftTerm ve Sparkle (SPM, ilk açılışta Xcode kendisi çözer)
+
+## Kurulum
+
+```bash
+brew install --cask ahmetbarut/termora/termora
+```
+
+Tap henüz yayınlanmadıysa `.dmg` [yayınlar sayfasından](https://github.com/ahmetbarut/termora/releases)
+indirilebilir. Cask dosyası depoda `Casks/termora.rb`; sürüm ve SHA256'yı
+`scripts/update-cask.sh` yayınlanan DMG'den hesaplayıp yazar — elle düzenlenmez.
+
+Kurulu uygulama kendini Sparkle ile günceller; imzası doğrulanamayan paket kurulmaz.
+Kurulum ve anahtar üretimi: [docs/updates.md](docs/updates.md).
 
 ## Çalıştırma
 

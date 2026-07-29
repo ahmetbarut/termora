@@ -56,13 +56,37 @@ struct AboutSettingsView: View {
     }
 }
 
+/// Updates sayfasının metinleri. Görünümden ayrı ki sayfanın İDDİALARI sınanabilsin:
+/// ne gönderildiği, imzanın doğrulandığı ve yapının hazır olup olmadığı.
+@MainActor
+enum UpdatesContent {
+    static let notConfiguredNote = """
+        This build does not carry an update feed, so Termora does not check for updates \
+        on its own and sends nothing anywhere. The button opens the releases page in your \
+        browser.
+        """
+
+    static let privacyNote = """
+        The check asks the update feed for the latest version number and nothing else. \
+        Termora never sends your machine profile, your usage, or any identifier with it.
+        """
+
+    static let signatureNote = """
+        Every update is verified against Termora's EdDSA signature before it is installed; \
+        a package whose signature does not match is refused.
+        """
+}
+
 /// briefs/2 "Ayarlar Ekranı" ▸ Updates.
 ///
-/// İmzalı otomatik güncelleme (Sparkle) ayrı bir iştir. Bu sayfa o gelene kadar
-/// DÜRÜST davranır: ne yaptığını ve ne YAPMADIĞINI söyler, sürümü gösterir ve
-/// yayınlar sayfasına götürür. Boş ya da yalan bir sayfa göstermek — "güncel"
-/// yazan ama hiçbir şey kontrol etmeyen bir satır — daha kötü olurdu.
+/// Sayfa yapının HAZIR olup olmadığına göre iki farklı şey gösterir. Appcast adresi ve
+/// açık anahtar yoksa Sparkle hiç başlatılmaz; o durumda "otomatik kontrol" anahtarı
+/// çizmek, hiçbir şey yapmayan bir anahtar göstermek olurdu.
 struct UpdatesSettingsView: View {
+
+    /// Ayarlar; anahtar değiştiğinde Sparkle'a taşınır.
+    let settings: SettingsStore
+    var updater: AppUpdater = .shared
 
     var body: some View {
         Form {
@@ -71,17 +95,52 @@ struct UpdatesSettingsView: View {
                     Text("\(AppIdentity.version) (\(AppIdentity.build))")
                         .monospacedDigit()
                 }
-                Button("Check Releases…") {
-                    NSWorkspace.shared.open(TermoraLinks.releases)
+
+                if updater.isReady {
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { settings.settings.checksForUpdatesAutomatically },
+                        set: {
+                            settings.settings.checksForUpdatesAutomatically = $0
+                            updater.apply(settings.settings)
+                        }
+                    ))
+
+                    Picker("Check", selection: Binding(
+                        get: { settings.settings.updateCheckInterval },
+                        set: {
+                            settings.settings.updateCheckInterval = $0
+                            updater.apply(settings.settings)
+                        }
+                    )) {
+                        ForEach(UpdateCheckInterval.allCases) { interval in
+                            Text(interval.title).tag(interval)
+                        }
+                    }
+                    .disabled(!settings.settings.checksForUpdatesAutomatically)
+
+                    // Elle kontrol otomatik ayardan BAĞIMSIZ: kullanıcı kapalı tutup yine
+                    // de bugün bakmak isteyebilir. Sparkle'ın kendi penceresi "Skip This
+                    // Version" ve "Remind Me Later" seçeneklerini burada sunar.
+                    Button("Check Now…") { updater.checkForUpdates() }
+                } else {
+                    Button("Check Releases…") {
+                        NSWorkspace.shared.open(TermoraLinks.releases)
+                    }
                 }
             } header: {
                 Text("Updates")
             } footer: {
-                Text("Termora does not check for updates on its own yet, and it sends nothing "
-                     + "anywhere to find out. The button opens the releases page in your browser.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    if updater.isReady {
+                        Text(UpdatesContent.privacyNote)
+                        Text(UpdatesContent.signatureNote)
+                    } else {
+                        Text(UpdatesContent.notConfiguredNote)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)

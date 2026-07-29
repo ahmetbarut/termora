@@ -25,6 +25,10 @@ struct TermoraApp: App {
                 )
                 .syncingTerminalAppearance(settings: services.settings, sessionManager: services.sessionManager)
                 .presentingOnboardingIfNeeded(settings: services.settings)
+                // briefs/2 "Güncelleme Sistemi": güncelleyici açılışta BİR KEZ başlar.
+                // Yapı hazır değilse (appcast adresi ya da açık anahtar yok) hiçbir şey
+                // olmaz — `AppUpdater` o durumda hiç kurulmaz.
+                .task { AppUpdater.shared.start(with: services.settings.settings) }
         }
         .defaultSize(width: 900, height: 560)
         .commands {
