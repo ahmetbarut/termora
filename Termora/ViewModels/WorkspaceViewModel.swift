@@ -124,6 +124,11 @@ final class WorkspaceViewModel {
     /// kurulmadığı bağlamlarda (önizleme) kablonun ucunu boşa çıkarırdı.
     private(set) var explainSelectionRequest: UUID?
 
+    /// briefs/3 "Yeni Sekme Ekranı": launcher açıkken ⌘T doğrudan sekme açmaz, bu jetonu
+    /// tazeler ve pencere seçim ekranını gösterir. Menünün ekranı doğrudan çağırması,
+    /// launcher'ın hiç kurulmadığı bağlamlarda (önizleme, test) kabloyu boşa çıkarırdı.
+    private(set) var newTabRequest: UUID?
+
     var activeTab: TerminalTab? {
         guard let activeTabID else { return nil }
         return tabs.first { $0.id == activeTabID }
@@ -146,6 +151,30 @@ final class WorkspaceViewModel {
     }
 
     // MARK: - Sekme açma
+
+    /// ⌘T'nin girdiği kapı. Launcher açıksa sekme AÇILMAZ; pencere seçim ekranını gösterir
+    /// ve seçime göre buradaki yollardan biri çağrılır.
+    func requestNewTab() {
+        guard settings.settings.showsNewTabLauncher else {
+            newTab()
+            return
+        }
+        // Her çağrı YENİ bir jeton üretir: ekranı kapatıp ⌘T'ye yeniden basmak da
+        // çalışmalı, `onChange` ise aynı değerde uyanmaz.
+        newTabRequest = UUID()
+    }
+
+    /// Klasörde yeni sekme. Launcher'ın "Open Folder" yolu ve ileride başka giriş
+    /// noktaları aynı kapıyı kullanır.
+    func openFolderInNewTab(_ path: String) {
+        let session = sessionManager.createSession(profile: nil, workingDirectory: path)
+        let paneID = UUID()
+        let tab = TerminalTab(root: .leaf(paneID: paneID, sessionID: session.id),
+                              activePaneID: paneID)
+        tab.automaticTitle = (path as NSString).lastPathComponent
+        tabs.append(tab)
+        activeTabID = tab.id
+    }
 
     func newTab(profile: TerminalProfile? = nil) {
         let session = sessionManager.createSession(profile: profile, workingDirectory: nil)

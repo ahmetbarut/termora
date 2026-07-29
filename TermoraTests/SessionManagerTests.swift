@@ -78,7 +78,12 @@ private func pollSending(timeout: Duration = .seconds(15),
     return condition()
 }
 
+/// `.serialized`: bu süitin her testi gerçek bir kabuk açıyor. Paralel koştuklarında
+/// aynı anda onlarca PTY ve süreç doğuyor; tam paket koşusunda (başka süitler de kabuk
+/// açarken) bu, komutun önplana geçmesini ölçen testi düşürecek kadar yavaşlatıyordu.
+/// Tek tek koşunca aynı test hep geçiyordu — kusur testte değil, yükte.
 @MainActor
+@Suite(.serialized)
 struct SessionManagerTests {
 
     /// Spec: "Yeni terminal açıldığında kullanıcının home dizininden başlat".

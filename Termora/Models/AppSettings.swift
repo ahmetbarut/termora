@@ -58,6 +58,11 @@ struct AppSettings: Codable, Equatable {
     /// (briefs/2 kabul kriteri: *Interactive uygulamaların görünümü bozulmuyor*).
     var isCommandBlockPanelVisible: Bool = false
 
+    /// briefs/3 "Yeni Sekme Ekranı": *Yeni sekme açıldığında shell doğrudan
+    /// başlatılmalıdır.* Launcher yalnız kullanıcı isterse araya girer, bu yüzden
+    /// varsayılan KAPALI — ve brief ayrıca "terminal kullanımını yavaşlatmamalı" diyor.
+    var showsNewTabLauncher: Bool = false
+
     /// briefs/2 "Ayarlar Ekranı" ▸ Keybindings: kullanıcının değiştirdiği kısayollar.
     ///
     /// Anahtar komut KİMLİĞİ (`AppShortcut.id`), değer `AppShortcut.stroke` biçimi.
@@ -156,6 +161,9 @@ struct AppSettings: Codable, Equatable {
         customShortcutStrokes = try container.decodeIfPresent(
             [String: String].self, forKey: .customShortcutStrokes
         ) ?? defaults.customShortcutStrokes
+        showsNewTabLauncher = try container.decodeIfPresent(
+            Bool.self, forKey: .showsNewTabLauncher
+        ) ?? defaults.showsNewTabLauncher
         sidebarWidth = SettingsLimits.clampSidebarWidth(
             try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
         )

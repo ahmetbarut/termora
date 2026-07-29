@@ -91,7 +91,7 @@ struct AppCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Button("New Tab") {
-                workspace?.newTab()
+                workspace?.requestNewTab()
             }
             .shortcut(AppShortcuts.newTab, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)

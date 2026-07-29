@@ -40,6 +40,16 @@ final class CommandPaletteModel {
         isPresented = false
     }
 
+    /// Belirli bir kategoriyi arayarak açar (briefs/3 "Yeni Sekme Ekranı" yolları).
+    ///
+    /// Launcher kendi workspace/SSH/klasör listesini ÇİZMEZ: aynı kaydı iki ayrı yerde
+    /// bakımı gereken iki listeye bölmek yerine paletin arama ve önizleme yüzeyini
+    /// kullanır.
+    func open(category: CommandPaletteCategory) {
+        query = category.title
+        isPresented = true
+    }
+
     func toggle() {
         if isPresented { dismiss() } else { present() }
     }

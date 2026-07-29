@@ -83,6 +83,9 @@ struct MainWindowView: View {
     /// Kayıtlı çerçeve bir kez uygulanır; sonrasında pencerenin boyutu kullanıcınındır.
     @State private var hasPlacedWindow = false
 
+    /// briefs/3 "Yeni Sekme Ekranı": launcher açıkken ⌘T önce seçim sorar.
+    @State private var showsLauncher = false
+
     @Environment(\.openWindow) private var openWindow
     /// Sidebar'daki Settings satırları paletle aynı yolu kullanır.
     @Environment(\.openSettings) private var openSettings
@@ -224,6 +227,26 @@ struct MainWindowView: View {
         }
         .onReceive(titleTicker) { _ in
             workspace.syncAutomaticTitles()
+        }
+        .sheet(isPresented: $showsLauncher) {
+            NewTabLauncherView(
+                availability: NewTabLauncherAvailability(
+                    hasWorkspaces: !(services.workspaces.workspaces.isEmpty),
+                    hasSSHHosts: !services.sshHosts.hosts.isEmpty,
+                    hasRecentFolders: !services.recentFolders.recents.isEmpty
+                ),
+                onChoose: { option in
+                    showsLauncher = false
+                    handle(option)
+                },
+                onCancel: { showsLauncher = false }
+            )
+        }
+        .onChange(of: workspace.newTabRequest) { _, request in
+            guard request != nil else { return }
+            // Ayar kapalıyken istek hiç doğmaz; buraya geldiyse kullanıcı ekranı açık
+            // tutmayı seçmiş demektir.
+            showsLauncher = true
         }
         .focusedSceneValue(\.workspace, workspace)
         .background(
@@ -467,6 +490,26 @@ struct MainWindowView: View {
                                     ai: ai,
                                     currentDirectory: currentWorkingDirectory(),
                                     openSettings: { openSettings() })
+    }
+
+    /// Launcher seçimini yerine getirir. Her yol zaten var olan bir kapıyı kullanır —
+    /// launcher yeni bir davranış eklemez, var olanların önüne bir seçim koyar.
+    private func handle(_ option: NewTabLauncherOption) {
+        switch option {
+        case .defaultShell:
+            workspace.newTab()
+        case .openFolder:
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            workspace.openFolderInNewTab(url.path)
+        case .openWorkspace, .connectSSH, .recentSessions:
+            // Bu üçünün kendi arama ve önizleme yüzeyi paletin içinde: ikinci bir liste
+            // çizmek, aynı kaydı iki ayrı yerde bakımı gereken iki listeye bölerdi.
+            palette.open(category: option.paletteCategory)
+        }
     }
 
     /// Klavye odağını aktif panelin terminaline geri verir.

@@ -105,6 +105,17 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
 
                 Toggle("Show status bar", isOn: $settings.settings.showStatusBar)
+
+                // briefs/3 "Yeni Sekme Ekranı": varsayılan KAPALI — yeni sekme doğrudan
+                // shell açar ve bu ekran araya girmez.
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Ask what to open on ⌘T", isOn: $settings.settings.showsNewTabLauncher)
+                    Text("Off by default: ⌘T starts your shell right away. Turn this on to "
+                         + "pick a folder, workspace or SSH host first.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section("Session") {
