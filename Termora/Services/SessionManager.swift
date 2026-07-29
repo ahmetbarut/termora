@@ -440,6 +440,13 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         if view.getTerminal().options.scrollback != scrollback {
             view.changeScrollback(scrollback)
         }
+
+        // Option tuşu: `optionAsMetaKey` SwiftTerm'in alanı, `optionKeySendsMeta`
+        // bizim kalıcı ayarımız. Varsayılan KAPALI, böylece Option alternatif karakteri
+        // (Option+4 = `$` gibi) yazar; açılırsa Esc önekli Meta dizisi gönderir.
+        if view.optionAsMetaKey != current.optionKeySendsMeta {
+            view.optionAsMetaKey = current.optionKeySendsMeta
+        }
     }
 
     /// The profile a session was opened with, if it still exists in the store.

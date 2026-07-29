@@ -44,6 +44,18 @@ struct AppSettings: Codable, Equatable {
     var themeID: String = "termora-dark"
     var windowOpacity: Double = 1.0
     var scrollbackLines: Int = 10_000
+    /// Option tuşunun davranışı. SwiftTerm'in `optionAsMetaKey` alanı ile birebir eşleşir.
+    ///
+    /// - `true`  → Option + tuş, Esc önekli Meta dizisi gönderir (readline/emacs için
+    ///   M-b geri-sözcük, M-d ileri-sözcük-sil). Güçlü kullanıcılar bunu ister.
+    /// - `false` → Option + tuş, tuşun alternatif karakterini yazar (Türkçe Q'da
+    ///   Option+4 = `$`, Option+5 = `€` vb.).
+    ///
+    /// Varsayılan KAPALI: Terminal.app ile aynı. Çoğu klavye düzeninde Option, para
+    /// işaretleri ve aksanlı harfler gibi GÜNLÜK karakterleri taşır; bunu Meta'ya feda
+    /// etmek göze alınmaz. "Option hiçbir şey yazmıyor" sanan kullanıcı aslında Meta
+    /// dizisi gönderip kabuğun sessiz kalmasını yaşıyordu.
+    var optionKeySendsMeta: Bool = false
     var defaultShellPath: String? = nil
     var startupDirectory: String? = nil
     var showStatusBar: Bool = true
@@ -173,6 +185,8 @@ struct AppSettings: Codable, Equatable {
         themeID = try container.decodeIfPresent(String.self, forKey: .themeID) ?? defaults.themeID
         windowOpacity = try container.decodeIfPresent(Double.self, forKey: .windowOpacity) ?? defaults.windowOpacity
         scrollbackLines = try container.decodeIfPresent(Int.self, forKey: .scrollbackLines) ?? defaults.scrollbackLines
+        optionKeySendsMeta = try container.decodeIfPresent(Bool.self, forKey: .optionKeySendsMeta)
+            ?? defaults.optionKeySendsMeta
         defaultShellPath = try container.decodeIfPresent(String.self, forKey: .defaultShellPath)
         startupDirectory = try container.decodeIfPresent(String.self, forKey: .startupDirectory)
         showStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showStatusBar) ?? defaults.showStatusBar

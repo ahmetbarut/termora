@@ -7,7 +7,7 @@ import SwiftUI
 /// ÇALIŞTIĞINI belirler — hangi kabuk, nerede açılır, ne kadar geçmiş tutulur.
 struct TerminalSettingsView: View {
 
-    let settings: SettingsStore
+    @Bindable var settings: SettingsStore
     /// briefs/3 "Sidebar" ▸ Saved Commands. Düzenleme burada yaşıyor: komutlar
     /// terminale ait ve brief ayrı bir sekme saymıyor.
     let savedCommands: SavedCommandStore
@@ -68,6 +68,19 @@ struct TerminalSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             } header: {
                 Text("History")
+            }
+
+            Section {
+                Toggle("Use Option key as Meta (Esc)", isOn: $settings.settings.optionKeySendsMeta)
+                Text("Off (default): Option types the character printed on the key — "
+                     + "Option+4 gives “$”, Option+5 gives “€”. "
+                     + "On: Option sends an Esc-prefixed Meta sequence for shell/emacs "
+                     + "shortcuts (Option+b jumps back a word).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Keyboard")
             }
 
             savedCommandsSection

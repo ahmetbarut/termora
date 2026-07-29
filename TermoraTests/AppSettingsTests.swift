@@ -18,6 +18,9 @@ import Testing
         #expect(settings.themeID == "termora-dark")
         #expect(settings.windowOpacity == 1.0)
         #expect(settings.scrollbackLines == 10_000)
+        // Option tuşu varsayılan KAPALI: Option, Meta (Esc) değil, tuşun alternatif
+        // karakterini yazmalı (Option+4 = "$" vb.). Terminal.app ile aynı.
+        #expect(settings.optionKeySendsMeta == false)
         #expect(settings.defaultShellPath == nil)
         #expect(settings.startupDirectory == nil)
         #expect(settings.showStatusBar == true)
@@ -44,6 +47,7 @@ import Testing
         settings.themeID = "nord"
         settings.windowOpacity = 0.9
         settings.scrollbackLines = 50_000
+        settings.optionKeySendsMeta = true
         settings.defaultShellPath = "/bin/bash"
         settings.startupDirectory = "/Users/me"
         settings.showStatusBar = false
@@ -62,6 +66,7 @@ import Testing
         #expect(decoded.notifiesOnCommandSuccess == false)
         #expect(decoded.notifiesOnCommandFailure == false)
         #expect(Double(decoded.longCommandThresholdSeconds) == 120)
+        #expect(decoded.optionKeySendsMeta == true)
     }
 
     /// Eski (onboarding alanı olmayan) bloblar hâlâ çözülmeli; aksi hâlde güncelleyen
@@ -80,6 +85,9 @@ import Testing
         #expect(decoded.notifiesOnCommandSuccess == true)
         #expect(decoded.notifiesOnCommandFailure == true)
         #expect(Double(decoded.longCommandThresholdSeconds) == 30)
+        // Eski blobda optionKeySendsMeta yok: güncelleyen kullanıcının Option tuşu
+        // bir anda Meta'ya dönüşmemeli — varsayılan (karakter yazar) korunur.
+        #expect(decoded.optionKeySendsMeta == false)
     }
 
     @Test func cursorStyleMapsToSwiftTermForAllSixCases() {
