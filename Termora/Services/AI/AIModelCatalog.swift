@@ -31,8 +31,11 @@ final class AIModelCatalog {
     /// Kullanıcının seçtiği model. Depo `AppSettings`'tir: seçim Ayarlar ve panel
     /// arasında paylaşılır ve uygulama yeniden açıldığında korunur.
     var selectedModel: String? {
-        get { settings.settings.aiModel }
-        set { settings.settings.aiModel = newValue }
+        // Model sağlayıcıya ÖZGÜDÜR: `llama3.2` OpenAI'de, `gpt-4o` Ollama'da yoktur.
+        // Tek alanda tutmak, sağlayıcı değiştiren kullanıcıya olmayan bir model seçili
+        // gösterirdi.
+        get { settings.settings.aiModel(for: settings.settings.aiProviderKind) }
+        set { settings.settings.aiModel(for: settings.settings.aiProviderKind, is: newValue) }
     }
 
     var installedModels: [AIModel] {

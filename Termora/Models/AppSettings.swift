@@ -92,6 +92,24 @@ struct AppSettings: Codable, Equatable {
     /// AI'a hangi bağlamların gönderileceği (briefs/2 "Terminal Bağlamı").
     var aiContext: AIContextPreferences = AIContextPreferences()
 
+    /// briefs/2 "AI Asistanı": OpenAI, Anthropic, Ollama, OpenAI uyumlu özel adres.
+    ///
+    /// Varsayılan YEREL Ollama: yeni kullanıcı hiçbir anahtar girmeden ve hiçbir veri
+    /// makineden çıkmadan başlar (briefs/2 "Gizlilik").
+    var aiProviderKind: AIProviderKind = .ollama
+
+    /// Sağlayıcı başına adres. Tek bir alan olsaydı OpenAI'ye geçip geri dönen kullanıcı
+    /// Ollama adresini yeniden yazmak zorunda kalırdı.
+    ///
+    /// Anahtar `AIProviderKind.rawValue`; ham dize kullanılıyor çünkü sözlüğün JSON'a
+    /// yazılması gerekiyor ve ileride kaldırılan bir sağlayıcının kaydı diğerlerini
+    /// çözülemez hâle getirmemeli.
+    var aiEndpointsByProvider: [String: String] = [:]
+
+    /// Sağlayıcı başına seçili model. Modeller sağlayıcıya özgüdür; `llama3.2` OpenAI'de,
+    /// `gpt-4o` Ollama'da yoktur.
+    var aiModelsByProvider: [String: String] = [:]
+
     init() {}
 
     /// Elle yazılmış çözücü: Swift'in ürettiği `init(from:)` eksik anahtarlarda
@@ -138,11 +156,58 @@ struct AppSettings: Codable, Equatable {
         longCommandThresholdSeconds = try container.decodeIfPresent(Double.self, forKey: .longCommandThresholdSeconds)
             ?? defaults.longCommandThresholdSeconds
         aiEndpoint = try container.decodeIfPresent(String.self, forKey: .aiEndpoint) ?? defaults.aiEndpoint
+        // Bilinmeyen bir sağlayıcı adı (eski/yeni sürüm) yalnız KENDİ kaydını düşürür;
+        // tüm ayarları çözülemez yapmaz.
+        aiProviderKind = try container.decodeIfPresent(String.self, forKey: .aiProviderKind)
+            .flatMap(AIProviderKind.init(rawValue:)) ?? defaults.aiProviderKind
+        aiEndpointsByProvider = try container.decodeIfPresent(
+            [String: String].self, forKey: .aiEndpointsByProvider
+        ) ?? defaults.aiEndpointsByProvider
+        aiModelsByProvider = try container.decodeIfPresent(
+            [String: String].self, forKey: .aiModelsByProvider
+        ) ?? defaults.aiModelsByProvider
+
         aiModel = try container.decodeIfPresent(String.self, forKey: .aiModel)
+
+        // Tek sağlayıcılı sürümden göç: o sürümde `aiEndpoint`/`aiModel` Ollama'nın
+        // kaydıydı. Boşluğu YALNIZ doldurur — sağlayıcı başına kayıt varsa ona
+        // dokunmaz, yoksa güncelleme kullanıcının yeni ayarını eskisiyle ezerdi.
+        let ollama = AIProviderKind.ollama.rawValue
+        if aiEndpointsByProvider[ollama] == nil, aiEndpoint != defaults.aiEndpoint {
+            aiEndpointsByProvider[ollama] = aiEndpoint
+        }
+        if aiModelsByProvider[ollama] == nil, let aiModel {
+            aiModelsByProvider[ollama] = aiModel
+        }
         // Bağlam tercihleri KENDİ ileri uyumlu çözücüsüne sahiptir; ileride eklenen bir
         // bağlam türü eski blobu bozmaz. Blok tamamen bozuksa varsayılana düşer —
         // gizlilik açısından güvenli yön budur (varsayılanlar geçmişi göndermiyor).
         aiContext = (try? container.decodeIfPresent(AIContextPreferences.self, forKey: .aiContext))
             .flatMap { $0 } ?? defaults.aiContext
+    }
+}
+
+
+// MARK: - Sağlayıcı başına AI ayarları
+
+extension AppSettings {
+
+    /// Seçili sağlayıcının adresi; kullanıcı girmediyse sağlayıcının resmî adresi.
+    /// Özel adresli sağlayıcıda boş döner — orada adres yalnızca kullanıcıdan gelir.
+    func aiEndpoint(for kind: AIProviderKind) -> String {
+        if let stored = aiEndpointsByProvider[kind.rawValue], !stored.isEmpty { return stored }
+        return kind.defaultEndpoint ?? ""
+    }
+
+    mutating func aiEndpoint(for kind: AIProviderKind, is value: String) {
+        aiEndpointsByProvider[kind.rawValue] = value
+    }
+
+    func aiModel(for kind: AIProviderKind) -> String? {
+        aiModelsByProvider[kind.rawValue]
+    }
+
+    mutating func aiModel(for kind: AIProviderKind, is value: String?) {
+        aiModelsByProvider[kind.rawValue] = value
     }
 }

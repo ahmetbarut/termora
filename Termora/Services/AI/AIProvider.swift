@@ -2,19 +2,51 @@ import Foundation
 
 // MARK: - Sağlayıcı
 
-/// Hangi sağlayıcı ailesi. Bugün TEK üye var; enum ileride eklenecek üyeler için değil,
-/// kayıtlı ayarın (`AppSettings`) bir gün ikinci bir aileyi ayırt edebilmesi için burada.
-///
-/// Kullanıcı kararı: bu turda YALNIZ Ollama. Ollama yerel çalışır ve API anahtarı
-/// İSTEMEZ — bu yüzden Termora bu turda hiçbir yere anahtar yazmaz, Keychain'e de.
+/// Hangi sağlayıcı ailesi (briefs/2 "AI Asistanı": OpenAI, Anthropic, Ollama ve
+/// OpenAI uyumlu özel API adresleri).
 enum AIProviderKind: String, Codable, CaseIterable, Identifiable {
     case ollama
+    case openAI
+    case anthropic
+    /// OpenAI ile aynı sözleşmeyi konuşan üçüncü taraf adresler (Groq, Together,
+    /// LM Studio, vLLM…). Ayrı bir istemci değil, `OpenAIClient`'ın başka bir adresi.
+    case openAICompatible
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .ollama: "Ollama (local)"
+        case .openAI: "OpenAI"
+        case .anthropic: "Anthropic"
+        case .openAICompatible: "OpenAI-compatible endpoint"
+        }
+    }
+
+    /// Sağlayıcının API anahtarını sakladığı Keychain hesabı; anahtar istemeyen
+    /// sağlayıcıda `nil`.
+    ///
+    /// Yerel Ollama'ya hesap açmak, olmayan bir sırrı varmış gibi gösterirdi —
+    /// ayarlar ekranı da o yüzden ona anahtar alanı çizmez.
+    var keychainAccount: String? {
+        switch self {
+        case .ollama: nil
+        case .openAI: "ai.openai.apiKey"
+        case .anthropic: "ai.anthropic.apiKey"
+        case .openAICompatible: "ai.openAICompatible.apiKey"
+        }
+    }
+
+    var requiresAPIKey: Bool { keychainAccount != nil }
+
+    /// Kullanıcı adres girmediğinde kullanılacak resmî uç nokta. Özel adresli
+    /// sağlayıcıda `nil` — orada adres kullanıcının kendisinden gelir.
+    var defaultEndpoint: String? {
+        switch self {
+        case .ollama: OllamaEndpoint.defaultAddress
+        case .openAI: "https://api.openai.com/v1"
+        case .anthropic: "https://api.anthropic.com/v1"
+        case .openAICompatible: nil
         }
     }
 }
@@ -47,8 +79,9 @@ struct AIReply: Equatable {
 
 /// AI sağlayıcısının Termora'ya bakan yüzü.
 ///
-/// Somut sınıf bugün TEK (`OllamaClient`), ama panel ve testler yalnız bu protokolü görür:
-/// testler sahte bir sağlayıcıyla koşar ve HİÇBİR gerçek ağ isteği yapmaz.
+/// Somut sınıflar `OllamaClient`, `OpenAIClient` ve `AnthropicClient`; panel ve testler
+/// yalnız bu protokolü görür, testler sahte bir sağlayıcıyla koşar ve HİÇBİR gerçek ağ
+/// isteği yapmaz.
 @MainActor
 protocol AIProviding: AnyObject {
     var kind: AIProviderKind { get }
@@ -91,6 +124,8 @@ extension AIProviding {
 enum AIProviderError: Error, Equatable {
     /// Ayarlardaki adres bir HTTP adresi değil.
     case invalidEndpoint(String)
+    /// Sağlayıcı anahtar ister ama Keychain'de kayıt yok.
+    case missingAPIKey(provider: AIProviderKind)
     /// Adres doğru ama kimse cevap vermiyor.
     case endpointUnreachable(endpoint: String)
     /// Ollama çalışıyor ama hiç model indirilmemiş — bu makinenin başlangıç durumu.
@@ -103,6 +138,7 @@ enum AIProviderError: Error, Equatable {
     var title: String {
         switch self {
         case .invalidEndpoint: "That is not a valid Ollama address"
+        case let .missingAPIKey(provider): "\(provider.displayName) needs an API key"
         case .endpointUnreachable: "Termora could not reach Ollama"
         case .noModelsInstalled: "Ollama has no models to answer with"
         case let .modelNotFound(model): "The model “\(model)” is not installed"
@@ -116,6 +152,9 @@ enum AIProviderError: Error, Equatable {
         switch self {
         case let .invalidEndpoint(raw):
             "“\(raw)” is not an http:// or https:// address."
+        case let .missingAPIKey(provider):
+            "Termora has no \(provider.displayName) key in the macOS Keychain, and this "
+                + "provider refuses unauthenticated requests."
         case let .endpointUnreachable(endpoint):
             "Nothing answered at \(endpoint). Ollama is probably not running, or it listens "
                 + "on a different address."
@@ -137,6 +176,9 @@ enum AIProviderError: Error, Equatable {
         switch self {
         case .invalidEndpoint:
             "Enter an address such as http://localhost:11434 in Settings ▸ AI."
+        case .missingAPIKey:
+            "Paste the key in Settings ▸ AI. It is stored in the Keychain, never in "
+                + "Termora's settings file."
         case .endpointUnreachable:
             "Start it with `ollama serve`, then try again, or change the address in Settings ▸ AI."
         case .noModelsInstalled:
@@ -155,6 +197,7 @@ enum AIProviderError: Error, Equatable {
     var technicalDetail: String {
         switch self {
         case let .invalidEndpoint(raw): "invalidEndpoint(\(raw))"
+        case let .missingAPIKey(provider): "missingAPIKey(\(provider.rawValue))"
         case let .endpointUnreachable(endpoint): "endpointUnreachable(\(endpoint))"
         case let .noModelsInstalled(endpoint): "noModelsInstalled(\(endpoint))"
         case let .modelNotFound(model): "modelNotFound(\(model))"

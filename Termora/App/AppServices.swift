@@ -114,10 +114,13 @@ final class AppServices {
         self.recentFolders = RecentFoldersStore(defaults: defaults)
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
 
-        // Uç nokta bir KAPANIŞ olarak verilir, dize olarak değil: kullanıcı Ayarlar ▸ AI'da
-        // adresi değiştirdiğinde istemcinin yeniden kurulması gerekmez.
-        let aiProvider = OllamaClient(endpoint: { settings.settings.aiEndpoint },
-                                      transport: URLSessionAITransport())
+        // Sağlayıcı ÇALIŞMA ANINDA değişebilir (briefs/2: OpenAI, Anthropic, Ollama,
+        // OpenAI uyumlu adres). Panel ve katalog tek bir referans tutar; yönlendirici
+        // seçili sağlayıcıya delege eder, böylece seçim değişince hiçbiri yeniden
+        // kurulmak zorunda kalmaz.
+        let aiProvider = AIProviderRouter(settings: settings,
+                                          keychain: KeychainService(),
+                                          transport: URLSessionAITransport())
         self.aiProvider = aiProvider
         let aiCatalog = AIModelCatalog(provider: aiProvider, settings: settings)
         self.aiCatalog = aiCatalog

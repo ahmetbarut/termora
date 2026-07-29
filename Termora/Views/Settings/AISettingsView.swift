@@ -11,6 +11,11 @@ enum AISettingsContent {
     static let providerFooter = "Ollama runs on this Mac and asks for no API key, so Termora "
         + "stores no credentials for it."
 
+    /// briefs/1 "Güvenlik": anahtar Keychain'de tutulur. Kullanıcı bunu görebilmeli —
+    /// bir gizlilik vaadi ancak söylendiğinde vaattir.
+    static let apiKeyFooter = "The key is stored in your macOS Keychain, never in Termora's "
+        + "settings file. Clearing the field removes it from the Keychain."
+
     static let endpointHelp = "The address Termora sends questions to. The default is Ollama's own."
 
     static let modelHelp = "Termora lists the models already downloaded on this Mac; it never "
@@ -22,7 +27,8 @@ enum AISettingsContent {
     static let maskingNote = "Whatever is sent goes through secret masking first, and the panel "
         + "shows you the exact text before you send it."
 
-    static let allProse = [providerFooter, endpointHelp, modelHelp, contextFooter, maskingNote]
+    static let allProse = [providerFooter, apiKeyFooter, endpointHelp, modelHelp,
+                           contextFooter, maskingNote]
 
     /// Model listesi boşken/başarısızken açılır listenin yerine geçen tek satır.
     static let noModelPlaceholder = "No model available"
@@ -41,18 +47,25 @@ struct AISettingsView: View {
     @State private var endpointDraft = ""
     @State private var isRefreshing = false
 
+    /// Anahtar taslağı. Ayara YAZILMAZ — `commitAPIKey` onu Keychain'e koyar.
+    @State private var apiKeyDraft = ""
+    @State private var keychainFailure: String?
+
+    private let keychain = KeychainService()
+
     var body: some View {
         Form {
             Section {
-                LabeledContent("Provider") {
-                    Text(catalog.providerName)
-                        .foregroundStyle(.secondary)
+                Picker("Provider", selection: providerBinding) {
+                    ForEach(AIProviderKind.allCases) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
                 }
 
                 TextField("Endpoint", text: $endpointDraft)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(commitEndpoint)
-                    .accessibilityLabel("Ollama server address")
+                    .accessibilityLabel("\(selectedProvider.displayName) server address")
                     .accessibilityHint(AISettingsContent.endpointHelp)
 
                 HStack {
@@ -60,19 +73,51 @@ struct AISettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Use Default") {
-                        endpointDraft = OllamaEndpoint.defaultAddress
-                        commitEndpoint()
+                    if let fallback = selectedProvider.defaultEndpoint {
+                        Button("Use Default") {
+                            endpointDraft = fallback
+                            commitEndpoint()
+                        }
+                        .disabled(endpointDraft == fallback)
                     }
-                    .disabled(endpointDraft == OllamaEndpoint.defaultAddress)
                 }
             } header: {
                 Text("Provider")
             } footer: {
-                Text(AISettingsContent.providerFooter)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Yerel sağlayıcının gizlilik vaadi yalnız ONUN için doğrudur; uzak
+                // sağlayıcı seçiliyken göstermek yanlış güven verirdi.
+                if selectedProvider == .ollama {
+                    Text(AISettingsContent.providerFooter)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            // Anahtar alanı yalnız anahtar İSTEYEN sağlayıcıda çizilir: Ollama'ya alan
+            // göstermek, olmayan bir sırrı varmış gibi göstermek olurdu.
+            if selectedProvider.requiresAPIKey {
+                Section {
+                    SecureField("API key", text: $apiKeyDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(commitAPIKey)
+                        .accessibilityLabel("\(selectedProvider.displayName) API key")
+                        .accessibilityHint(AISettingsContent.apiKeyFooter)
+
+                    if let failure = keychainFailure {
+                        Text(failure)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: {
+                    Text("Authentication")
+                } footer: {
+                    Text(AISettingsContent.apiKeyFooter)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section {
@@ -116,9 +161,7 @@ struct AISettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear {
-            endpointDraft = settings.settings.aiEndpoint
-        }
+        .onAppear(perform: loadDraftsForSelectedProvider)
         .task {
             // Sayfa açıldığında liste bir kez sorulur; yoksa kullanıcı gerekçesiz bir
             // "No model available" satırına bakar ve ne yapacağını bilemez.
@@ -177,9 +220,49 @@ struct AISettingsView: View {
     /// Adres ayara YAZILIRKEN normalleştirilir; kullanıcı `localhost:11434` yazdıysa
     /// kaydedilen `http://localhost:11434` olur ve panel ile ayar aynı şeyi gösterir.
     private func commitEndpoint() {
-        let normalized = OllamaEndpoint.url(from: endpointDraft)?.absoluteString
-        settings.settings.aiEndpoint = normalized ?? endpointDraft
-        endpointDraft = settings.settings.aiEndpoint
+        let normalized = RemoteEndpoint.url(from: endpointDraft)?.absoluteString
+        settings.settings.aiEndpoint(for: selectedProvider, is: normalized ?? endpointDraft)
+        endpointDraft = settings.settings.aiEndpoint(for: selectedProvider)
+    }
+
+    // MARK: - Sağlayıcı seçimi
+
+    private var selectedProvider: AIProviderKind { settings.settings.aiProviderKind }
+
+    private var providerBinding: Binding<AIProviderKind> {
+        Binding(
+            get: { selectedProvider },
+            set: { newValue in
+                // Yazılmakta olan taslak önce kaydedilir: sağlayıcı değiştirmek,
+                // kullanıcının henüz Enter'lamadığı adresi çöpe atmamalı.
+                commitEndpoint()
+                settings.settings.aiProviderKind = newValue
+                loadDraftsForSelectedProvider()
+                // Model listesi sağlayıcıya özgüdür; eskisini göstermek yanlış olurdu.
+                Task { await catalog.refresh() }
+            }
+        )
+    }
+
+    private func loadDraftsForSelectedProvider() {
+        endpointDraft = settings.settings.aiEndpoint(for: selectedProvider)
+        // Anahtar Keychain'den okunur; ayar dosyasında hiç bulunmaz.
+        apiKeyDraft = (try? keychain.secret(account: selectedProvider.keychainAccount ?? "")) ?? ""
+        keychainFailure = nil
+    }
+
+    /// Boş alan anahtarı SİLER (bkz. `KeychainService.setSecret`): kullanıcı alanı
+    /// temizlediğinde anahtarın Keychain'de kalması, sildiğini sanmasına yol açardı.
+    private func commitAPIKey() {
+        guard let account = selectedProvider.keychainAccount else { return }
+        do {
+            try keychain.setSecret(apiKeyDraft, account: account)
+            keychainFailure = nil
+        } catch {
+            // Sessizce yutmak, kullanıcının kaydettiğini sanıp isteklerin 401 almasına
+            // yol açardı (briefs/3 "Error State").
+            keychainFailure = "Termora could not write to the Keychain: \(error)"
+        }
     }
 }
 
