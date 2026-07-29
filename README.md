@@ -62,7 +62,7 @@ xcodebuild test -project Termora.xcodeproj -scheme Termora \
 | ⌘D / ⌘⇧D / ⌘⇧W | Dikey böl / yatay böl / paneli kapat |
 | ⌘⌥ ok tuşları | Komşu panele odaklan |
 | ⌘F / ⌘G / ⌘⇧G | Bul / sonraki / önceki eşleşme |
-| ⌘, | Ayarlar (Genel, Görünüm, Profiller) |
+| ⌘, | Ayarlar (Genel, Görünüm, Profiller, Kısayollar, Güncellemeler, Hakkında) |
 
 ## Klasör düzeni
 
