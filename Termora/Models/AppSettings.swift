@@ -57,6 +57,13 @@ struct AppSettings: Codable, Equatable {
     /// terminali değiştirseydi `vim`, `top`, `tmux` gibi tam ekran uygulamalar bozulurdu
     /// (briefs/2 kabul kriteri: *Interactive uygulamaların görünümü bozulmuyor*).
     var isCommandBlockPanelVisible: Bool = false
+
+    /// briefs/2 "Ayarlar Ekranı" ▸ Keybindings: kullanıcının değiştirdiği kısayollar.
+    ///
+    /// Anahtar komut KİMLİĞİ (`AppShortcut.id`), değer `AppShortcut.stroke` biçimi.
+    /// Yalnız DEĞİŞTİRİLENLER saklanır: varsayılanları da yazmak, uygulamanın kısayolu
+    /// bir gün değiştiğinde kullanıcıyı eskisine kilitlerdi.
+    var customShortcutStrokes: [String: String] = [:]
     var sidebarWidth: Double = SettingsLimits.defaultSidebarWidth
     /// brief 3 "İlk Açılış Akışı": ilk açılış akışı yalnızca bir kez gösterilir.
     /// Akış tamamlandığında **ve atlandığında** true olur.
@@ -146,6 +153,9 @@ struct AppSettings: Codable, Equatable {
         isCommandBlockPanelVisible = try container.decodeIfPresent(
             Bool.self, forKey: .isCommandBlockPanelVisible
         ) ?? defaults.isCommandBlockPanelVisible
+        customShortcutStrokes = try container.decodeIfPresent(
+            [String: String].self, forKey: .customShortcutStrokes
+        ) ?? defaults.customShortcutStrokes
         sidebarWidth = SettingsLimits.clampSidebarWidth(
             try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
         )

@@ -7,21 +7,29 @@ import SwiftUI
 enum SettingsTab: String, CaseIterable {
     case general
     case appearance
+    case terminal
     case profiles
     case workspaces
     case ssh
     case ai
+    case keybindings
     case privacy
+    case updates
+    case about
 
     var title: String {
         switch self {
         case .general: "General"
         case .appearance: "Appearance"
+        case .terminal: "Terminal"
         case .profiles: "Profiles"
         case .workspaces: "Workspaces"
         case .ssh: "SSH"
         case .ai: "AI"
+        case .keybindings: "Keybindings"
         case .privacy: "Privacy"
+        case .updates: "Updates"
+        case .about: "About"
         }
     }
 
@@ -29,11 +37,15 @@ enum SettingsTab: String, CaseIterable {
         switch self {
         case .general: "gearshape"
         case .appearance: "paintpalette"
+        case .terminal: "terminal"
         case .profiles: "person.crop.rectangle.stack"
         case .workspaces: CommandPaletteCategory.workspaces.symbolName
         case .ssh: CommandPaletteCategory.ssh.symbolName
         case .ai: "sparkles"
+        case .keybindings: "keyboard"
         case .privacy: "hand.raised"
+        case .updates: "arrow.down.circle"
+        case .about: "info.circle"
         }
     }
 }
@@ -68,6 +80,9 @@ struct SettingsWindowView: View {
             AppearanceSettingsView(settings: settings, themes: themes)
                 .tabItem { label(for: .appearance) }
 
+            TerminalSettingsView(settings: settings)
+                .tabItem { label(for: .terminal) }
+
             ProfilesSettingsView(profiles: profiles, themes: themes)
                 .tabItem { label(for: .profiles) }
 
@@ -86,6 +101,15 @@ struct SettingsWindowView: View {
 
             PrivacySettingsView()
                 .tabItem { label(for: .privacy) }
+
+            KeybindingsSettingsView(settings: settings)
+                .tabItem { label(for: .keybindings) }
+
+            UpdatesSettingsView()
+                .tabItem { label(for: .updates) }
+
+            AboutSettingsView()
+                .tabItem { label(for: .about) }
         }
         .frame(width: 560, height: 480)
     }

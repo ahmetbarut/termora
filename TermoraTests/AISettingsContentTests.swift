@@ -35,7 +35,6 @@ struct AISettingsContentTests {
         let privacy = try #require(order.firstIndex(of: .privacy))
         #expect(ssh < ai)
         #expect(ai < privacy)
-        #expect(order.last == .privacy)
     }
 
     // MARK: - Gizlilik sayfası artık AI'ı YOK saymıyor

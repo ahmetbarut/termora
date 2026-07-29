@@ -25,6 +25,14 @@ extension View {
     func shortcut(_ shortcut: AppShortcut) -> some View {
         keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
     }
+
+    /// Kullanıcının ataması varsa ONU, yoksa varsayılanı bağlar. Menüler bunu kullanır;
+    /// aksi hâlde Keybindings ekranı hiçbir şeyi değiştirmeyen ölü bir liste olurdu.
+    func shortcut(_ shortcut: AppShortcut, custom: [String: String]) -> some View {
+        let resolved = custom[shortcut.id].flatMap(AppShortcuts.shortcut(from:))
+        return keyboardShortcut(resolved?.key ?? shortcut.key,
+                                modifiers: resolved?.modifiers ?? shortcut.modifiers)
+    }
 }
 
 /// Uygulamanın bütün menü kısayolları. Menüler (`AppCommands`) bu kataloğu okur; katalog
@@ -140,6 +148,39 @@ enum AppShortcuts {
         focusPaneLeft, focusPaneRight, focusPaneUp, focusPaneDown,
         nextTab, previousTab,
     ] + tabSelection
+
+    /// Kullanıcının atamalarını kataloğun üstüne uygular.
+    ///
+    /// Anahtar komut KİMLİĞİDİR, başlığı değil: kayıt kimliğe bağlı olduğu için başlık
+    /// değiştiğinde ya da çevrildiğinde atama kaybolmaz.
+    ///
+    /// Çözülemeyen bir vuruş ve bilinmeyen bir kimlik SESSİZCE atlanır. Kısayolsuz bir
+    /// menü öğesi, kullanıcının değiştirdiğini sandığı ama hiç çalışmayan bir komut olurdu.
+    static func resolved(customStrokes: [String: String]) -> [AppShortcut] {
+        all.map { shortcut in
+            guard let raw = customStrokes[shortcut.id],
+                  let replacement = self.shortcut(from: raw) else { return shortcut }
+            return AppShortcut(id: shortcut.id,
+                               title: shortcut.title,
+                               key: replacement.key,
+                               modifiers: replacement.modifiers)
+        }
+    }
+
+    /// `stroke` metnini tuş ve değiştiricilere geri çözer.
+    ///
+    /// Biçim `AppShortcut.stroke` ile aynı sözleşmedir: `<karakter>-<modifiers.rawValue>`.
+    /// Ayrıştırma SONDAKİ tireden yapılır — karakterin kendisi tire olabilir (`⌘-`).
+    static func shortcut(from raw: String) -> (key: KeyEquivalent, modifiers: EventModifiers)? {
+        guard let separator = raw.lastIndex(of: "-"), separator != raw.startIndex else { return nil }
+        let characterPart = String(raw[raw.startIndex..<separator])
+        let modifierPart = String(raw[raw.index(after: separator)...])
+        guard characterPart.count == 1,
+              let character = characterPart.first,
+              let rawModifiers = Int(modifierPart)
+        else { return nil }
+        return (KeyEquivalent(character), EventModifiers(rawValue: rawModifiers))
+    }
 
     /// Aynı vuruşu paylaşan komut grupları. Boş dizi = çakışma yok.
     static func conflicts(in shortcuts: [AppShortcut] = all) -> [[AppShortcut]] {

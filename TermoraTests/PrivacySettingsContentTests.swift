@@ -101,7 +101,17 @@ struct PrivacySettingsContentTests {
         }
     }
 
-    @Test func privacyIsTheLastTabSoTheEverydaySectionsComeFirst() {
-        #expect(SettingsTab.allCases.last == .privacy)
+    /// Sekme sırası briefs/2 "Ayarlar Ekranı"nın listesidir:
+    /// General, Appearance, Terminal, Profiles, Workspaces, SSH, AI, Keybindings,
+    /// Privacy, Updates, About.
+    ///
+    /// Privacy bir zamanlar SON sekmeydi ve bu test onu öyle sabitliyordu; Updates ve
+    /// About eklenince brief'in sırası otorite oldu. Ölçülen şey artık asıl amaç:
+    /// gündelik ayarlar önce gelir, künye ve güncelleme sona kalır.
+    @Test func theTabOrderFollowsTheBrief() {
+        #expect(SettingsTab.allCases == [
+            .general, .appearance, .terminal, .profiles, .workspaces,
+            .ssh, .ai, .keybindings, .privacy, .updates, .about,
+        ])
     }
 }

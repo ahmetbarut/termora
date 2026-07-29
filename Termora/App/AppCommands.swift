@@ -51,7 +51,7 @@ struct AppCommands: Commands {
             Button(settings.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
                 settings.settings.isSidebarVisible.toggle()
             }
-            .shortcut(AppShortcuts.toggleSidebar)
+            .shortcut(AppShortcuts.toggleSidebar, custom: settings.settings.customShortcutStrokes)
 
             // briefs/2 "Komut Blokları": panel terminalin YANINDA durur, yerine geçmez —
             // kapalıyken görünüm tam olarak klasik terminaldir.
@@ -59,19 +59,19 @@ struct AppCommands: Commands {
                    ? "Hide Command Blocks" : "Show Command Blocks") {
                 settings.settings.isCommandBlockPanelVisible.toggle()
             }
-            .shortcut(AppShortcuts.toggleCommandBlocks)
+            .shortcut(AppShortcuts.toggleCommandBlocks, custom: settings.settings.customShortcutStrokes)
 
             Button(aiPanel?.isPresented == true ? "Hide AI Assistant" : "Show AI Assistant") {
                 aiPanel?.isPresented.toggle()
             }
-            .shortcut(AppShortcuts.toggleAIPanel)
+            .shortcut(AppShortcuts.toggleAIPanel, custom: settings.settings.customShortcutStrokes)
             .disabled(aiPanel == nil)
 
             Button("Explain Selection with AI") {
                 guard let aiPanel else { return }
                 Task { await aiPanel.openAndExplainSelection() }
             }
-            .shortcut(AppShortcuts.explainSelection)
+            .shortcut(AppShortcuts.explainSelection, custom: settings.settings.customShortcutStrokes)
             // Seçim yokken sorulacak bir şey yok; öğe gizlenmez, devre dışı görünür
             // (briefs/3 "Sağ Tık Menüleri" ile aynı kural).
             .disabled(aiPanel == nil)
@@ -85,7 +85,7 @@ struct AppCommands: Commands {
             Button("Command Palette…") {
                 commandPalette?.toggle()
             }
-            .shortcut(AppShortcuts.commandPalette)
+            .shortcut(AppShortcuts.commandPalette, custom: settings.settings.customShortcutStrokes)
             .disabled(commandPalette == nil)
         }
 
@@ -93,7 +93,7 @@ struct AppCommands: Commands {
             Button("New Tab") {
                 workspace?.newTab()
             }
-            .shortcut(AppShortcuts.newTab)
+            .shortcut(AppShortcuts.newTab, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
         }
 
@@ -109,7 +109,7 @@ struct AppCommands: Commands {
                     NSApp.keyWindow?.performClose(nil)
                 }
             }
-            .shortcut(AppShortcuts.closeTabOrWindow)
+            .shortcut(AppShortcuts.closeTabOrWindow, custom: settings.settings.customShortcutStrokes)
         }
 
         CommandGroup(after: .textEditing) {
@@ -117,19 +117,19 @@ struct AppCommands: Commands {
             Button("Find…") {
                 workspace?.toggleSearchBar()
             }
-            .shortcut(AppShortcuts.find)
+            .shortcut(AppShortcuts.find, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             Button("Find Next") {
                 workspace?.findNextMatch()
             }
-            .shortcut(AppShortcuts.findNext)
+            .shortcut(AppShortcuts.findNext, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             Button("Find Previous") {
                 workspace?.findPreviousMatch()
             }
-            .shortcut(AppShortcuts.findPrevious)
+            .shortcut(AppShortcuts.findPrevious, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
         }
 
@@ -139,13 +139,13 @@ struct AppCommands: Commands {
             Button("Split Vertically") {
                 workspace?.splitActivePane(axis: .vertical)
             }
-            .shortcut(AppShortcuts.splitVertically)
+            .shortcut(AppShortcuts.splitVertically, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             Button("Split Horizontally") {
                 workspace?.splitActivePane(axis: .horizontal)
             }
-            .shortcut(AppShortcuts.splitHorizontally)
+            .shortcut(AppShortcuts.splitHorizontally, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             Divider()
@@ -153,22 +153,22 @@ struct AppCommands: Commands {
             Button("Close Pane") {
                 workspace?.requestCloseActivePane()
             }
-            .shortcut(AppShortcuts.closePane)
+            .shortcut(AppShortcuts.closePane, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             Divider()
 
             Button("Focus Pane Left") { workspace?.focusPane(.left) }
-                .shortcut(AppShortcuts.focusPaneLeft)
+                .shortcut(AppShortcuts.focusPaneLeft, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
             Button("Focus Pane Right") { workspace?.focusPane(.right) }
-                .shortcut(AppShortcuts.focusPaneRight)
+                .shortcut(AppShortcuts.focusPaneRight, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
             Button("Focus Pane Up") { workspace?.focusPane(.up) }
-                .shortcut(AppShortcuts.focusPaneUp)
+                .shortcut(AppShortcuts.focusPaneUp, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
             Button("Focus Pane Down") { workspace?.focusPane(.down) }
-                .shortcut(AppShortcuts.focusPaneDown)
+                .shortcut(AppShortcuts.focusPaneDown, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
         }
 
@@ -179,7 +179,7 @@ struct AppCommands: Commands {
             Button(AppShortcuts.clearScreen.title) {
                 workspace?.clearActivePane()
             }
-            .shortcut(AppShortcuts.clearScreen)
+            .shortcut(AppShortcuts.clearScreen, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             Divider()
@@ -187,7 +187,7 @@ struct AppCommands: Commands {
             Button(AppShortcuts.restartSession.title) {
                 workspace?.restartActivePaneSession()
             }
-            .shortcut(AppShortcuts.restartSession)
+            .shortcut(AppShortcuts.restartSession, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
 
             // briefs/3 "Error State" örneğindeki kurtarma yolu: yapılandırılmış shell
@@ -195,16 +195,16 @@ struct AppCommands: Commands {
             Button(AppShortcuts.restartWithDefaultShell.title) {
                 workspace?.restartActivePaneSession(forceDefaultShell: true)
             }
-            .shortcut(AppShortcuts.restartWithDefaultShell)
+            .shortcut(AppShortcuts.restartWithDefaultShell, custom: settings.settings.customShortcutStrokes)
             .disabled(workspace == nil)
         }
 
         CommandMenu("Tab") {
             Button("Next Tab") { workspace?.nextTab() }
-                .shortcut(AppShortcuts.nextTab)
+                .shortcut(AppShortcuts.nextTab, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
             Button("Previous Tab") { workspace?.previousTab() }
-                .shortcut(AppShortcuts.previousTab)
+                .shortcut(AppShortcuts.previousTab, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
 
             Divider()
@@ -213,7 +213,7 @@ struct AppCommands: Commands {
                 Button(shortcut.title) {
                     workspace?.selectTab(at: index)
                 }
-                .shortcut(shortcut)
+                .shortcut(shortcut, custom: settings.settings.customShortcutStrokes)
                 .disabled(workspace == nil)
             }
         }
@@ -235,4 +235,5 @@ struct AppCommands: Commands {
 enum TermoraLinks {
     static let repository = URL(string: "https://github.com/ahmetbarut/termora")!
     static let newIssue = URL(string: "https://github.com/ahmetbarut/termora/issues/new")!
+    static let releases = URL(string: "https://github.com/ahmetbarut/termora/releases")!
 }
