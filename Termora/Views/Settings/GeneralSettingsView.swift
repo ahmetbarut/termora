@@ -8,6 +8,18 @@ struct GeneralSettingsView: View {
     @State private var scrollbackText: String = ""
     @State private var notificationThresholdText: String = ""
 
+    /// Kancaların kurulu olup olmadığı DOSYADAN okunur, bir ayardan değil: kullanıcı
+    /// bloğu elle silmiş olabilir ve Termora "kurulu" demeye devam ederdi.
+    @State private var isIntegrationInstalled = false
+    @State private var integrationFailure: String?
+    private let installer = ShellIntegrationInstaller()
+
+    /// Kancaların yazılacağı kabuk. Ayarlardaki varsayılan kabuk boşsa kullanıcının
+    /// giriş kabuğuna düşülür — Termora burada bir kabuk UYDURMAZ.
+    private var integrationFamily: ShellFamily? {
+        ShellFamily(shellPath: settings.settings.defaultShellPath ?? ShellService.defaultShellPath())
+    }
+
     var body: some View {
         Form {
             Section("Shell") {
@@ -16,6 +28,44 @@ struct GeneralSettingsView: View {
                     ForEach(shells) { shell in
                         Text(shell.displayName).tag(shell.path as String?)
                     }
+                }
+            }
+
+            Section(ShellIntegrationContent.title) {
+                if let family = integrationFamily {
+                    Text(ShellIntegrationContent.explanation(for: family))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        // Dotfile'a yazan TEK yol bu düğmedir; Termora kendiliğinden yazmaz.
+                        Button(isIntegrationInstalled
+                               ? ShellIntegrationContent.uninstallTitle
+                               : ShellIntegrationContent.installTitle) {
+                            applyIntegration(install: !isIntegrationInstalled, family: family)
+                        }
+                        if isIntegrationInstalled {
+                            Text(ShellIntegrationContent.installedNote)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if let integrationFailure {
+                        // Başarısız yazma SESSİZ kalmaz: kullanıcı kurulduğunu sanırdı.
+                        Text(integrationFailure)
+                            .font(.caption)
+                            .foregroundStyle(DesignTokens.warning.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    // Ölü bir düğme yerine dürüst bir cümle.
+                    Text(ShellIntegrationContent.unsupportedShellNote(
+                        shellPath: settings.settings.defaultShellPath ?? ShellService.defaultShellPath()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -78,6 +128,11 @@ struct GeneralSettingsView: View {
             shells = ShellService.availableShells()
             scrollbackText = String(settings.settings.scrollbackLines)
             notificationThresholdText = Self.thresholdText(settings.settings.longCommandThresholdSeconds)
+            refreshIntegrationState()
+        }
+        // Varsayılan kabuk değişince kancaların hedef dosyası da değişir.
+        .onChange(of: settings.settings.defaultShellPath) { _, _ in
+            refreshIntegrationState()
         }
         .onChange(of: settings.settings.scrollbackLines) { _, newValue in
             scrollbackText = String(newValue)
@@ -85,6 +140,30 @@ struct GeneralSettingsView: View {
         .onChange(of: settings.settings.longCommandThresholdSeconds) { _, newValue in
             notificationThresholdText = Self.thresholdText(newValue)
         }
+    }
+
+    // MARK: - Shell integration
+
+    private func refreshIntegrationState() {
+        integrationFailure = nil
+        isIntegrationInstalled = integrationFamily.map { installer.isInstalled(for: $0) } ?? false
+    }
+
+    /// Kullanıcının dosyasına yazan tek yol. Hata SESSİZ kalmaz ve durum dosyadan
+    /// YENİDEN okunur — "yazdım" demek yetmez, yazılmış olduğunu görmek gerekir.
+    private func applyIntegration(install: Bool, family: ShellFamily) {
+        do {
+            if install {
+                try installer.install(for: family)
+            } else {
+                try installer.uninstall(for: family)
+            }
+            integrationFailure = nil
+        } catch {
+            integrationFailure = "~/\(family.startupFileName) could not be updated: "
+                + error.localizedDescription
+        }
+        isIntegrationInstalled = installer.isInstalled(for: family)
     }
 
     // MARK: - Notifications (briefs/2 "Bildirimler")

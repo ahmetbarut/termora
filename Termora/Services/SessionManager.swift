@@ -200,7 +200,40 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         )
         view.processDelegate = self
         applyAppearance(to: view, sessionID: sessionID)
+        registerShellIntegrationHandler(on: view, sessionID: sessionID)
         return view
+    }
+
+    /// Shell integration kancalarının yaydığı OSC 133 işaretlerini dinler.
+    ///
+    /// Kancalar kurulu değilse bu işleyici HİÇ çağrılmaz ve hiçbir şey değişmez —
+    /// entegrasyon isteğe bağlıdır (briefs/2 Onboarding "İsteğe Bağlı Özellikler").
+    private func registerShellIntegrationHandler(on view: TermoraTerminalView, sessionID: UUID) {
+        view.getTerminal().registerOscHandler(code: 133) { [weak self] payload in
+            let text = "133;" + (String(bytes: payload, encoding: .utf8) ?? "")
+            guard let marker = ShellIntegrationMarker(payload: text) else { return }
+            // OSC işleyicisi ayrıştırma kuyruğundan gelir; oturum durumu MainActor'a aittir.
+            Task { @MainActor [weak self] in
+                self?.apply(marker, to: sessionID)
+            }
+        }
+    }
+
+    @MainActor
+    private func apply(_ marker: ShellIntegrationMarker, to sessionID: UUID) {
+        guard let session = session(id: sessionID) else { return }
+        session.didReceiveShellIntegrationMarker = true
+        switch marker {
+        case let .commandEnd(exitCode):
+            // Kod bilinmiyorsa ESKİSİ KORUNMAZ: bir önceki komutun kodunu yeni komuta
+            // yapıştırmak, kullanıcıya yanlış bir sonuç göstermek olurdu.
+            session.lastCommandExitCode = exitCode
+        case .promptStart, .commandStart:
+            break
+        case .outputStart:
+            // Yeni bir komut çalışmaya başladı: önceki kod artık geçmişe aittir.
+            session.lastCommandExitCode = nil
+        }
     }
 
     /// Starts `shellPath` behind `view`, or records the failure on the session.

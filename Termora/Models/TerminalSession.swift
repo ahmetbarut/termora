@@ -37,6 +37,17 @@ final class TerminalSession: Identifiable {
     /// Spec §8: the pane draws an in-pane error banner with a "try the default shell" action.
     var launchFailure: String?
 
+    /// Shell integration kuruluysa son BİTEN komutun çıkış kodu (OSC 133 `D`).
+    ///
+    /// Kancalar kurulu değilse ya da kabuk kodu bildirmediyse nil kalır. 0 varsayılmaz:
+    /// başarısız bir komutu başarılı göstermek, kullanıcının ekranda gördüğünü yalanlardı.
+    var lastCommandExitCode: Int?
+
+    /// Shell integration'ın bu oturumda GERÇEKTEN çalıştığının kanıtı: kabuk en az bir
+    /// işaret yaydı. Ayarlardaki "kurulu" bilgisi rc dosyasına bakar; bu ise kabuğun
+    /// kendisine. İkisi ayrışabilir (kullanıcı kurdu ama sekmeyi yeniden açmadı).
+    var didReceiveShellIntegrationMarker = false
+
     /// Bumped by `SessionManager.restartSession(id:forceDefaultShell:)`, which installs a brand
     /// new AppKit view for the same session id. SwiftUI would otherwise keep showing the dead
     /// one, so the pane keys its `TerminalHostView` on this value. Only `SessionManager` writes it.

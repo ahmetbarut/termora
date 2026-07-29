@@ -10,8 +10,10 @@ import SwiftUI
 /// - **Finder entegrasyonu:** VAR ama bir anahtarı yok — `termora://` şeması ve Finder ▸
 ///   Services girdisi uygulama paketinin parçası, kullanıcı açıp kapatamaz. Kapatılamayan
 ///   bir şey için anahtar koymak yalan olurdu.
-/// - **Shell integration:** bugün uygulamada YOK. Hiçbir şey yapmayan bir anahtar
-///   kullanıcıyı yanıltır, o yüzden satırı da yok.
+/// - **Shell integration:** VAR. Kurulum kullanıcının rc dosyasına yazdığı için burada
+///   yalnız NE OLDUĞU anlatılır ve Ayarlar'a yönlendirilir; onboarding hiçbir dotfile'a
+///   dokunmaz. İlk açılışta "Open Termora"ya basmak isteyen kullanıcıya yazma onayı
+///   sordurmak, brief'in "kullanıcı onboarding'i atlayabilmelidir" kuralına aykırıdır.
 ///
 /// Geri kalanı yapılan seçimleri özetler, gerçekten çalışan kısayolları gösterir ve
 /// "Open Termora" ile kapanır.
@@ -31,6 +33,21 @@ struct OnboardingSummaryView: View {
                 summaryRow("Shell", value: shellSummary)
                 summaryRow("Font", value: fontSummary)
                 summaryRow("Theme", value: themes.theme(id: state.selections.themeID).name)
+            }
+
+            if let family = ShellFamily(shellPath: state.selections.shellPath) {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ShellIntegrationContent.title)
+                        .font(.system(size: 13, weight: .medium))
+                    Text(ShellIntegrationContent.explanation(for: family))
+                        .font(.system(size: 12))
+                    Text("Turn it on in Settings ▸ General whenever you want.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
             }
 
             if let aiCatalog {
