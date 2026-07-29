@@ -12,6 +12,9 @@ import Testing
         #expect(settings.fontSize == 13)
         #expect(settings.lineSpacing == 1.25)
         #expect(settings.cursorStyle == .blinkBlock)
+        // brief 3 "Tipografi": ligature açılıp kapatılabilir. Varsayılan KAPALI — SwiftTerm
+        // glyph sayısıyla sütun hesapladığı için ligature'lı bir fontta satır hizası kayar.
+        #expect(settings.usesLigatures == false)
         #expect(settings.themeID == "termora-dark")
         #expect(settings.windowOpacity == 1.0)
         #expect(settings.scrollbackLines == 10_000)

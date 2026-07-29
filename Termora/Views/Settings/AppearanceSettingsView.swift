@@ -99,6 +99,14 @@ struct AppearanceSettingsView: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Ligatures", isOn: $settings.settings.usesLigatures)
+                    Text("Fonts like Fira Code draw \"=>\" as one glyph. The terminal places "
+                         + "glyphs by column, so a merged pair shifts the rest of the line.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Cursor & Window") {

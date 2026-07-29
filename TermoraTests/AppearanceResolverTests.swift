@@ -14,7 +14,20 @@ struct AppearanceResolverTests {
 
     @Test func noProfileUsesGlobalSettings() {
         let resolved = AppearanceResolver.resolve(settings: baseSettings(), profile: nil)
-        #expect(resolved == ResolvedAppearance(fontName: "Menlo", fontSize: 13, themeID: "termora-dark"))
+        #expect(resolved == ResolvedAppearance(
+            fontName: "Menlo", fontSize: 13, themeID: "termora-dark", usesLigatures: false
+        ))
+    }
+
+    /// Ligature'ın profilde karşılığı yok (briefs/1 profil alanları): satır yüksekliği ve
+    /// imleç gibi genel kalır. Yine de çözümlemeden geçer ki fontu kuran taraf tek bir
+    /// yerden okusun.
+    @Test func ligatureSettingFlowsThroughEvenThoughProfilesCannotOverrideIt() {
+        var settings = baseSettings()
+        settings.usesLigatures = true
+        let profile = TerminalProfile(name: "Ops", fontName: "SF Mono")
+        #expect(AppearanceResolver.resolve(settings: settings, profile: profile).usesLigatures)
+        #expect(AppearanceResolver.resolve(settings: settings, profile: nil).usesLigatures)
     }
 
     @Test func profileOverridesWinOverGlobalSettings() {

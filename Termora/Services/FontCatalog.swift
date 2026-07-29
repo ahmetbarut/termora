@@ -71,23 +71,46 @@ enum FontCatalog {
 
     /// Ayarlardaki aile adı + boyuttan gerçek fontu üretir; aile bulunamazsa Menlo'ya,
     /// o da yoksa sistem monospace fontuna düşer.
+    ///
+    /// `usesLigatures` kapalıyken ligature font descriptor'ında kapatılır. Bu, Termora'nın
+    /// elindeki tek kaldıraç: terminal metnini `NSAttributedString`'e SwiftTerm çevirir,
+    /// yani `.ligature` özniteliğini biz veremeyiz — ama verdiğimiz fontu Core Text dinler.
     @MainActor
-    static func resolvedFont(name: String?, size: Double) -> NSFont {
+    static func resolvedFont(name: String?, size: Double, usesLigatures: Bool = false) -> NSFont {
         let clampedSize = SettingsLimits.clampFontSize(size)
+        return applyingLigatureSetting(baseFont(name: name, size: clampedSize), usesLigatures: usesLigatures)
+    }
+
+    @MainActor
+    private static func baseFont(name: String?, size: CGFloat) -> NSFont {
         if let name, !name.isEmpty {
-            if let font = NSFontManager.shared.font(withFamily: name, traits: [], weight: 5, size: clampedSize) {
+            if let font = NSFontManager.shared.font(withFamily: name, traits: [], weight: 5, size: size) {
                 return font
             }
             // SF Mono macOS'ta font panelinde/`availableFontFamilies`'te GÖRÜNMEZ ve
             // PostScript adıyla da açılmaz (sistem fontu). Aksi hâlde brief'in varsayılanı
             // sessizce Menlo'ya düşerdi; `monospacedSystemFont` aynı yazı tipini verir.
             if name.caseInsensitiveCompare(defaultFamily) == .orderedSame {
-                return NSFont.monospacedSystemFont(ofSize: clampedSize, weight: .regular)
+                return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
             }
         }
-        if let font = NSFont(name: fallbackFamily, size: clampedSize) {
+        if let font = NSFont(name: fallbackFamily, size: size) {
             return font
         }
-        return NSFont.monospacedSystemFont(ofSize: clampedSize, weight: .regular)
+        return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+
+    /// Ligature açıkken font olduğu gibi döner: hangi ligature'ları sunacağına font karar
+    /// verir. Kapalıyken `kCommonLigaturesOffSelector` eklenir; descriptor'dan font
+    /// üretilemezse ligature'lı hâli döndürmek, hiç font döndürmemekten iyidir.
+    private static func applyingLigatureSetting(_ font: NSFont, usesLigatures: Bool) -> NSFont {
+        guard !usesLigatures else { return font }
+        let descriptor = font.fontDescriptor.addingAttributes([
+            .featureSettings: [[
+                NSFontDescriptor.FeatureKey.typeIdentifier: kLigaturesType,
+                NSFontDescriptor.FeatureKey.selectorIdentifier: kCommonLigaturesOffSelector,
+            ]],
+        ])
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }
 }

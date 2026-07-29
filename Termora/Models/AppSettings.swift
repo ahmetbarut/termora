@@ -34,6 +34,13 @@ struct AppSettings: Codable, Equatable {
     var fontSize: Double = DesignTokens.Typography.terminalFontSize
     var lineSpacing: Double = DesignTokens.Typography.terminalLineHeight
     var cursorStyle: CursorStyleSetting = .blinkBlock
+    /// brief 3 "Tipografi": ligature açılıp kapatılabilmelidir.
+    ///
+    /// Varsayılan KAPALI. SwiftTerm bir satırı tek `CTLine` olarak çizip glyph'leri
+    /// `sütun × glyphIndex` ile konumlandırır; ligature iki karakteri tek glyph'e
+    /// indirdiğinde satırın geri kalanı bir sütun kayar. Fira Code ve JetBrains Mono
+    /// font listesinde önerildiği için bu sessiz bir hizalama hatası olurdu.
+    var usesLigatures: Bool = false
     var themeID: String = "termora-dark"
     var windowOpacity: Double = 1.0
     var scrollbackLines: Int = 10_000
@@ -98,6 +105,7 @@ struct AppSettings: Codable, Equatable {
         // yedeğe atar ve kullanıcının her ayarı sıfırlanırdı. Yalnız bu alan düşer.
         cursorStyle = try container.decodeIfPresent(String.self, forKey: .cursorStyle)
             .flatMap(CursorStyleSetting.init(rawValue:)) ?? defaults.cursorStyle
+        usesLigatures = try container.decodeIfPresent(Bool.self, forKey: .usesLigatures) ?? defaults.usesLigatures
         themeID = try container.decodeIfPresent(String.self, forKey: .themeID) ?? defaults.themeID
         windowOpacity = try container.decodeIfPresent(Double.self, forKey: .windowOpacity) ?? defaults.windowOpacity
         scrollbackLines = try container.decodeIfPresent(Int.self, forKey: .scrollbackLines) ?? defaults.scrollbackLines

@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import Testing
 @testable import Termora
 
@@ -100,5 +101,53 @@ struct FontCatalogTests {
         // dönüşüm olmadan bu karşılaştırma değerler eşitken bile HER ZAMAN başarısız olur.
         #expect(Double(FontCatalog.resolvedFont(name: nil, size: 400).pointSize) == SettingsLimits.fontSizeRange.upperBound)
         #expect(Double(FontCatalog.resolvedFont(name: nil, size: 1).pointSize) == SettingsLimits.fontSizeRange.lowerBound)
+    }
+
+    // MARK: - brief 3 "Ligature desteği kullanıcı tarafından açılıp kapatılabilmelidir"
+
+    /// Bir satırdaki glyph sayısı.
+    ///
+    /// Ölçüm Helvetica ile yapılır, terminal fontuyla değil: bu makinede ligature içeren
+    /// hiçbir monospace font (Fira Code, JetBrains Mono, MesloLGS NF) kurulu olmayabilir ve
+    /// `resolvedFont`'un sözleşmesi aileye bağlı değildir. Helvetica her macOS'ta bulunur ve
+    /// "fi" ligature'ını kesin taşır, yani ayarın etkisini ölçebileceğimiz tek güvenilir zemin.
+    private func glyphCount(of text: String, in font: NSFont) -> Int {
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: text, attributes: [.font: font])
+        )
+        return CTLineGetGlyphCount(line)
+    }
+
+    /// SwiftTerm bir satırı `CTLine` olarak çizer ve her glyph'i `sütun × glyphIndex` ile
+    /// konumlandırır (`AppleTerminalView`, "Pre-create CTLines" döngüsü). Ligature iki
+    /// karakteri tek glyph'e indirdiğinde satırın geri kalanı bir sütun kayar. Attributed
+    /// string'i SwiftTerm kurduğu için Termora'nın tek müdahale noktası fontun kendisidir:
+    /// ligature'ı font descriptor'ında kapatmak.
+    @Test func ligaturesOffYieldsAFontCoreTextWillNotMergeGlyphsWith() {
+        let on = FontCatalog.resolvedFont(name: "Helvetica", size: 13, usesLigatures: true)
+        let off = FontCatalog.resolvedFont(name: "Helvetica", size: 13, usesLigatures: false)
+        #expect(glyphCount(of: "fi", in: on) == 1)
+        #expect(glyphCount(of: "fi", in: off) == 2)
+    }
+
+    /// Varsayılan kapalı. Terminalde hizalama doğruluğu tipografik zarafetten önce gelir
+    /// (briefs/2 MVP kriteri: "Unicode ve emoji hizalaması bozulmuyor"); ligature isteyen
+    /// kullanıcı onu açıkça açar.
+    @Test func ligaturesAreOffUnlessTheCallerAsksForThem() {
+        #expect(glyphCount(of: "fi", in: FontCatalog.resolvedFont(name: "Helvetica", size: 13)) == 2)
+    }
+
+    @Test func disablingLigaturesChangesNothingElseAboutTheFont() {
+        let font = FontCatalog.resolvedFont(name: "Menlo", size: 15, usesLigatures: false)
+        #expect(font.familyName == "Menlo")
+        #expect(font.pointSize == 15)
+        #expect(font.isFixedPitch)
+    }
+
+    /// Aile çözülemediğinde geri düşülen fontta da ayar geçerli olmalı — aksi hâlde
+    /// kullanıcı bilinmeyen bir font seçtiğinde ligature sessizce geri gelirdi.
+    @Test func theFallbackFontHonoursTheLigatureSettingToo() {
+        let font = FontCatalog.resolvedFont(name: "ThereIsNoSuchFont-42", size: 13, usesLigatures: false)
+        #expect(glyphCount(of: "fi", in: font) == 2)
     }
 }

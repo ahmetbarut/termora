@@ -359,7 +359,11 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         let theme = themes.theme(id: resolved.themeID)
         let opacity = SettingsLimits.clampOpacity(current.windowOpacity)
 
-        let font = FontCatalog.resolvedFont(name: resolved.fontName, size: resolved.fontSize)
+        let font = FontCatalog.resolvedFont(
+            name: resolved.fontName,
+            size: resolved.fontSize,
+            usesLigatures: resolved.usesLigatures
+        )
         if view.font != font {
             view.font = font
         }
