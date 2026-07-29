@@ -26,7 +26,18 @@ enum WindowLayout {
         return width
     }
 
-    /// briefs/3 "Pencere Yönetimi": boyut ve konum, oturum geri yükleme KAPALIYKEN de
+}
+
+/// Komut bloğu panelinin genişlik sınırları. AI paneliyle aynı kalıp: blok satırları
+/// komut ve çıktı taşır, dar bir sütunda her satır sarılırdı.
+enum CommandBlockPanelLayout {
+    static let minWidth: CGFloat = 280
+    static let defaultWidth: CGFloat = 360
+    static let maxWidth: CGFloat = 520
+}
+
+extension WindowLayout {
+        /// briefs/3 "Pencere Yönetimi": boyut ve konum, oturum geri yükleme KAPALIYKEN de
     /// hatırlanmalı. AppKit'in kendi mekanizması kullanılır — kayıt yeri `NSUserDefaults`'tur,
     /// ikinci bir pencere açıldığında AppKit onu kaydedilen çerçevenin üzerine basmak yerine
     /// kademelendirir.
@@ -117,6 +128,28 @@ struct MainWindowView: View {
                 ))
             }
             terminalColumn
+            // briefs/2 "Komut Blokları": panel terminalin YANINDA durur. Yerine geçseydi
+            // vim/top/tmux gibi tam ekran uygulamalar bozulurdu.
+            if services.settings.settings.isCommandBlockPanelVisible {
+                Divider()
+                CommandBlockPanelView(
+                    blocks: workspace.activeCommandBlocks,
+                    hasShellIntegration: workspace.activeSessionHasShellIntegration,
+                    onRunAgain: { workspace.runAgain($0) },
+                    onInsert: { workspace.insertForEditing($0) },
+                    onExplain: { block in
+                        // Blok metni AI panelinin kendi yoluna verilir; panel maskeleme ve
+                        // onay kurallarını uygular (briefs/2 "Secret Maskeleme").
+                        ai.isPresented = true
+                        Task { await ai.explainCommandBlock(block) }
+                    },
+                    onDismiss: { services.settings.settings.isCommandBlockPanelVisible = false }
+                )
+                .frame(minWidth: CommandBlockPanelLayout.minWidth,
+                       idealWidth: CommandBlockPanelLayout.defaultWidth,
+                       maxWidth: CommandBlockPanelLayout.maxWidth)
+                .transition(.move(edge: .trailing))
+            }
             if ai.isPresented {
                 Divider()
                 AIPanelView(model: ai)
@@ -131,6 +164,7 @@ struct MainWindowView: View {
                minHeight: WindowLayout.minHeight)
         .motionAnimation(.panel, value: ai.isPresented)
         .motionAnimation(.panel, value: services.settings.settings.isSidebarVisible)
+        .motionAnimation(.panel, value: services.settings.settings.isCommandBlockPanelVisible)
         .focusedSceneValue(\.aiPanel, ai)
         .onChange(of: ai.isPresented) { _, isPresented in
             // Panel açıldığında gönderilecek bağlam TAZE olmalı; kapanırken klavye

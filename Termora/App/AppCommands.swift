@@ -53,6 +53,14 @@ struct AppCommands: Commands {
             }
             .shortcut(AppShortcuts.toggleSidebar)
 
+            // briefs/2 "Komut Blokları": panel terminalin YANINDA durur, yerine geçmez —
+            // kapalıyken görünüm tam olarak klasik terminaldir.
+            Button(settings.settings.isCommandBlockPanelVisible
+                   ? "Hide Command Blocks" : "Show Command Blocks") {
+                settings.settings.isCommandBlockPanelVisible.toggle()
+            }
+            .shortcut(AppShortcuts.toggleCommandBlocks)
+
             Button(aiPanel?.isPresented == true ? "Hide AI Assistant" : "Show AI Assistant") {
                 aiPanel?.isPresented.toggle()
             }

@@ -299,7 +299,8 @@ final class AIPanelModel {
     /// briefs/2 "Hata Açıklama": başarısız bir komut seçildiğinde olası neden, ilgili
     /// satırlar ve GÜVENLİ çözüm adımları istenir.
     ///
-    /// Komut blokları henüz yok; kullanıcı terminalde metni seçer, bağlam oradan gelir.
+    /// Kullanıcı terminalde metni seçer, bağlam oradan gelir. Bloktan gelen istek için
+    /// `explainCommandBlock(_:)`.
     func explainSelection() async {
         guard canExplainSelection else { return }
         await ask("""
@@ -307,6 +308,25 @@ final class AIPanelModel {
             the most likely cause, which output lines show it, and safe steps to fix it.
             If a command would fix it, show it in a code block and say what it changes.
             """, clearingPrompt: false)
+    }
+
+    /// briefs/2 "Komut Blokları" ▸ *Hata çıktısını AI ile açıklayabilmeli.*
+    ///
+    /// Blok metni soruya GÖMÜLÜR, terminal seçimi olarak değil: seçim yolu kullanıcının o
+    /// an ekranda işaretlediği metni okur ve blok paneli açıkken kullanıcı hiçbir şey
+    /// seçmemiş olabilir.
+    ///
+    /// Metin, isteği kuran ortak yoldan geçtiği için maskelemeye tabidir (briefs/2 "Secret
+    /// Maskeleme") — blok çıktısında duran bir token dışarı çıkmaz.
+    func explainCommandBlock(_ block: CommandBlock) async {
+        let question = """
+            Explain this command and its result. Tell me what it did, whether it succeeded, \
+            and — if it failed — the most likely cause and safe steps to fix it. If a command \
+            would fix it, show it in a code block and say what it changes.
+
+            \(CommandBlockMarkdown.text(for: block))
+            """
+        await ask(question, clearingPrompt: false)
     }
 
     /// Tek soru-cevap turu. Bağlam gönderim ANINDA tazelenir: kullanıcı yazarken

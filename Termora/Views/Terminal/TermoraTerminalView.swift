@@ -104,6 +104,24 @@ final class TermoraTerminalView: LocalProcessTerminalView {
         fatalError("TermoraTerminalView is created in code only")
     }
 
+    /// Ham PTY baytlarının musluğu (briefs/2 "Komut Blokları").
+    ///
+    /// Komut blokları "şu bayt hangi komutun çıktısı?" sorusuna cevap vermek zorunda ve
+    /// SwiftTerm'ün OSC kancası buna yetmez: kanca ayrıştırma sırasında ateşlenir ama
+    /// oturum durumu MainActor'a ait olduğu için bir `Task`'e ertelenir — işaretler
+    /// baytlardan SONRA gelir. Burası akışın SIRASI BOZULMAMIŞ tek noktası.
+    ///
+    /// Nil iken hiçbir ek iş yapılmaz: blok paneli kapalıyken terminal tam eskisi gibi
+    /// çalışır.
+    var onDataReceived: ((ArraySlice<UInt8>) -> Void)?
+
+    /// Musluk ÖNCE terminale verir: blok kaydı bir gün hata verse bile terminalin kendisi
+    /// baytları almış olur. Terminal her şeyden önce terminaldir.
+    override func dataReceived(slice: ArraySlice<UInt8>) {
+        super.dataReceived(slice: slice)
+        onDataReceived?(slice)
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         guard newSize.width > 0, newSize.height > 0 else { return }
         super.setFrameSize(newSize)

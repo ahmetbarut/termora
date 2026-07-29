@@ -531,7 +531,39 @@ final class WorkspaceViewModel {
         sessionManager.sendInput(TerminalContextMenu.clearScreenInput, toSession: sessionID)
     }
 
-    // MARK: - Arama (⌘F / ⌘G / ⌘⇧G)
+    // MARK: - briefs/2 "Komut Blokları"
+
+    /// Aktif panelin komut blokları, eskiden yeniye. Oturum yoksa boş.
+    var activeCommandBlocks: [CommandBlock] {
+        guard let sessionID = activeSessionID,
+              let session = sessionManager.session(id: sessionID) else { return [] }
+        return session.commandBlocks.blocks
+    }
+
+    /// Shell integration bu oturumda GERÇEKTEN çalışıyor mu. Ayarlardaki "kurulu" bilgisi
+    /// rc dosyasına bakar; bu ise kabuğun kendisine — panel boşken hangi cümleyi
+    /// göstereceğine bu karar verir.
+    var activeSessionHasShellIntegration: Bool {
+        guard let sessionID = activeSessionID,
+              let session = sessionManager.session(id: sessionID) else { return false }
+        return session.didReceiveShellIntegrationMarker
+    }
+
+    /// "Run Again": komutu satırbaşıyla gönderir, yani ÇALIŞTIRIR. Kullanıcı bu düğmeye
+    /// basarak onayını zaten vermiştir.
+    func runAgain(_ command: String) {
+        guard let sessionID = activeSessionID else { return }
+        sessionManager.sendInput(command + "\n", toSession: sessionID)
+    }
+
+    /// "Edit and Run": komutu satıra YAZAR ama çalıştırmaz. Kullanıcı düzenleyip kendisi
+    /// Enter'lar — briefs/1 "Güvenlik": komutlar kullanıcı onayı olmadan çalışmaz.
+    func insertForEditing(_ command: String) {
+        guard let sessionID = activeSessionID else { return }
+        sessionManager.sendInput(command, toSession: sessionID)
+    }
+
+        // MARK: - Arama (⌘F / ⌘G / ⌘⇧G)
 
     /// Aktif oturum yöneticisi arama yürütebiliyorsa onu verir; testlerdeki basit çiftlerde nil olur.
     private var searchRunner: (any TerminalSearchRunner)? {

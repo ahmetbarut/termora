@@ -50,6 +50,13 @@ struct AppSettings: Codable, Equatable {
     /// briefs/3 "Sidebar": varsayılan kapalı. Yeni kullanıcı yalnız terminali görmeli
     /// (briefs/3 "Aşamalı Karmaşıklık"); workspace, SSH ve Docker istendiğinde açılır.
     var isSidebarVisible: Bool = false
+    /// briefs/2 "Komut Blokları": *Komut blokları zorunlu olmamalı; ayarlardan klasik
+    /// terminal görünümüne geçilebilmelidir.*
+    ///
+    /// Varsayılan KAPALI ve panel terminalin YERİNE geçmez, yanında durur. Blok görünümü
+    /// terminali değiştirseydi `vim`, `top`, `tmux` gibi tam ekran uygulamalar bozulurdu
+    /// (briefs/2 kabul kriteri: *Interactive uygulamaların görünümü bozulmuyor*).
+    var isCommandBlockPanelVisible: Bool = false
     var sidebarWidth: Double = SettingsLimits.defaultSidebarWidth
     /// brief 3 "İlk Açılış Akışı": ilk açılış akışı yalnızca bir kez gösterilir.
     /// Akış tamamlandığında **ve atlandığında** true olur.
@@ -136,6 +143,9 @@ struct AppSettings: Codable, Equatable {
         showStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showStatusBar) ?? defaults.showStatusBar
         isSidebarVisible = try container.decodeIfPresent(Bool.self, forKey: .isSidebarVisible)
             ?? defaults.isSidebarVisible
+        isCommandBlockPanelVisible = try container.decodeIfPresent(
+            Bool.self, forKey: .isCommandBlockPanelVisible
+        ) ?? defaults.isCommandBlockPanelVisible
         sidebarWidth = SettingsLimits.clampSidebarWidth(
             try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
         )

@@ -48,6 +48,13 @@ final class TerminalSession: Identifiable {
     /// kendisine. İkisi ayrışabilir (kullanıcı kurdu ama sekmeyi yeniden açmadı).
     var didReceiveShellIntegrationMarker = false
 
+    /// briefs/2 "Komut Blokları": bu oturumda çalışmış komutlar, çıktıları ve sonuçları.
+    ///
+    /// Oturumla birlikte yaşar ve DİSKE YAZILMAZ (briefs/2 "Gizlilik": terminal geçmişi
+    /// kalıcılaştırılmaz). Shell integration kurulu değilse boş kalır — Termora komut
+    /// sınırlarını tahmin etmez.
+    var commandBlocks = CommandBlockRecorder()
+
     /// Oturum Termora'nın SSH yöneticisinden açıldı mı (briefs/2 "SSH Yöneticisi").
     ///
     /// Bağlantı durumu paneldeki süreçten türetilir, ama `ssh` bittikten SONRA geriye

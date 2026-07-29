@@ -206,7 +206,31 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
         view.processDelegate = self
         applyAppearance(to: view, sessionID: sessionID)
         registerShellIntegrationHandler(on: view, sessionID: sessionID)
+        registerCommandBlockRecorder(on: view, sessionID: sessionID)
         return view
+    }
+
+    /// Ham baytları komut bloğu kaydedicisine akıtır (briefs/2 "Komut Blokları").
+    ///
+    /// Kayıt HER ZAMAN çalışır, panel açık olmasa bile: panel açıldığında kullanıcı boş
+    /// bir listeye değil, o ana kadar çalıştırdığı komutlara bakmalı. Maliyeti dar —
+    /// kaydedici işaret görmeden hiçbir şey biriktirmez ve shell integration kurulu
+    /// değilse tek bir blok bile açılmaz.
+    private func registerCommandBlockRecorder(on view: TermoraTerminalView, sessionID: UUID) {
+        view.onDataReceived = { [weak self] slice in
+            // `dataReceived` PTY okuma kuyruğundan gelir; oturum durumu MainActor'a aittir.
+            // Baytlar kopyalanır: dilim çağrı bitince geçersizdir.
+            let bytes = Array(slice)
+            Task { @MainActor [weak self] in
+                self?.recordCommandBlockBytes(bytes, sessionID: sessionID)
+            }
+        }
+    }
+
+    @MainActor
+    private func recordCommandBlockBytes(_ bytes: [UInt8], sessionID: UUID) {
+        guard let session = session(id: sessionID) else { return }
+        session.commandBlocks.consume(bytes, now: Date())
     }
 
     /// Shell integration kancalarının yaydığı OSC 133 işaretlerini dinler.
