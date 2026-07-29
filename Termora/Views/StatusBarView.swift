@@ -50,6 +50,8 @@ struct StatusBarView: View {
 
     let workspace: WorkspaceViewModel
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @State private var snapshot: WorkspaceViewModel.StatusSnapshot?
 
     /// briefs/3 "Küçük Pencere Davranışı" ▸ ilk adım: status bar bilgileri azaltılır.
@@ -80,7 +82,9 @@ struct StatusBarView: View {
                     }
                 })
         }
-        .font(.system(size: 11))
+        // briefs/2 "Erişilebilirlik": sistem yazı boyutu tercihi izlenir. Sabit 11 pt,
+        // sistemi büyüten kullanıcı için okunmaz kalırdı.
+        .font(.system(size: DynamicTypeScale.scaled(11, for: dynamicTypeSize)))
         .foregroundStyle(.secondary)
         .onAppear {
             workspace.refreshActiveWorkingDirectory()

@@ -146,6 +146,8 @@ private struct CommandBlockRow: View {
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color(nsColor: .separatorColor)))
+        // Blok listesi klavyeyle gezilebilir olmalı; odak halkası sistemin kendi halkası.
+        .focusable()
     }
 
     /// Durum, süre ve saat. Renk TEK gösterge değildir: her durumun kendi sözcüğü ve

@@ -70,6 +70,8 @@ enum TabAccessibility {
 
 /// Elle çizilen sekme çubuğu (macOS 14'te NSWindow tab bar'ı kullanılmaz).
 struct TabBarView: View {
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let workspace: WorkspaceViewModel
 
     @State private var hoveredTabID: UUID?
@@ -125,7 +127,8 @@ struct TabBarView: View {
                     .accessibilityLabel(TabAccessibility.renameFieldLabel(title: tab.displayTitle))
             } else {
                 Text(tab.displayTitle)
-                    .font(.system(size: 12))
+                    // Sistem yazı boyutu tercihi (briefs/2 "Erişilebilirlik").
+                    .font(.system(size: DynamicTypeScale.scaled(12, for: dynamicTypeSize)))
                     // brief 3 "Sadece renkle durum anlatılmamalı": aktif sekme yalnız accent
                     // zeminle değil, KALIN başlıkla da işaretlenir. Ağırlık farkı renkten
                     // bağımsız okunur; alttaki accent çizgisi üçüncü (şekil) sinyaldir.
@@ -153,6 +156,10 @@ struct TabBarView: View {
             }
         }
         .padding(.horizontal, isCompact ? 4 : 8)
+        // briefs/2 "Erişilebilirlik": klavye ile tam kullanım ve GÖRÜNÜR odak. Varsayılan
+        // odak halkası macOS'un kendi halkasıdır; kendi çizimimizi koymak sistemin
+        // "Increase contrast" gibi tercihleriyle ayrışırdı.
+        .focusable()
         .frame(width: width, height: TabBarLayout.height)
         .background(background(isActive: isActive, isHovered: isHovered))
         .overlay(alignment: .bottom) {
