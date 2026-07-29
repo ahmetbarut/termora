@@ -13,6 +13,11 @@ final class FakeAIProvider: AIProviding {
     var modelsResult: Result<[AIModel], any Error> = .success([AIModel(name: "llama3.2", sizeBytes: nil)])
     var replyResult: Result<AIReply, any Error> = .success(AIReply(text: "ok"))
 
+    /// Akış testleri için: parçalar sırayla yayılır, sonra `streamFailure` varsa atılır.
+    /// Boşsa sağlayıcı akışı DESTEKLEMİYOR gibi davranır ve varsayılan (tek parça) yola düşer.
+    var streamChunks: [String] = []
+    var streamFailure: (any Error)?
+
     private(set) var requests: [AIRequest] = []
     private(set) var modelQueries = 0
 
@@ -24,6 +29,33 @@ final class FakeAIProvider: AIProviding {
     func complete(_ request: AIRequest) async throws -> AIReply {
         requests.append(request)
         return try replyResult.get()
+    }
+
+    func stream(_ request: AIRequest) -> AsyncThrowingStream<String, any Error> {
+        guard !streamChunks.isEmpty || streamFailure != nil else {
+            return Self.singleShotStream { try await self.complete(request) }
+        }
+        requests.append(request)
+        let chunks = streamChunks
+        let failure = streamFailure
+        return AsyncThrowingStream { continuation in
+            for chunk in chunks { continuation.yield(chunk) }
+            if let failure { continuation.finish(throwing: failure) } else { continuation.finish() }
+        }
+    }
+
+    private static func singleShotStream(_ body: @escaping () async throws -> AIReply)
+        -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    continuation.yield(try await body().text)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 }
 

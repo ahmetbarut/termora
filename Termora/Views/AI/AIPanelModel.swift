@@ -111,6 +111,14 @@ final class AIPanelModel {
     private(set) var preparedContext: PreparedAIContext = .empty
     /// Bağlam listesinin açık olup olmadığı (briefs/2: kullanıcı son içeriği inceleyebilmeli).
     var isContextExpanded = false
+    /// Akış sürerken ekranda duran CANLI metin; akış bitince ya da düşünce nil olur.
+    /// Konuşmaya yazılmaz — komut önerileri yalnız TAMAMLANMIŞ mesajdan çıkarılır.
+    private(set) var streamingText: String?
+
+    /// Her parça geldiğinde çağrılır. Test dikişi: akış SÜRERKEN modelin ne durumda
+    /// olduğunu gözlemeyi mümkün kılar.
+    var onStreamDelta: (() -> Void)?
+
     /// Kullanıcının açıkça eklediği dosyalar (briefs/2 "Terminal Bağlamı").
     /// Pencere başınadır ve diske YAZILMAZ — konuşmayla aynı kural.
     private(set) var attachments: [AIFileAttachment] = []
@@ -312,15 +320,32 @@ final class AIPanelModel {
                                              context: preparedContext,
                                              history: conversation.history)
         sendState = .sending
+        streamingText = ""
         do {
-            let reply = try await provider.complete(request)
+            var answer = ""
+            for try await delta in provider.stream(request) {
+                answer += delta
+                streamingText = answer
+                onStreamDelta?()
+            }
+            let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                throw AIProviderError.malformedResponse("the model returned an empty answer")
+            }
+            // Konuşmaya YALNIZ burada, akış BİTİNCE yazılır. Komut önerileri mesaj
+            // metninden çıkarılıyor; yarım bir kod bloğu çalıştırılabilir görünen ama
+            // eksik bir komut üretir ve Run düğmesi onu onaylatırdı.
+            streamingText = nil
             conversation.append(AIMessage(role: .user, text: question))
-            conversation.append(AIMessage(role: .assistant, text: reply.text))
+            conversation.append(AIMessage(role: .assistant, text: text))
             if clearingPrompt { prompt = "" }
             sendState = .idle
         } catch let error as AIProviderError {
+            // Yarım gelen metin EKRANDA BIRAKILMAZ: tam sanmak en kötü sonuç olurdu.
+            streamingText = nil
             sendState = .failed(error)
         } catch {
+            streamingText = nil
             sendState = .failed(.malformedResponse(error.localizedDescription))
         }
     }

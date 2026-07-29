@@ -114,7 +114,16 @@ struct AIPanelView: View {
                         AIMessageView(message: message, model: model)
                             .id(message.id)
                     }
-                    if model.sendState == .sending {
+                    // Cevap gelirken canlı metin. Konuşma balonu DEĞİLDİR ve öneri/Run
+                    // düğmesi TAŞIMAZ: yarım bir kod bloğu eksik bir komutu onaylatırdı.
+                    if let streaming = model.streamingText, !streaming.isEmpty {
+                        Text(streaming)
+                            .font(.callout)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("Answer still arriving. \(streaming)")
+                    }
+                    if model.sendState == .sending, model.streamingText?.isEmpty != false {
                         Label("Waiting for \(model.selectedModel ?? "the model")…",
                               systemImage: "ellipsis.circle")
                             .font(.caption)

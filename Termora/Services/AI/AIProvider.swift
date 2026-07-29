@@ -60,6 +60,28 @@ protocol AIProviding: AnyObject {
     func availableModels() async throws -> [AIModel]
 
     func complete(_ request: AIRequest) async throws -> AIReply
+
+    /// Cevabı PARÇA PARÇA verir. Yerel bir modelin ilk kelimesi ile son kelimesi arasında
+    /// onlarca saniye olabiliyor; akış olmadan panel o süre boyunca boş durur.
+    ///
+    /// Varsayılan uygulama `complete`'e düşer: akış desteklemeyen bir sağlayıcı yazmak
+    /// hiçbir ek iş gerektirmesin.
+    func stream(_ request: AIRequest) -> AsyncThrowingStream<String, any Error>
+}
+
+extension AIProviding {
+    func stream(_ request: AIRequest) -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    continuation.yield(try await complete(request).text)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Hatalar
@@ -149,6 +171,20 @@ enum AIProviderError: Error, Equatable {
 @MainActor
 protocol AIHTTPTransport {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
+
+    /// Yanıtı bayt bayt verir (akış). Varsayılan uygulama `send`'e düşer ve tek parça
+    /// yayar: akış desteklemeyen bir taşıma yazmak ek iş gerektirmesin.
+    func stream(_ request: URLRequest) async throws -> (AsyncThrowingStream<Data, any Error>, HTTPURLResponse)
+}
+
+extension AIHTTPTransport {
+    func stream(_ request: URLRequest) async throws -> (AsyncThrowingStream<Data, any Error>, HTTPURLResponse) {
+        let (data, response) = try await send(request)
+        return (AsyncThrowingStream { continuation in
+            continuation.yield(data)
+            continuation.finish()
+        }, response)
+    }
 }
 
 /// Üretimdeki taşıma.
@@ -180,5 +216,26 @@ struct URLSessionAITransport: AIHTTPTransport {
             throw AIProviderError.malformedResponse("response was not HTTP")
         }
         return (data, http)
+    }
+
+    func stream(_ request: URLRequest) async throws -> (AsyncThrowingStream<Data, any Error>, HTTPURLResponse) {
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw AIProviderError.malformedResponse("response was not HTTP")
+        }
+        return (AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    // Satır satır toplanır: NDJSON'un doğal sınırı budur ve tek tek bayt
+                    // yaymak her karakter için bir görev uyandırması demekti.
+                    for try await line in bytes.lines {
+                        continuation.yield(Data((line + "\n").utf8))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }, http)
     }
 }

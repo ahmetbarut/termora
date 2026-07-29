@@ -51,8 +51,11 @@ enum OllamaEndpoint {
 /// "kenar durum" değil, İLK karşılaşılan durumdur ve panelin ona söyleyecek somut bir
 /// sözü olmalı (`ollama pull …`).
 ///
-/// **Akış kapalı.** `stream: false` ile tek parça cevap istenir; panel yarım JSON
-/// ayrıştırmaz ve mesaj balonu tek seferde belirir.
+/// **Akış AÇIK ama sınırlı.** `stream(_:)` cevabı parça parça verir — yerel bir modelin
+/// ilk ve son kelimesi arasında onlarca saniye olabiliyor. Parçalar yalnız CANLI METİN
+/// olarak gösterilir; komut önerileri hâlâ yalnız TAMAMLANMIŞ cevaptan çıkarılır, çünkü
+/// yarım bir kod bloğu çalıştırılabilir görünen eksik bir komut üretir. `complete(_:)`
+/// tek parça yolu olarak duruyor ve model listesi gibi kısa çağrılarda kullanılıyor.
 @MainActor
 final class OllamaClient: AIProviding {
 
@@ -118,6 +121,56 @@ final class OllamaClient: AIProviding {
         return AIReply(text: text)
     }
 
+    /// Akışlı cevap. Aynı uç nokta, `stream: true`.
+    ///
+    /// Hata yolu `complete` ile AYNI: HTTP durum kodu ve ağ hataları aynı `AIProviderError`
+    /// üyelerine çevrilir, böylece panelin gösterdiği dört soruluk durum değişmez.
+    func stream(_ request: AIRequest) -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            Task { @MainActor in
+                do {
+                    let base = try baseURL()
+                    var httpRequest = URLRequest(url: base.appendingPathComponent("api/chat"))
+                    httpRequest.httpMethod = "POST"
+                    httpRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    httpRequest.timeoutInterval = 180
+                    httpRequest.httpBody = try encode(request, streaming: true)
+
+                    let (bytes, response) = try await transport.stream(httpRequest)
+                    guard (200..<300).contains(response.statusCode) else {
+                        // Akışta gövde okunmadan durum bilinir; hata gövdesi tek parçadır.
+                        var body = Data()
+                        for try await chunk in bytes { body.append(chunk) }
+                        let detail = Self.serverMessage(from: body)
+                        if response.statusCode == 404, detail.lowercased().contains("not found") {
+                            throw AIProviderError.modelNotFound(request.model)
+                        }
+                        throw AIProviderError.requestFailed(status: response.statusCode, detail: detail)
+                    }
+
+                    var decoder = OllamaStreamDecoder()
+                    for try await chunk in bytes {
+                        for case let .delta(text) in decoder.consume(chunk) {
+                            continuation.yield(text)
+                        }
+                    }
+                    // Sunucu akışın İÇİNDE hata bildirdiyse akış başarıyla bitmiş SAYILMAZ.
+                    if let failure = decoder.failure {
+                        throw AIProviderError.malformedResponse(failure)
+                    }
+                    continuation.finish()
+                } catch let error as AIProviderError {
+                    continuation.finish(throwing: error)
+                } catch let error as URLError {
+                    continuation.finish(throwing: Self.map(error, endpoint: self.endpoint()))
+                } catch {
+                    continuation.finish(throwing:
+                        AIProviderError.malformedResponse(error.localizedDescription))
+                }
+            }
+        }
+    }
+
     // MARK: - Ortak yol
 
     private func baseURL() throws -> URL {
@@ -179,14 +232,14 @@ final class OllamaClient: AIProviding {
         return raw.isEmpty ? "no details" : String(raw.prefix(200))
     }
 
-    private func encode(_ request: AIRequest) throws -> Data {
+    private func encode(_ request: AIRequest, streaming: Bool = false) throws -> Data {
         let body = ChatRequestBody(
             model: request.model,
             // Yalnız `MaskedPayload.text` tele düşer; ham metin bu tipe hiç girmez.
             messages: request.messages.map {
                 ChatRequestBody.Message(role: $0.role.rawValue, content: $0.content.text)
             },
-            stream: false
+            stream: streaming
         )
         do {
             return try JSONEncoder().encode(body)
