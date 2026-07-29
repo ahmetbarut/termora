@@ -71,6 +71,11 @@ struct AppSettings: Codable, Equatable {
     /// Sesi kapalı tutan kullanıcı için bell'in görsel karşılığı.
     var usesVisualBell: Bool = false
 
+    /// briefs/2 "Hata Raporlama": isteğe bağlı çökme raporu. Varsayılan KAPALI ve
+    /// eksik kayıt da kapalı sayılır — eksik veri asla raporlamayı kendiliğinden
+    /// açmamalı (briefs/2 "Gizlilik": telemetri varsayılan olarak kapalıdır).
+    var sendsCrashReports: Bool = false
+
     /// briefs/2 "Ayarlar Ekranı" ▸ Keybindings: kullanıcının değiştirdiği kısayollar.
     ///
     /// Anahtar komut KİMLİĞİ (`AppShortcut.id`), değer `AppShortcut.stroke` biçimi.
@@ -176,6 +181,8 @@ struct AppSettings: Codable, Equatable {
             ?? defaults.enabledSounds
         usesVisualBell = try container.decodeIfPresent(Bool.self, forKey: .usesVisualBell)
             ?? defaults.usesVisualBell
+        sendsCrashReports = try container.decodeIfPresent(Bool.self, forKey: .sendsCrashReports)
+            ?? defaults.sendsCrashReports
         sidebarWidth = SettingsLimits.clampSidebarWidth(
             try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
         )

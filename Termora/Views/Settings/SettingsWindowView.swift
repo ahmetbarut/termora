@@ -100,7 +100,7 @@ struct SettingsWindowView: View {
                     .tabItem { label(for: .ai) }
             }
 
-            PrivacySettingsView()
+            PrivacySettingsView(settings: settings)
                 .tabItem { label(for: .privacy) }
 
             KeybindingsSettingsView(settings: settings)

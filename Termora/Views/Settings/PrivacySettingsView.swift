@@ -156,8 +156,12 @@ enum PrivacyContent {
 /// Ayarlar ▸ Privacy (briefs/2 "Gizlilik", briefs/3 Settings bölüm listesi).
 struct PrivacySettingsView: View {
 
+    let settings: SettingsStore
+
     var body: some View {
         Form {
+            CrashReportingSection(settings: settings)
+
             ForEach(PrivacyContent.sections) { section in
                 Section {
                     ForEach(section.statements) { statement in
@@ -197,5 +201,60 @@ struct PrivacySettingsView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(statement.title). \(statement.detail)")
+    }
+}
+
+/// briefs/2 "Hata Raporlama" bölümü.
+///
+/// Anahtarın yanında raporun TAM İÇERİĞİ duruyor. Brief "gönderilecek içerik
+/// incelenebilmeli" diyor ve bunu ayrı bir ekrana saklamak, kimsenin bakmadığı bir
+/// vaade dönüştürürdü.
+struct CrashReportingSection: View {
+    let settings: SettingsStore
+
+    @State private var showsSample = false
+
+    /// Örnek rapor: gerçek bir çökme olmadan da kullanıcı NE gönderileceğini görebilmeli.
+    private var sample: CrashReport {
+        CrashReport.current(stackTrace: """
+            0   Termora    0x0000000102a4c1f0 exampleFrame + 128
+            1   AppKit     0x00007ff81a2b3c40 -[NSApplication run] + 586
+            """)
+    }
+
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Send crash reports", isOn: Binding(
+                    get: { settings.settings.sendsCrashReports },
+                    set: { settings.settings.sendsCrashReports = $0 }
+                ))
+                Text("Off by default. Termora never sends anything about a crash unless "
+                     + "this is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            DisclosureGroup("What a report contains", isExpanded: $showsSample) {
+                Text(sample.previewText)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption)
+        } header: {
+            Text("Crash Reporting")
+        } footer: {
+            // Yasak listesi kullanıcıya AÇIKÇA söylenir: bir gizlilik vaadi ancak
+            // söylendiğinde vaattir.
+            Text("A report has four things: the Termora version, your macOS version, your "
+                 + "Mac's architecture and the crash's stack trace. It never contains "
+                 + "terminal output, the commands you typed, file contents, environment "
+                 + "variables, API keys or SSH details.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
