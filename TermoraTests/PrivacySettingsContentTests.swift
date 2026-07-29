@@ -94,7 +94,7 @@ struct PrivacySettingsContentTests {
     @Test func everyTabComesFromTheBriefsSectionList() {
         let allowed: Set<String> = [
             "General", "Appearance", "Terminal", "Profiles", "Workspaces",
-            "SSH", "AI", "Keybindings", "Privacy", "Updates", "About",
+            "SSH", "AI", "Keybindings", "Privacy", "License", "Updates", "About",
         ]
         for tab in SettingsTab.allCases {
             #expect(allowed.contains(tab.title), "brief'te olmayan bölüm: \(tab.title)")
@@ -108,10 +108,15 @@ struct PrivacySettingsContentTests {
     /// Privacy bir zamanlar SON sekmeydi ve bu test onu öyle sabitliyordu; Updates ve
     /// About eklenince brief'in sırası otorite oldu. Ölçülen şey artık asıl amaç:
     /// gündelik ayarlar önce gelir, künye ve güncelleme sona kalır.
+    ///
+    /// License bu listede DEĞİLDİ: briefs/2'nin "Ayarlar Ekranı" listesi, aynı brief'in
+    /// "Lisanslama ve Planlar" bölümünden önce yazılmış. Testin kuralı "uydurma bölüm
+    /// olmasın"dı; License uydurma değil, brief'in kendi bölümü — ve ürünle ilgili
+    /// olduğu için Updates/About'un yanına, terminal ayarlarının arkasına konur.
     @Test func theTabOrderFollowsTheBrief() {
         #expect(SettingsTab.allCases == [
             .general, .appearance, .terminal, .profiles, .workspaces,
-            .ssh, .ai, .keybindings, .privacy, .updates, .about,
+            .ssh, .ai, .keybindings, .privacy, .license, .updates, .about,
         ])
     }
 }

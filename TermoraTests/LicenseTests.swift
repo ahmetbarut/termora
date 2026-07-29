@@ -67,3 +67,44 @@ struct LicenseTests {
         #expect(LicenseState.verificationIsOffline)
     }
 }
+
+/// briefs/2 "Lisanslama" ▸ *Pro özelliklerinde kilitli durum gösterimi (özelliği
+/// gizlemek yerine anlatmak).*
+@MainActor
+@Suite("Lisans sayfası içeriği")
+struct LicenseSettingsContentTests {
+
+    @Test func settingsHasAlicenseTab() {
+        #expect(SettingsTab.allCases.contains(.license))
+        #expect(SettingsTab.license.title == "License")
+        #expect(SettingsTab.license.symbolName.isEmpty == false)
+    }
+
+    /// Sayfa HER İKİ planı da listeler: Free kullanıcı neye sahip olduğunu, neyi
+    /// kaçırdığını aynı ekranda görür.
+    @Test func thePageListsBothPlans() {
+        #expect(LicenseContent.freeFeatures == ProFeature.allCases.filter(\.isFreeTier))
+        #expect(LicenseContent.proFeatures == ProFeature.allCases.filter { !$0.isFreeTier })
+        #expect(LicenseContent.freeFeatures.count + LicenseContent.proFeatures.count
+                == ProFeature.allCases.count)
+    }
+
+    /// Kilitli özellik kendini anlatır; boş bir kilit ikonu "neden?" sorusunu yanıtsız
+    /// bırakırdı.
+    @Test func everyProFeatureExplainsWhatItWouldDo() {
+        for feature in LicenseContent.proFeatures {
+            #expect(feature.lockedExplanation.count > 30, "yetersiz açıklama: \(feature.title)")
+            #expect(feature.lockedExplanation.hasSuffix("."))
+        }
+    }
+
+    /// Sayfa abonelik VAAT ETMEZ: briefs/2 tek seferlik lisans ya da yıllık güncelleme
+    /// diyor; "subscription" kelimesi ekranda bulunmamalı.
+    @Test func thePageNeverPromisesAsubscription() {
+        let text = (LicenseContent.summary + " " + LicenseContent.offlineNote).lowercased()
+        #expect(text.contains("subscription") == false)
+        #expect(text.contains("one-time"))
+        // Çevrimdışı çalıştığı AÇIKÇA yazılır: kullanıcı uçakta ne olacağını bilmeli.
+        #expect(LicenseContent.offlineNote.lowercased().contains("offline"))
+    }
+}

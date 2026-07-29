@@ -76,6 +76,16 @@ struct AppSettings: Codable, Equatable {
     /// açmamalı (briefs/2 "Gizlilik": telemetri varsayılan olarak kapalıdır).
     var sendsCrashReports: Bool = false
 
+    /// briefs/2 "Güncelleme Sistemi": otomatik kontrol AÇIK gelir.
+    ///
+    /// Kapalı bir varsayılan, güvenlik düzeltmesini kaçıran bir kullanıcı demektir.
+    /// Kontrolün NE gönderdiği ayrı bir sorudur ve yanıtı `UpdaterConfiguration`da:
+    /// makine profili hiçbir koşulda gönderilmez.
+    var checksForUpdatesAutomatically: Bool = true
+
+    /// Kontrol sıklığı (briefs/2 "Ayarlar Ekranı" ▸ Updates).
+    var updateCheckInterval: UpdateCheckInterval = .daily
+
     /// briefs/2 "Ayarlar Ekranı" ▸ Keybindings: kullanıcının değiştirdiği kısayollar.
     ///
     /// Anahtar komut KİMLİĞİ (`AppShortcut.id`), değer `AppShortcut.stroke` biçimi.
@@ -183,6 +193,10 @@ struct AppSettings: Codable, Equatable {
             ?? defaults.usesVisualBell
         sendsCrashReports = try container.decodeIfPresent(Bool.self, forKey: .sendsCrashReports)
             ?? defaults.sendsCrashReports
+        checksForUpdatesAutomatically = try container.decodeIfPresent(
+            Bool.self, forKey: .checksForUpdatesAutomatically) ?? defaults.checksForUpdatesAutomatically
+        updateCheckInterval = try container.decodeIfPresent(
+            UpdateCheckInterval.self, forKey: .updateCheckInterval) ?? defaults.updateCheckInterval
         sidebarWidth = SettingsLimits.clampSidebarWidth(
             try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
         )

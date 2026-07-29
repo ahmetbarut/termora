@@ -14,6 +14,7 @@ enum SettingsTab: String, CaseIterable {
     case ai
     case keybindings
     case privacy
+    case license
     case updates
     case about
 
@@ -28,6 +29,7 @@ enum SettingsTab: String, CaseIterable {
         case .ai: "AI"
         case .keybindings: "Keybindings"
         case .privacy: "Privacy"
+        case .license: "License"
         case .updates: "Updates"
         case .about: "About"
         }
@@ -44,6 +46,7 @@ enum SettingsTab: String, CaseIterable {
         case .ai: "sparkles"
         case .keybindings: "keyboard"
         case .privacy: "hand.raised"
+        case .license: "checkmark.seal"
         case .updates: "arrow.down.circle"
         case .about: "info.circle"
         }
@@ -71,6 +74,8 @@ struct SettingsWindowView: View {
     /// böylece iki ekran "model yok" durumunu aynı cümlelerle anlatır.
     /// Verilmezse `AppServices`'in kaydettiği kataloğa düşer.
     var aiCatalog: AIModelCatalog?
+    /// Kurulu lisans. Varsayılan paylaşılan örnektir; `TermoraApp` kendi deposunu geçirir.
+    var license: LicenseStore = .shared
 
     var body: some View {
         TabView {
@@ -100,11 +105,14 @@ struct SettingsWindowView: View {
                     .tabItem { label(for: .ai) }
             }
 
+            KeybindingsSettingsView(settings: settings)
+                .tabItem { label(for: .keybindings) }
+
             PrivacySettingsView(settings: settings)
                 .tabItem { label(for: .privacy) }
 
-            KeybindingsSettingsView(settings: settings)
-                .tabItem { label(for: .keybindings) }
+            LicenseSettingsView(license: license)
+                .tabItem { label(for: .license) }
 
             UpdatesSettingsView()
                 .tabItem { label(for: .updates) }

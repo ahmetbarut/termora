@@ -5,7 +5,7 @@ import Foundation
 /// Brief'in en bağlayıcı cümlesi burada uygulanıyor: *Temel terminal özellikleri ücret
 /// duvarının arkasına konulmamalıdır.* Free listesi `isFreeTier` ile sabit ve bir Pro
 /// kontrolü onların önüne geçemez.
-enum ProFeature: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum ProFeature: String, CaseIterable, Identifiable, Sendable {
     // Free (briefs/2)
     case localTerminals
     case tabs
@@ -63,7 +63,7 @@ enum ProFeature: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// Lisans durumu.
-enum LicenseState: Equatable, Sendable {
+nonisolated enum LicenseState: Equatable, Sendable {
     case free
     case pro
 
@@ -77,6 +77,11 @@ enum LicenseState: Equatable, Sendable {
     /// kullanıcının kendi satın aldığı özelliği kaybetmesi demektir — ve terminal
     /// uygulaması tam olarak o ortamlarda kullanılır.
     static let verificationIsOffline = true
+
+    /// Doğrulanmış lisans varsa Pro, yoksa Free.
+    init(license: License?) {
+        self = license == nil ? .free : .pro
+    }
 
     func allows(_ feature: ProFeature) -> Bool {
         // Ücretsiz özellik HER ZAMAN açık: bir Pro kontrolü brief'in "ücret duvarı

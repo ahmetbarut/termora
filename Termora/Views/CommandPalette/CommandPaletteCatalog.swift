@@ -35,8 +35,9 @@ enum CommandPaletteCatalog {
                       currentDirectory: String? = nil,
                       home: String = NSHomeDirectory(),
                       now: @escaping @MainActor () -> Date = Date.init,
+                      license: LicenseStore = .shared,
                       openSettings: @escaping @MainActor () -> Void) -> [CommandPaletteItem] {
-        actions(workspace: workspace)
+        let all = actions(workspace: workspace)
             + favoriteCommands(folders: folders, currentDirectory: currentDirectory, now: now)
             + workspaceCommands(workspace: workspace)
             + folderCommands(workspace: workspace, folders: folders, home: home, now: now)
@@ -46,6 +47,9 @@ enum CommandPaletteCatalog {
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
             + aiCommands(ai: ai)
+        // Kilit EN SONDA ve tek yerde: her üretici ayrı ayrı lisans sorsaydı, bir gün
+        // birinin sormayı unutması Pro bir özelliği bedava açık bırakırdı.
+        return ProGate.apply(all, license: license, openLicenseSettings: openSettings)
     }
 
     // MARK: - AI Actions (briefs/3 "Sonuç kategorileri", briefs/2 "AI komut alanını açma")
