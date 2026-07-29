@@ -7,7 +7,7 @@
 # with a checksum error and no way to tell which side is wrong.
 cask "termora" do
   version "1.0"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "cc0afe92d394299f35ceb6ec0e6d128f99b17b7fa85afa7e9b661a3f44a12dc0"
 
   url "https://github.com/ahmetbarut/termora/releases/download/v#{version}/Termora-#{version}.dmg",
       verified: "github.com/ahmetbarut/termora/"
