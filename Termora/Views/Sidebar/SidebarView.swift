@@ -14,10 +14,9 @@ struct SidebarView: View {
             ForEach(sections) { content in
                 Section {
                     if content.items.isEmpty {
-                        // briefs/3 "Empty State": tek cümle, illüstrasyon yok.
-                        Text(content.section.emptyMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        EmptyStateView(content: EmptyStateContent(
+                            message: content.section.emptyMessage
+                        ))
                     } else {
                         ForEach(content.items) { item in
                             SidebarRow(item: item)

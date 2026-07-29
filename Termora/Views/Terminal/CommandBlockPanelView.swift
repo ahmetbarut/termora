@@ -62,28 +62,26 @@ struct CommandBlockPanelView: View {
         .padding(.vertical, 8)
     }
 
-    /// briefs/3 "Empty State": tek cümle, birincil eylem, illüstrasyon yok.
+    /// Shell integration yoksa bu bir boşluk değil bir EKSİK KURULUM: o yüzden empty
+    /// state değil error state kullanılır — brief'in dört sorusu burada gerçekten var.
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack {
             Spacer()
-            Text(hasShellIntegration
-                 ? "No commands yet in this session."
-                 : "Command blocks need shell integration.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            if !hasShellIntegration {
-                Text("Termora marks command boundaries with the shell hooks it installs from "
-                     + "Settings. Without them it will not guess where one command ends.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            if hasShellIntegration {
+                EmptyStateView(content: EmptyStateContent(
+                    message: "No commands yet in this session."
+                ))
+            } else {
+                ErrorStateView(content: ErrorStateContent(
+                    title: "Command blocks need shell integration",
+                    reason: "Termora marks command boundaries with the shell hooks it installs.",
+                    recovery: "Install them from Settings ▸ General, then open a new tab."
+                ))
+                .padding(.horizontal, 16)
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
     }
 
     private var list: some View {
