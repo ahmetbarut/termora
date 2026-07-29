@@ -149,6 +149,10 @@ final class WorkspaceViewModel {
 
     func newTab(profile: TerminalProfile? = nil) {
         let session = sessionManager.createSession(profile: profile, workingDirectory: nil)
+        // briefs/2 "SSH Yöneticisi": bağlantı koptuğunda yeniden bağlanma sunabilmek için
+        // oturumun SSH ile açıldığını hatırlamak gerekir; `ssh` bittikten sonra panelde
+        // ondan geriye bir iz kalmaz.
+        session.didLaunchSSH = SSHConnectionTracker.isSSHCommandLine(profile?.startupCommand)
         let paneID = UUID()
         let tab = TerminalTab(
             root: .leaf(paneID: paneID, sessionID: session.id),
@@ -631,6 +635,9 @@ final class WorkspaceViewModel {
         /// Yoklama arka planda ve seyrek yapıldığı için ilk saniyelerde nil olabilir —
         /// çubuk o sırada yalnız depo adını ve dalı gösterir.
         var gitStatus: GitStatusDetail?
+        /// briefs/3 "Status Bar": *SSH bağlantısı.* SSH ile ilgisi olmayan panelde nil —
+        /// `vim` çalışıyor diye "Disconnected" demek yanlış bilgi olurdu.
+        var sshConnection: SSHConnectionState?
     }
 
     /// Durum çubuğu ayarlardan açık mı? (@Observable okuması sayesinde canlı günceller.)
@@ -702,7 +709,12 @@ final class WorkspaceViewModel {
             columns: size.cols,
             rows: size.rows,
             isBusy: sessionManager.hasRunningProcess(sessionID: sessionID),
-            gitStatus: gitDetail
+            gitStatus: gitDetail,
+            sshConnection: SSHConnectionTracker.state(
+                foregroundCommand: foregroundProcessName(sessionID: sessionID),
+                didLaunchSSH: session.didLaunchSSH,
+                lastExitCode: session.lastCommandExitCode
+            )
         )
     }
 

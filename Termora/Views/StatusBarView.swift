@@ -112,6 +112,13 @@ struct StatusBarView: View {
                          label: "Git branch: \(branch)")
                 }
 
+                // briefs/3 "Status Bar": SSH bağlantısı. SSH ile ilgisi olmayan panelde
+                // hiç çizilmez.
+                if let ssh = snapshot.sshConnection {
+                    separator
+                    sshIndicator(ssh)
+                }
+
                 Spacer(minLength: 8)
 
                 Text("\(snapshot.columns)×\(snapshot.rows)")
@@ -126,6 +133,29 @@ struct StatusBarView: View {
             }
         } else {
             Color.clear
+        }
+    }
+
+    /// SSH bağlantı göstergesi. Bağlantı KOPTUĞUNDA satır bir düğmeye dönüşür
+    /// (briefs/2 "SSH Yöneticisi": *Bağlantı kesildiğinde tekrar bağlanma seçeneği
+    /// sunmalıdır*); diğer durumlarda tıklanacak bir şey yok, sadece bilgi.
+    @ViewBuilder
+    private func sshIndicator(_ state: SSHConnectionState) -> some View {
+        if state.canReconnect {
+            Button {
+                workspace.restartActivePaneSession()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: state.symbolName)
+                    Text("Reconnect")
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.red)
+            .help("The SSH connection failed. Click to run the same connection again.")
+            .accessibilityLabel("SSH \(state.title). Reconnect")
+        } else {
+            item(state.symbolName, "SSH \(state.title)", label: "SSH \(state.title)")
         }
     }
 

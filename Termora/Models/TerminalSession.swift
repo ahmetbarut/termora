@@ -48,6 +48,13 @@ final class TerminalSession: Identifiable {
     /// kendisine. İkisi ayrışabilir (kullanıcı kurdu ama sekmeyi yeniden açmadı).
     var didReceiveShellIntegrationMarker = false
 
+    /// Oturum Termora'nın SSH yöneticisinden açıldı mı (briefs/2 "SSH Yöneticisi").
+    ///
+    /// Bağlantı durumu paneldeki süreçten türetilir, ama `ssh` bittikten SONRA geriye
+    /// bakacak bir iz gerekir: bu bayrak olmasa kopan bir bağlantı sıradan bir shell'den
+    /// ayırt edilemez ve "Reconnect" hiç sunulamazdı.
+    var didLaunchSSH: Bool = false
+
     /// Bumped by `SessionManager.restartSession(id:forceDefaultShell:)`, which installs a brand
     /// new AppKit view for the same session id. SwiftUI would otherwise keep showing the dead
     /// one, so the pane keys its `TerminalHostView` on this value. Only `SessionManager` writes it.

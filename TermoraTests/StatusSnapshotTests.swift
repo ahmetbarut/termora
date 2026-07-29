@@ -182,4 +182,39 @@ struct StatusSnapshotTests {
         #expect(session.terminalSize?.cols == 80)
         #expect(session.terminalSize?.rows == 24)
     }
+
+    // MARK: - briefs/3 "Status Bar" ▸ SSH bağlantısı
+
+    /// Sıradan bir panelde SSH satırı HİÇ çizilmez.
+    @Test func aPlainSessionReportsNoSshConnection() {
+        let (workspace, _, _) = makeWorkspace()
+        #expect(workspace.statusSnapshot()?.sshConnection == nil)
+    }
+
+    @Test func anSshSessionReportsItsConnectionState() {
+        let suiteName = "termora.status.ssh.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let stub = NamingStatusStubSessionManager()
+        let workspace = WorkspaceViewModel(sessionManager: stub,
+                                           settings: SettingsStore(defaults: defaults),
+                                           profiles: ProfileStore(defaults: defaults))
+        workspace.newTab(profile: SSHLaunch.profile(for: .configHost(SSHConfigHost(alias: "deploy"))))
+
+        stub.foregroundName = "ssh"
+        #expect(workspace.statusSnapshot()?.sshConnection == .connected)
+
+        // Bağlantı koptu: shell geri geldi ve ssh 255 ile çıktı.
+        stub.foregroundName = "zsh"
+        let sessionID = workspace.tabs[0].root.leaves[0].sessionID
+        stub.session(id: sessionID)?.lastCommandExitCode = 255
+        #expect(workspace.statusSnapshot()?.sshConnection == .failed(exitCode: 255))
+    }
+}
+
+/// Foreground komut adını doğrudan verir; SSH durumu bu ada bakılarak türetilir.
+@MainActor
+final class NamingStatusStubSessionManager: StatusStubSessionManager, ForegroundProcessNaming {
+    var foregroundName: String?
+    func foregroundProcessName(sessionID: UUID) -> String? { foregroundName }
 }
