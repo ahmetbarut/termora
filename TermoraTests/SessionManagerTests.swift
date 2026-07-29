@@ -58,6 +58,26 @@ private func poll(timeout: Duration = .seconds(10), until condition: () -> Bool)
     return condition()
 }
 
+/// Koşul sağlanana kadar girdiyi TEKRAR gönderir.
+///
+/// Tek seferlik gönderim kırılgandı: kabuk istemi çizmeden gelen girdi yutuluyor ve
+/// tam paket koşusunda (aynı anda başka testler de kabuk açarken) bu gerçekten oluyordu.
+private func pollSending(timeout: Duration = .seconds(15),
+                         _ send: () -> Void,
+                         until condition: () -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        send()
+        // Gönderimden sonra kısa bir aralıkla birkaç kez bakılır; her turda yeniden
+        // göndermek gereksiz yere onlarca süreç başlatırdı.
+        for _ in 0..<10 {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+    return condition()
+}
+
 @MainActor
 struct SessionManagerTests {
 
@@ -105,9 +125,15 @@ struct SessionManagerTests {
         let becameIdle = await poll { manager.hasRunningProcess(sessionID: session.id) == false }
         #expect(becameIdle, "an idle shell must not report a foreground job")
 
-        view.send(txt: "sleep 5\n")
-
-        let becameBusy = await poll { manager.hasRunningProcess(sessionID: session.id) }
+        // Girdi, kabuk istemini çizmeden gönderilirse YUTULUR ve komut hiç çalışmaz.
+        // "İstem hazır" durumunu dışarıdan güvenilir biçimde gözlemenin bir yolu yok
+        // (`hasRunningProcess` yalnız önplanda iş olup olmadığını söyler, kabuğun okumaya
+        // hazır olduğunu değil), bu yüzden gönderim tekrarlanır. `sleep` birden çok kez
+        // çalışsa da test aynı şeyi ölçer.
+        let becameBusy = await pollSending(
+            { view.send(txt: "sleep 5\n") },
+            until: { manager.hasRunningProcess(sessionID: session.id) }
+        )
         #expect(becameBusy, "`sleep 5` must show up as a foreground job")
     }
 

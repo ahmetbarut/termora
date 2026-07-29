@@ -2,13 +2,14 @@ import Foundation
 
 /// briefs/3 "Sidebar" bölümleri, brief'in saydığı sırayla.
 ///
-/// Saved Commands brief'te beşinci bölüm olarak geçer; özelliğin kendisi henüz yok
-/// (#25). Boş bir bölüm çizmek yerine, özellik geldiğinde buraya eklenecek.
+/// Brief'in beş bölümü de burada. Bölüm listesi kayıt yokken de döner: kullanıcı SSH
+/// hostu ya da kayıtlı komutu olmadığını görebilmeli.
 enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     case workspaces
     case folders
     case ssh
     case docker
+    case savedCommands
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .folders: return "Recent Folders"
         case .ssh: return "SSH Hosts"
         case .docker: return "Docker"
+        case .savedCommands: return "Saved Commands"
         }
     }
 
@@ -31,6 +33,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .folders: return .folders
         case .ssh: return .ssh
         case .docker: return .docker
+        case .savedCommands: return .savedCommands
         }
     }
 
@@ -41,6 +44,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .folders: return "No folders opened yet"
         case .ssh: return "No SSH hosts found"
         case .docker: return "No containers running"
+        case .savedCommands: return "No saved commands yet"
         }
     }
 }

@@ -29,6 +29,8 @@ final class AppServices {
     /// Son kullanılan ve favori klasörler (briefs/2 "Hızlı Açma"). Diğer depolar gibi
     /// paylaşılır: hangi pencere klasör açarsa açsın geçmiş TEKTİR.
     let recentFolders: RecentFoldersStore
+    /// briefs/3 "Sidebar" ▸ Saved Commands.
+    let savedCommands: SavedCommandStore
 
     /// AI sağlayıcısı (briefs/2 "AI Asistanı"). Durumsuzdur ve uç noktayı her istekte
     /// ayarlardan okur, bu yüzden pencereler arasında paylaşılabilir. Konuşma paylaşılmaz:
@@ -112,6 +114,7 @@ final class AppServices {
         self.workspaces = WorkspaceStore(defaults: defaults)
         self.sshHosts = SSHHostStore(defaults: defaults)
         self.recentFolders = RecentFoldersStore(defaults: defaults)
+        self.savedCommands = SavedCommandStore(defaults: defaults)
         self.sessionManager = SessionManager(settings: settings, themes: themes, profiles: profiles)
 
         // Sağlayıcı ÇALIŞMA ANINDA değişebilir (briefs/2: OpenAI, Anthropic, Ollama,

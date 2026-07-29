@@ -143,6 +143,9 @@ struct MainWindowView: View {
                         ai.isPresented = true
                         Task { await ai.explainCommandBlock(block) }
                     },
+                    onSave: { command in
+                        services.savedCommands.add(SavedCommand(command: command))
+                    },
                     onDismiss: { services.settings.settings.isCommandBlockPanelVisible = false }
                 )
                 .frame(minWidth: CommandBlockPanelLayout.minWidth,
@@ -193,6 +196,7 @@ struct MainWindowView: View {
                                    ssh: services.sshHosts,
                                    folders: services.recentFolders,
                                    docker: DockerStore.shared,
+                                   savedCommands: services.savedCommands,
                                    ai: ai,
                                    currentDirectory: currentWorkingDirectory())
                     .transition(.opacity)
@@ -459,6 +463,7 @@ struct MainWindowView: View {
                                     ssh: services.sshHosts,
                                     folders: services.recentFolders,
                                     docker: DockerStore.shared,
+                                    savedCommands: services.savedCommands,
                                     ai: ai,
                                     currentDirectory: currentWorkingDirectory(),
                                     openSettings: { openSettings() })

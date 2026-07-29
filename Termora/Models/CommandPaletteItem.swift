@@ -13,6 +13,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
     case ssh
     case folders
     case docker
+    case savedCommands
     case settings
     case themes
     case aiActions
@@ -26,6 +27,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .ssh: return "SSH"
         case .folders: return "Folders"
         case .docker: return "Docker"
+        case .savedCommands: return "Saved Commands"
         case .settings: return "Settings"
         case .themes: return "Themes"
         case .aiActions: return "AI Actions"
@@ -40,6 +42,7 @@ enum CommandPaletteCategory: String, CaseIterable, Identifiable, Sendable {
         case .ssh: return "network"
         case .folders: return "folder"
         case .docker: return "shippingbox"
+        case .savedCommands: return "bookmark"
         case .settings: return "gearshape"
         case .themes: return "paintpalette"
         case .aiActions: return "sparkles"

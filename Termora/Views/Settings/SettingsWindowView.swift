@@ -60,6 +60,7 @@ struct SettingsWindowView: View {
     /// anahtar pencereye iletir (bkz. AppServices.workspaceOpenRequest).
     let requestOpen: (Workspace) -> Void
     let captureCurrentLayout: () -> [WorkspaceTab]
+    let savedCommands: SavedCommandStore
     /// Kayıtlı SSH profilleri. Varsayılan paylaşılan örnektir: bu pencereyi kuran
     /// `TermoraApp` bu görevin kapsamı dışında olduğu için depo oradan geçirilemiyor
     /// (bkz. `SSHHostStore.shared`).
@@ -80,7 +81,7 @@ struct SettingsWindowView: View {
             AppearanceSettingsView(settings: settings, themes: themes)
                 .tabItem { label(for: .appearance) }
 
-            TerminalSettingsView(settings: settings)
+            TerminalSettingsView(settings: settings, savedCommands: savedCommands)
                 .tabItem { label(for: .terminal) }
 
             ProfilesSettingsView(profiles: profiles, themes: themes)

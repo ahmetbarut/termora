@@ -8,6 +8,9 @@ import SwiftUI
 struct TerminalSettingsView: View {
 
     let settings: SettingsStore
+    /// briefs/3 "Sidebar" ▸ Saved Commands. Düzenleme burada yaşıyor: komutlar
+    /// terminale ait ve brief ayrı bir sekme saymıyor.
+    let savedCommands: SavedCommandStore
 
     /// Yol alanları yazarken her tuşta ayara YAZILMAZ: yarım yazılmış bir yol
     /// (`/usr/local/bi`) kaydedilir ve yeni sekme açılmaz olurdu.
@@ -66,9 +69,35 @@ struct TerminalSettingsView: View {
             } header: {
                 Text("History")
             }
+
+            savedCommandsSection
         }
         .formStyle(.grouped)
         .onAppear(perform: loadDrafts)
+    }
+
+    /// Liste + satır içi düzenleme. Ayrı bir editör penceresi açmak, iki alanı olan bir
+    /// kayıt için gereğinden ağır olurdu.
+    @ViewBuilder
+    private var savedCommandsSection: some View {
+        Section {
+            if savedCommands.commands.isEmpty {
+                // briefs/3 "Empty State": tek cümle, nereden geldiğini söyler.
+                Text("Save a command from the Command Blocks panel, then find it here or in "
+                     + "the command palette.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(savedCommands.commands) { command in
+                    SavedCommandRow(command: command,
+                                    onChange: { savedCommands.update($0) },
+                                    onDelete: { savedCommands.remove(id: command.id) })
+                }
+            }
+        } header: {
+            Text("Saved Commands")
+        }
     }
 
     private func loadDrafts() {
@@ -118,5 +147,59 @@ struct TerminalSettingsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         directoryDraft = url.path
         commitDirectory()
+    }
+}
+
+
+// MARK: - Kayıtlı komut satırı
+
+/// Tek bir kayıtlı komut: ad, komut ve —riskliyse— uyarı.
+private struct SavedCommandRow: View {
+    let command: SavedCommand
+    let onChange: (SavedCommand) -> Void
+    let onDelete: () -> Void
+
+    @State private var nameDraft = ""
+    @State private var commandDraft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                TextField("Name", text: $nameDraft, prompt: Text(command.command))
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(commit)
+                Button("Delete", role: .destructive, action: onDelete)
+            }
+            TextField("Command", text: $commandDraft)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout.monospaced())
+                .onSubmit(commit)
+
+            if command.isRisky {
+                // briefs/2 "Tehlikeli Komut Koruması": kayıt engellenmez ama söylenir.
+                // Renk tek gösterge değil — simge ve cümle de var.
+                Label("This command is hard to undo. Termora writes it to the terminal but "
+                      + "never runs it for you.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(DesignTokens.warning.color)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear {
+            nameDraft = command.name
+            commandDraft = command.command
+        }
+    }
+
+    /// Boş komut kaydı DEPO tarafından reddedilir; alan eski değerine döner ki kullanıcı
+    /// kaydettiğini sanmasın.
+    private func commit() {
+        var edited = command
+        edited.name = nameDraft
+        edited.command = commandDraft
+        onChange(edited)
+        commandDraft = commandDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? command.command : commandDraft
     }
 }

@@ -30,6 +30,7 @@ enum CommandPaletteCatalog {
                       ssh: SSHHostStore? = nil,
                       folders: RecentFoldersStore? = nil,
                       docker: DockerStore? = nil,
+                      savedCommands: SavedCommandStore? = nil,
                       ai: AIPanelModel? = nil,
                       currentDirectory: String? = nil,
                       home: String = NSHomeDirectory(),
@@ -41,6 +42,7 @@ enum CommandPaletteCatalog {
             + folderCommands(workspace: workspace, folders: folders, home: home, now: now)
             + sshCommands(workspace: workspace, ssh: ssh, now: now)
             + dockerCommands(workspace: workspace, docker: docker)
+            + savedCommandItems(workspace: workspace, store: savedCommands)
             + settingsCommands(openSettings: openSettings)
             + themeCommands(settings: settings, themes: themes)
             + aiCommands(ai: ai)
@@ -387,6 +389,32 @@ enum CommandPaletteCatalog {
                 }
             },
         ]
+    }
+
+    // MARK: - Saved Commands (briefs/3 "Sidebar")
+
+    /// Kayıtlı komutlar. Enter komutu terminale YAZAR, ÇALIŞTIRMAZ — briefs/1 "Güvenlik":
+    /// komutlar kullanıcı onayı olmadan çalışmaz. Kullanıcı satırı görüp kendisi Enter'lar.
+    ///
+    /// Riskli komut satırda İŞARETLENİR (briefs/2 "Tehlikeli Komut Koruması"): kaydı
+    /// engellemek kullanıcının kendi aracını elinden almak olurdu, sessizce sunmak ise
+    /// uyarısız bir tuzak bırakmak.
+    private static func savedCommandItems(workspace: WorkspaceViewModel,
+                                          store: SavedCommandStore?) -> [CommandPaletteItem] {
+        guard let store else { return [] }
+        return store.commands.map { saved in
+            CommandPaletteItem(
+                id: "saved.\(saved.id.uuidString)",
+                title: saved.isRisky ? "\(saved.displayName) — risky" : saved.displayName,
+                category: .savedCommands,
+                symbolName: saved.isRisky ? "exclamationmark.triangle" : "bookmark",
+                accessibilityLabel: saved.isRisky
+                    ? "\(saved.displayName). Risky command; it is written to the terminal but not run."
+                    : "\(saved.displayName). Written to the terminal but not run."
+            ) {
+                workspace.insertForEditing(saved.command)
+            }
+        }
     }
 
     // MARK: - Settings

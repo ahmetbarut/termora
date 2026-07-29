@@ -47,6 +47,7 @@ struct TermoraApp: App {
                                workspaces: services.workspaces,
                                requestOpen: { services.workspaceOpenRequest = $0 },
                                captureCurrentLayout: { services.capturedLayout() },
+                               savedCommands: services.savedCommands,
                                ssh: services.sshHosts,
                                connectSSH: { services.sshConnectRequest = $0 })
         }

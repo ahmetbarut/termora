@@ -18,6 +18,9 @@ struct CommandBlockPanelView: View {
     let onRunAgain: (String) -> Void
     let onInsert: (String) -> Void
     let onExplain: (CommandBlock) -> Void
+    /// briefs/3 "Sidebar" ▸ Saved Commands: bloktan kaydetmek en doğal yol — blok
+    /// komutu zaten biliyor, kullanıcının yeniden yazmasına gerek yok.
+    let onSave: (String) -> Void
     let onDismiss: () -> Void
 
     /// Süre çalışan bloklarda akar; saniyede bir tazelenir.
@@ -92,7 +95,8 @@ struct CommandBlockPanelView: View {
                                     now: now,
                                     onRunAgain: onRunAgain,
                                     onInsert: onInsert,
-                                    onExplain: onExplain)
+                                    onExplain: onExplain,
+                                    onSave: onSave)
                 }
             }
             .padding(12)
@@ -113,6 +117,7 @@ private struct CommandBlockRow: View {
     let onRunAgain: (String) -> Void
     let onInsert: (String) -> Void
     let onExplain: (CommandBlock) -> Void
+    let onSave: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -182,6 +187,8 @@ private struct CommandBlockRow: View {
                 Button("Copy Command") { copy(command) }
                 Button("Run Again") { onRunAgain(command) }
                 Button("Edit and Run") { onInsert(command) }
+                Button("Save") { onSave(command) }
+                    .help("Keep this command in Saved Commands")
             }
             if !block.output.isEmpty {
                 Button("Copy Output") { copy(block.output) }

@@ -35,8 +35,9 @@ struct SidebarTests {
     // MARK: - Bölümler
 
     @Test func sectionsFollowTheOrderTheBriefLists() {
+        // briefs/3 "Sidebar" beş bölüm sayıyor; sıra da brief'in sırası.
         #expect(SidebarSection.allCases.map(\.title)
-                == ["Workspaces", "Recent Folders", "SSH Hosts", "Docker"])
+                == ["Workspaces", "Recent Folders", "SSH Hosts", "Docker", "Saved Commands"])
     }
 
     @Test func eachSectionCollectsItsOwnPaletteCategory() {
