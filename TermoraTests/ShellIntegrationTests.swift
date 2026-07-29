@@ -61,6 +61,66 @@ struct ShellIntegrationTests {
         #expect(ShellIntegration.snippet(for: .bash).contains("$-"))
     }
 
+    /// `C` işareti komut METNİNİ taşır (briefs/2 komut bloklarının "Girilen komut" alanı).
+    ///
+    /// OSC 133 standardı bunu vermez; kanca eklemezse Termora'nın komutu öğrenmesinin tek
+    /// yolu ekran metnini geri okumak olurdu — kaydırma, satır kaydırma ve renk dizileri
+    /// yüzünden güvenilmez bir tahmin. Kanca kaynağı bilir, biz de ondan alıyoruz.
+    @Test func theSnippetSendsTheCommandTextAndDirectoryWithTheOutputStartMarker() {
+        for family in [ShellFamily.zsh, .bash] {
+            let snippet = ShellIntegration.snippet(for: family)
+            #expect(snippet.contains("133;C;cmd=%s;pwd=%s"), "\(family) komut metnini taşımıyor")
+            // Metin base64 gider: ham komut `;` ve BEL içerebilir, ikisi de OSC dizisini bozar.
+            #expect(snippet.contains("base64"), "\(family) komutu kodlamadan gönderiyor")
+        }
+    }
+
+    /// zsh komut metnini `preexec`'in ARGÜMANINDAN alır — kabuğun kullanıcıdan okuduğu
+    /// satırın kendisi. Ekrandan geri okuma yapılmaz.
+    @Test func zshReadsTheCommandFromItsPreexecArgument() {
+        #expect(ShellIntegration.snippet(for: .zsh).contains("preexec"))
+        #expect(ShellIntegration.snippet(for: .zsh).contains("\"$1\""))
+    }
+
+    /// bash'in DEBUG kancası HER basit komuttan önce ateşlenir: `PROMPT_COMMAND`'in
+    /// parçaları da dahil. Kurulmuş bir bayrak olmadan her prompt için sahte bir komut
+    /// bloğu açılır ve blok listesi çöple dolardı.
+    @Test func bashFiresTheOutputStartMarkerOncePerCommandNotOncePerDebugTrap() {
+        let snippet = ShellIntegration.snippet(for: .bash)
+        #expect(snippet.contains("DEBUG"))
+        #expect(snippet.contains("__TERMORA_ARMED"))
+        // Bayrak prompt'un SONUNDA kurulur; erken kurulursa PROMPT_COMMAND'in kendi
+        // komutları onu tüketir ve kullanıcının gerçek komutu işaretsiz kalırdı.
+        #expect(snippet.contains("__termora_arm"))
+    }
+
+    /// DEBUG kancası `extdebug` açıkken sıfırdan farklı dönerse bash SONRAKİ KOMUTU ATLAR.
+    /// Kullanıcının komutunun çalışmaması, bu özelliğin verebileceği en büyük zarardır.
+    @Test func theBashDebugHookAlwaysReturnsSuccess() {
+        #expect(ShellIntegration.snippet(for: .bash).contains("return 0"))
+    }
+
+    /// Gerçek bir bash'te yakalandı: kullanıcı BOŞ SATIRDA Enter'a bastığında hiçbir komut
+    /// çalışmaz, ama `PROMPT_COMMAND` yine döner ve DEBUG kancası bu kez Termora'nın KENDİ
+    /// prompt fonksiyonunu "kullanıcının komutu" sanıp `cmd=__termora_prompt` yayardı.
+    /// Blok listesi her Enter'da sahte bir blokla dolardı.
+    ///
+    /// İki kilit birlikte durur:
+    /// 1. Kendi fonksiyon adlarımız kancada elenir.
+    /// 2. Bayrak prompt'un BAŞINDA düşürülür; kullanıcının kendi `PROMPT_COMMAND`
+    ///    girdileri (`history -a` gibi) de komut sanılmasın.
+    @Test func bashNeverReportsItsOwnPromptHooksAsTheUsersCommand() {
+        let snippet = ShellIntegration.snippet(for: .bash)
+
+        #expect(snippet.contains("__termora_*"), "kendi kanca adlarımız elenmiyor")
+        // `__termora_prompt` bayrağı DÜŞÜRÜR: kullanıcının PROMPT_COMMAND girdileri
+        // ondan sonra çalışır ve armed bir bayrak bulmamalıdır.
+        let promptBody = snippet.components(separatedBy: "__termora_prompt() {")
+        #expect(promptBody.count == 2, "prompt fonksiyonu bulunamadı")
+        #expect(promptBody.last?.contains("__TERMORA_ARMED=") == true,
+                "prompt bayrağı düşürmüyor")
+    }
+
     // MARK: - Kurulum: metin dönüşümü SAFTIR
 
     private let emptyRC = "export PATH=/usr/local/bin:$PATH\n"
@@ -110,7 +170,60 @@ struct ShellIntegrationTests {
     @Test func promptAndCommandMarkersAreRecognised() {
         #expect(ShellIntegrationMarker(payload: "133;A") == .promptStart)
         #expect(ShellIntegrationMarker(payload: "133;B") == .commandStart)
-        #expect(ShellIntegrationMarker(payload: "133;C") == .outputStart)
+        #expect(ShellIntegrationMarker(payload: "133;C") == .outputStart(command: nil, directory: nil))
+    }
+
+    // MARK: - `C` işaretinin taşıdığı komut metni ve dizin
+
+    private func base64(_ text: String) -> String {
+        Data(text.utf8).base64EncodedString()
+    }
+
+    /// Komut BLOKLARININ can damarı (briefs/2 "Girilen komut", "Çalışma dizini").
+    ///
+    /// OSC 133'ün kendisi komutun metnini VERMEZ; Termora'nın kancası onu `cmd=` alanında
+    /// taşır. Bu çözülmezse her blok "komut metni yok" derdi ve "yeniden çalıştır",
+    /// "düzenleyerek çalıştır", "Markdown'a aktar" eylemlerinin hiçbiri yapılamazdı.
+    @Test func theOutputStartMarkerCarriesTheCommandAndItsDirectory() {
+        let payload = "133;C;cmd=\(base64("npm run build"));pwd=\(base64("/Users/dev/pinro"))"
+
+        #expect(ShellIntegrationMarker(payload: payload)
+                == .outputStart(command: "npm run build", directory: "/Users/dev/pinro"))
+    }
+
+    /// Komut metni base64 GİDER çünkü ham hâli OSC dizisini bozardı: `;` alanları böler,
+    /// BEL (`\u{07}`) diziyi ERKEN BİTİRİR ve kalan karakterler doğrudan ekrana basılırdı.
+    /// Kodlanmış hâlde noktalı virgül, tırnak, satır sonu ve UTF-8 sağ salim geçer.
+    @Test func aCommandFullOfSeparatorsSurvivesTheRoundTrip() {
+        let nasty = "echo 'a;b' && printf 'ü\nç'"
+        let marker = ShellIntegrationMarker(payload: "133;C;cmd=\(base64(nasty))")
+
+        #expect(marker == .outputStart(command: nasty, directory: nil))
+    }
+
+    /// Başka bir terminalin kancası (ya da `base64` bulunamayan bir sistem) düz `133;C`
+    /// yayar. Termora komut metni UYDURMAZ — alan nil kalır ve blok bunu dürüstçe söyler.
+    @Test func aPlainOutputStartMarkerLeavesTheCommandUnknown() {
+        #expect(ShellIntegrationMarker(payload: "133;C") == .outputStart(command: nil, directory: nil))
+        #expect(ShellIntegrationMarker(payload: "133;C;cmd=") == .outputStart(command: nil, directory: nil))
+    }
+
+    /// Çözülemeyen bir yük ATILIR. Yarım çözülmüş bir komut metni göstermek, kullanıcının
+    /// "yeniden çalıştır" diyebileceği YANLIŞ bir komut üretirdi.
+    @Test func anUndecodableCommandFieldIsDroppedRatherThanShownHalfway() {
+        #expect(ShellIntegrationMarker(payload: "133;C;cmd=!!!not-base64!!!")
+                == .outputStart(command: nil, directory: nil))
+        // Geçerli base64 ama geçerli UTF-8 değil.
+        let invalidUTF8 = Data([0xFF, 0xFE, 0xFD]).base64EncodedString()
+        #expect(ShellIntegrationMarker(payload: "133;C;cmd=\(invalidUTF8)")
+                == .outputStart(command: nil, directory: nil))
+    }
+
+    /// Tanımadığımız ek alanlar (`aid=`, ileride eklenecek başkaları) `C`'yi bozmaz.
+    @Test func unknownFieldsOnTheOutputStartMarkerAreIgnored() {
+        let payload = "133;C;aid=\(base64("42"));cmd=\(base64("ls"))"
+
+        #expect(ShellIntegrationMarker(payload: payload) == .outputStart(command: "ls", directory: nil))
     }
 
     @Test func theEndMarkerCarriesTheExitCode() {

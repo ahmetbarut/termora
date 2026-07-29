@@ -71,6 +71,14 @@ enum ShellIntegration {
         }
     }
 
+    /// `C` işaretinin yükü. Komut metni ve dizin base64 gider: ham hâlde bir `;` alanları
+    /// böler, bir BEL (`\u{07}`) ise OSC dizisini ERKEN BİTİRİR ve komutun geri kalanı
+    /// doğrudan kullanıcının ekranına basılırdı.
+    ///
+    /// `base64` bulunamazsa `$(...)` boş döner ve Termora alanı yok sayar — kabuk çalışmaya
+    /// devam eder, yalnız blok komut metnini bilmez.
+    static let outputStartFormat = "\\033]133;C;cmd=%s;pwd=%s\\007"
+
     private static let zshSnippet = """
         # Termora marks where each command starts and ends (OSC 133) so the app knows
         # a command's exit code instead of guessing it. Remove this block any time.
@@ -78,8 +86,12 @@ enum ShellIntegration {
           *i*)
             if [ -z "${\(guardVariable)-}" ]; then
               \(guardVariable)=1
+              __termora_b64() { printf '%s' "$1" | base64 | tr -d '\\n'; }
               __termora_precmd() { printf '\\033]133;D;%s\\007\\033]133;A\\007' "$?" }
-              __termora_preexec() { printf '\\033]133;C\\007' }
+              # $1 is the command line zsh just read from the user, before any of it runs.
+              __termora_preexec() {
+                printf '\(outputStartFormat)' "$(__termora_b64 "$1")" "$(__termora_b64 "$PWD")"
+              }
               autoload -Uz add-zsh-hook 2>/dev/null && {
                 add-zsh-hook precmd __termora_precmd
                 add-zsh-hook preexec __termora_preexec
@@ -90,6 +102,13 @@ enum ShellIntegration {
         esac
         """
 
+    /// bash'te `preexec` diye bir kanca YOKTUR; en yakını her basit komuttan önce ateşlenen
+    /// `DEBUG` tuzağıdır. Tuzak `PROMPT_COMMAND`'in parçaları için de ateşlendiğinden bir
+    /// KURMA BAYRAĞI kullanılır: bayrak prompt'un en sonunda kurulur, ilk gerçek komutta
+    /// tüketilir. Bayraksız hâlde her prompt sahte bir komut bloğu açardı.
+    ///
+    /// `return 0` pazarlığa kapalıdır: `shopt -s extdebug` açıkken DEBUG tuzağının sıfırdan
+    /// farklı dönmesi bash'e SONRAKİ KOMUTU ATLATIR — kullanıcının komutu hiç çalışmazdı.
     private static let bashSnippet = """
         # Termora marks where each command starts and ends (OSC 133) so the app knows
         # a command's exit code instead of guessing it. Remove this block any time.
@@ -97,13 +116,28 @@ enum ShellIntegration {
           *i*)
             if [ -z "${\(guardVariable)-}" ]; then
               \(guardVariable)=1
+              __termora_b64() { printf '%s' "$1" | base64 | tr -d '\\n'; }
               __termora_prompt() {
                 local __termora_status=$?
+                # Disarm first: whatever else PROMPT_COMMAND runs is not a user command.
+                __TERMORA_ARMED=
                 printf '\\033]133;D;%s\\007\\033]133;A\\007' "$__termora_status"
               }
-              PROMPT_COMMAND="__termora_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+              # Armed last, so the DEBUG trap fired for PROMPT_COMMAND's own commands
+              # never consumes it; the next command the user types does.
+              __termora_arm() { __TERMORA_ARMED=1; }
+              __termora_preexec() {
+                # Our own hooks run before the flag is cleared; they are never the command.
+                case "$BASH_COMMAND" in __termora_*) return 0 ;; esac
+                if [ -n "$__TERMORA_ARMED" ]; then
+                  __TERMORA_ARMED=
+                  printf '\(outputStartFormat)' "$(__termora_b64 "$BASH_COMMAND")" "$(__termora_b64 "$PWD")"
+                fi
+                return 0
+              }
+              PROMPT_COMMAND="__termora_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND};__termora_arm"
               PS1="\\[$(printf '\\033]133;B\\007')\\]$PS1"
-              trap 'printf "\\033]133;C\\007"' DEBUG
+              trap '__termora_preexec' DEBUG
             fi
             ;;
         esac
@@ -259,7 +293,13 @@ enum ShellIntegrationContent {
 enum ShellIntegrationMarker: Equatable {
     case promptStart
     case commandStart
-    case outputStart
+    /// `C` — komut çalışmaya başladı.
+    ///
+    /// OSC 133'ün kendisi komutun METNİNİ taşımaz; Termora'nın kancası onu `cmd=` alanında
+    /// base64 ile ekler (bkz. `ShellIntegration.snippet`). Kanca başka bir terminalinse ya
+    /// da `base64` bulunamadıysa alanlar boş gelir ve ikisi de nil kalır — Termora komut
+    /// metnini UYDURMAZ, blok "komut metni yok" der.
+    case outputStart(command: String?, directory: String?)
     /// Çıkış kodu bilinmiyorsa nil. 0 VARSAYILMAZ: başarısız bir komutu başarılı
     /// göstermek, kullanıcının gördüğü her şeyi yalanlardı.
     case commandEnd(exitCode: Int?)
@@ -271,12 +311,41 @@ enum ShellIntegrationMarker: Equatable {
         switch parts[1] {
         case "A": self = .promptStart
         case "B": self = .commandStart
-        case "C": self = .outputStart
+        case "C":
+            let fields = Self.decodedFields(in: parts.dropFirst(2))
+            self = .outputStart(command: fields["cmd"], directory: fields["pwd"])
         case "D":
             // Ek parametreler (`aid=`) yok sayılır; kod yalnız üçüncü alandan okunur.
             let code = parts.count >= 3 ? Int(parts[2]) : nil
             self = .commandEnd(exitCode: code)
         default: return nil
         }
+    }
+
+    /// `cmd=<base64>` biçimindeki alanları çözer.
+    ///
+    /// # Neden base64
+    ///
+    /// Komut metni her şeyi içerebilir: `;`, satır sonu, BEL, tırnak, UTF-8. Ham hâlde
+    /// gönderilseydi `;` alanları böler, BEL ise OSC dizisini ERKEN BİTİRİRDİ — geri
+    /// kalan karakterler doğrudan ekrana basılır ve kullanıcının terminali bozulurdu.
+    ///
+    /// Çözülemeyen bir değer ATLANIR. Yarım çözülmüş bir komut metnini göstermek,
+    /// kullanıcının "yeniden çalıştır" diyebileceği yanlış bir komut üretirdi.
+    private static func decodedFields(in parts: some Sequence<Substring>) -> [String: String] {
+        var result: [String: String] = [:]
+        for part in parts {
+            // İlk `=`'den bölünür: base64 dolgusu (`==`) değerin İÇİNDE geçer.
+            guard let separator = part.firstIndex(of: "="), separator != part.startIndex else { continue }
+            let name = String(part[part.startIndex..<separator])
+            let encoded = String(part[part.index(after: separator)...])
+            guard !encoded.isEmpty,
+                  let data = Data(base64Encoded: encoded),
+                  let text = String(data: data, encoding: .utf8),
+                  !text.isEmpty
+            else { continue }
+            result[name] = text
+        }
+        return result
     }
 }
