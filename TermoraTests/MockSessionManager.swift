@@ -65,4 +65,11 @@ final class MockSessionManager: SessionManaging {
     func hasRunningProcess(sessionID: UUID) -> Bool {
         busySessionIDs.contains(sessionID)
     }
+
+    /// Oturuma yazılan girdiler, çağrı sırasıyla.
+    private(set) var sentInput: [(text: String, sessionID: UUID)] = []
+
+    func sendInput(_ text: String, toSession id: UUID) {
+        sentInput.append((text: text, sessionID: id))
+    }
 }

@@ -510,6 +510,23 @@ final class WorkspaceViewModel {
         tab.activePaneID = paneID
     }
 
+    // MARK: - briefs/2 "Menü Çubuğu" ▸ Shell menüsü
+
+    /// Shell menüsündeki "Restart Session" / "Restart with Default Shell". Aktif panel
+    /// bilgisi menüde yoktur; komut hangi panelin aktif olduğunu buradan öğrenir.
+    func restartActivePaneSession(forceDefaultShell: Bool = false) {
+        guard let tab = activeTab else { return }
+        restartPaneSession(paneID: tab.activePaneID, forceDefaultShell: forceDefaultShell)
+    }
+
+    /// Shell menüsündeki "Clear Screen". Terminale form feed yazar — shell'in kendi
+    /// `Ctrl+L` yolu. Ekranı Termora tarafında temizlemek, scrollback ile shell'in
+    /// kendi durumunu Termora'nın bilmediği biçimde ayırırdı.
+    func clearActivePane() {
+        guard let sessionID = activeSessionID else { return }
+        sessionManager.sendInput(TerminalContextMenu.clearScreenInput, toSession: sessionID)
+    }
+
     // MARK: - Arama (⌘F / ⌘G / ⌘⇧G)
 
     /// Aktif oturum yöneticisi arama yürütebiliyorsa onu verir; testlerdeki basit çiftlerde nil olur.

@@ -23,6 +23,11 @@ protocol SessionManaging: AnyObject {
     /// ignores the settings/profile path and uses the login shell — the recovery action for
     /// "this shell cannot be executed".
     func restartSession(id: UUID, forceDefaultShell: Bool)
+
+    /// Oturuma kullanıcı yazmış gibi girdi gönderir. Shell menüsündeki "Clear Screen"
+    /// bunu kullanır: ekranı Termora'nın kendi tarafında temizlemek yerine shell'in kendi
+    /// `Ctrl+L` yolunu izler, böylece scrollback ve shell durumu ayrışmaz.
+    func sendInput(_ text: String, toSession id: UUID)
 }
 
 /// Single owner of terminal session lifetime.
@@ -336,6 +341,12 @@ final class SessionManager: SessionManaging, LocalProcessTerminalViewDelegate {
     /// together with their session in `createSession` and die in `terminateSession`.
     func terminalView(for sessionID: UUID) -> TermoraTerminalView? {
         views[sessionID]
+    }
+
+    /// Görünümü olmayan oturum sessizce yok sayılır: oturum kapanırken menü öğesi hâlâ
+    /// tetiklenebilir ve bu bir hata değildir.
+    func sendInput(_ text: String, toSession id: UUID) {
+        views[id]?.send(txt: text)
     }
 
     // MARK: - Appearance

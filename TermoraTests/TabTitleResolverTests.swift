@@ -193,6 +193,9 @@ final class ForegroundNamingSessionManager: SessionManaging, ForegroundProcessNa
 
     func hasRunningProcess(sessionID: UUID) -> Bool { base.hasRunningProcess(sessionID: sessionID) }
 
+    /// Bu süit girdi yazmayı ölçmez; üye protokolü tamamlamak için var.
+    func sendInput(_ text: String, toSession id: UUID) {}
+
     func restartSession(id: UUID, forceDefaultShell: Bool) {
         base.restartSession(id: id, forceDefaultShell: forceDefaultShell)
     }

@@ -23,6 +23,9 @@ final class WorkspaceSearchStubManager: SessionManaging, TerminalSearchRunner {
     func terminateSession(id: UUID) { storage[id] = nil }
     func hasRunningProcess(sessionID: UUID) -> Bool { false }
 
+    /// Bu süit girdi yazmayı ölçmez; üye protokolü tamamlamak için var.
+    func sendInput(_ text: String, toSession id: UUID) {}
+
     /// `SessionManaging`'in beşinci üyesi (Task 8). Arama süiti yeniden başlatmayı test
     /// etmez ama protokol zorunlu kıldığı için burada da bulunmalı; çağrı yalnız kaydedilir.
     private(set) var restartedSessionIDs: [UUID] = []

@@ -498,4 +498,62 @@ import Testing
         #expect(tab.automaticTitle == "zsh")
         #expect(tab.displayTitle == "zsh")
     }
+
+    // MARK: - briefs/2 "Menü Çubuğu" ▸ Shell menüsü
+
+    @Test func restartingTheActivePaneRestartsItsSession() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let sessionID = workspace.tabs[0].root.leaves[0].sessionID
+
+        workspace.restartActivePaneSession()
+
+        #expect(manager.restartedSessionIDs == [sessionID])
+    }
+
+    /// "Restart with Default Shell", kullanıcının bozuk bir profil shell'inden çıkış yoludur
+    /// (briefs/3 "Error State" örneği: `/usr/local/bin/fish` yok). Profil sıfırlanmazsa bu
+    /// öğe hiçbir işe yaramaz.
+    @Test func restartingWithTheDefaultShellDropsTheProfileShell() {
+        let (workspace, manager) = makeWorkspace()
+        manager.defaultShellPath = "/bin/zsh"
+        workspace.newTab(profile: TerminalProfile(name: "Kırık", shellPath: "/usr/local/bin/fish"))
+        let sessionID = workspace.tabs[0].root.leaves[0].sessionID
+
+        workspace.restartActivePaneSession(forceDefaultShell: true)
+
+        #expect(manager.session(id: sessionID)?.shellPath == "/bin/zsh")
+        #expect(manager.session(id: sessionID)?.profileID == nil)
+    }
+
+    @Test func restartingWithNoOpenTabDoesNothing() {
+        let (workspace, manager) = makeWorkspace()
+
+        workspace.restartActivePaneSession()
+
+        #expect(manager.restartedSessionIDs.isEmpty)
+    }
+
+    /// Clear Screen terminale form feed (`\u{0C}`) yazar — shell'in kendi `Ctrl+L`'iyle
+    /// aynı yol. Ekranı Termora'nın kendi tarafında "temizlemek" scrollback'i ve shell'in
+    /// durumunu Termora'nın bilmediği biçimde ayırırdı.
+    @Test func clearingTheActivePaneSendsFormFeedToItsSession() {
+        let (workspace, manager) = makeWorkspace()
+        workspace.newTab()
+        let sessionID = workspace.tabs[0].root.leaves[0].sessionID
+
+        workspace.clearActivePane()
+
+        #expect(manager.sentInput.count == 1)
+        #expect(manager.sentInput.first?.sessionID == sessionID)
+        #expect(manager.sentInput.first?.text == "\u{0C}")
+    }
+
+    @Test func clearingWithNoOpenTabSendsNothing() {
+        let (workspace, manager) = makeWorkspace()
+
+        workspace.clearActivePane()
+
+        #expect(manager.sentInput.isEmpty)
+    }
 }

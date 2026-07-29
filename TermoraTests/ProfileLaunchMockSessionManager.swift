@@ -69,4 +69,7 @@ final class ProfileLaunchMockSessionManager: SessionManaging {
         session.processState = .running
         session.restartGeneration += 1
     }
+
+    /// Bu süit girdi yazmayı ölçmez; üye protokolü tamamlamak için var.
+    func sendInput(_ text: String, toSession id: UUID) {}
 }

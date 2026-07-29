@@ -22,6 +22,9 @@ class StatusStubSessionManager: SessionManaging {
     func terminateSession(id: UUID) { storage[id] = nil; runningSessionIDs.remove(id) }
     func hasRunningProcess(sessionID: UUID) -> Bool { runningSessionIDs.contains(sessionID) }
 
+    /// Bu süit girdi yazmayı ölçmez; üye protokolü tamamlamak için var.
+    func sendInput(_ text: String, toSession id: UUID) {}
+
     func restartSession(id: UUID, forceDefaultShell: Bool) {
         guard let old = storage[id] else { return }
         storage[id] = TerminalSession(id: id,

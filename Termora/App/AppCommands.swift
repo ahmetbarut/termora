@@ -45,14 +45,14 @@ struct AppCommands: Commands {
             Button(aiPanel?.isPresented == true ? "Hide AI Assistant" : "Show AI Assistant") {
                 aiPanel?.isPresented.toggle()
             }
-            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .shortcut(AppShortcuts.toggleAIPanel)
             .disabled(aiPanel == nil)
 
             Button("Explain Selection with AI") {
                 guard let aiPanel else { return }
                 Task { await aiPanel.openAndExplainSelection() }
             }
-            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .shortcut(AppShortcuts.explainSelection)
             // Seçim yokken sorulacak bir şey yok; öğe gizlenmez, devre dışı görünür
             // (briefs/3 "Sağ Tık Menüleri" ile aynı kural).
             .disabled(aiPanel == nil)
@@ -66,7 +66,7 @@ struct AppCommands: Commands {
             Button("Command Palette…") {
                 commandPalette?.toggle()
             }
-            .keyboardShortcut("k", modifiers: .command)
+            .shortcut(AppShortcuts.commandPalette)
             .disabled(commandPalette == nil)
         }
 
@@ -74,7 +74,7 @@ struct AppCommands: Commands {
             Button("New Tab") {
                 workspace?.newTab()
             }
-            .keyboardShortcut("t", modifiers: .command)
+            .shortcut(AppShortcuts.newTab)
             .disabled(workspace == nil)
         }
 
@@ -90,7 +90,7 @@ struct AppCommands: Commands {
                     NSApp.keyWindow?.performClose(nil)
                 }
             }
-            .keyboardShortcut("w", modifiers: .command)
+            .shortcut(AppShortcuts.closeTabOrWindow)
         }
 
         CommandGroup(after: .textEditing) {
@@ -98,19 +98,19 @@ struct AppCommands: Commands {
             Button("Find…") {
                 workspace?.toggleSearchBar()
             }
-            .keyboardShortcut("f", modifiers: .command)
+            .shortcut(AppShortcuts.find)
             .disabled(workspace == nil)
 
             Button("Find Next") {
                 workspace?.findNextMatch()
             }
-            .keyboardShortcut("g", modifiers: .command)
+            .shortcut(AppShortcuts.findNext)
             .disabled(workspace == nil)
 
             Button("Find Previous") {
                 workspace?.findPreviousMatch()
             }
-            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .shortcut(AppShortcuts.findPrevious)
             .disabled(workspace == nil)
         }
 
@@ -120,13 +120,13 @@ struct AppCommands: Commands {
             Button("Split Vertically") {
                 workspace?.splitActivePane(axis: .vertical)
             }
-            .keyboardShortcut("d", modifiers: .command)
+            .shortcut(AppShortcuts.splitVertically)
             .disabled(workspace == nil)
 
             Button("Split Horizontally") {
                 workspace?.splitActivePane(axis: .horizontal)
             }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .shortcut(AppShortcuts.splitHorizontally)
             .disabled(workspace == nil)
 
             Divider()
@@ -134,42 +134,86 @@ struct AppCommands: Commands {
             Button("Close Pane") {
                 workspace?.requestCloseActivePane()
             }
-            .keyboardShortcut("w", modifiers: [.command, .shift])
+            .shortcut(AppShortcuts.closePane)
             .disabled(workspace == nil)
 
             Divider()
 
             Button("Focus Pane Left") { workspace?.focusPane(.left) }
-                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .shortcut(AppShortcuts.focusPaneLeft)
                 .disabled(workspace == nil)
             Button("Focus Pane Right") { workspace?.focusPane(.right) }
-                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .shortcut(AppShortcuts.focusPaneRight)
                 .disabled(workspace == nil)
             Button("Focus Pane Up") { workspace?.focusPane(.up) }
-                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .shortcut(AppShortcuts.focusPaneUp)
                 .disabled(workspace == nil)
             Button("Focus Pane Down") { workspace?.focusPane(.down) }
-                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .shortcut(AppShortcuts.focusPaneDown)
                 .disabled(workspace == nil)
+        }
+
+        // briefs/2 "Menü Çubuğu": Termora / File / Edit / View / **Shell** / Window / Help.
+        // Shell menüsü oturumun kendisine dokunan işlemleri toplar; panel ve sekme düzeni
+        // kendi menülerinde kalır.
+        CommandMenu("Shell") {
+            Button(AppShortcuts.clearScreen.title) {
+                workspace?.clearActivePane()
+            }
+            .shortcut(AppShortcuts.clearScreen)
+            .disabled(workspace == nil)
+
+            Divider()
+
+            Button(AppShortcuts.restartSession.title) {
+                workspace?.restartActivePaneSession()
+            }
+            .shortcut(AppShortcuts.restartSession)
+            .disabled(workspace == nil)
+
+            // briefs/3 "Error State" örneğindeki kurtarma yolu: yapılandırılmış shell
+            // çalıştırılamadığında kullanıcı login shell'e dönebilmeli.
+            Button(AppShortcuts.restartWithDefaultShell.title) {
+                workspace?.restartActivePaneSession(forceDefaultShell: true)
+            }
+            .shortcut(AppShortcuts.restartWithDefaultShell)
+            .disabled(workspace == nil)
         }
 
         CommandMenu("Tab") {
             Button("Next Tab") { workspace?.nextTab() }
-                .keyboardShortcut("]", modifiers: [.command, .shift])
+                .shortcut(AppShortcuts.nextTab)
                 .disabled(workspace == nil)
             Button("Previous Tab") { workspace?.previousTab() }
-                .keyboardShortcut("[", modifiers: [.command, .shift])
+                .shortcut(AppShortcuts.previousTab)
                 .disabled(workspace == nil)
 
             Divider()
 
-            ForEach(1...9, id: \.self) { number in
-                Button("Tab \(number)") {
-                    workspace?.selectTab(at: number - 1)
+            ForEach(Array(AppShortcuts.tabSelection.enumerated()), id: \.element.id) { index, shortcut in
+                Button(shortcut.title) {
+                    workspace?.selectTab(at: index)
                 }
-                .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
+                .shortcut(shortcut)
                 .disabled(workspace == nil)
             }
         }
+
+        // briefs/2 "Menü Çubuğu" Help menüsünü sayıyor. Ürünün henüz dokümantasyon sitesi
+        // yok (briefs/2 "Faz 6"), o yüzden burada yalnız gerçekten çalışan bir öğe var:
+        // varsayılan "Termora Help" öğesi olmayan bir kitapçığı açmaya çalışıp hata
+        // penceresi gösterirdi.
+        CommandGroup(replacing: .help) {
+            Button("Report an Issue…") {
+                NSWorkspace.shared.open(TermoraLinks.newIssue)
+            }
+        }
     }
+}
+
+/// Uygulamanın dışarı açtığı adresler. Tek yerde durur ki menü, About ve hata raporlama
+/// aynı hedefi göstersin.
+enum TermoraLinks {
+    static let repository = URL(string: "https://github.com/ahmetbarut/termora")!
+    static let newIssue = URL(string: "https://github.com/ahmetbarut/termora/issues/new")!
 }
