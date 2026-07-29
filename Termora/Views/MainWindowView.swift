@@ -16,8 +16,14 @@ enum WindowLayout {
     /// kullanımını engellememeli". Alt sınır sabit kalsaydı 720 pt'lik bir pencerede
     /// panel terminalin yarısını yerdi; bu yüzden panel açılırken pencere büyür ve
     /// terminal tanıdık alt sınırını korur.
-    static func minWidth(withAIPanel isPresented: Bool) -> CGFloat {
-        isPresented ? minWidth + AIPanelLayout.minWidth : minWidth
+    /// Sidebar de aynı kuralı izler (briefs/3 "Küçük Pencere Davranışı": *Terminal alanı
+    /// korunmalı*): açıldığında pencerenin alt sınırı sidebar'ın asgari genişliği kadar
+    /// büyür, böylece terminal 720 pt'lik tanıdık alanını kaybetmez.
+    static func minWidth(withAIPanel isPresented: Bool, withSidebar isSidebarVisible: Bool = false) -> CGFloat {
+        var width = minWidth
+        if isPresented { width += AIPanelLayout.minWidth }
+        if isSidebarVisible { width += CGFloat(SettingsLimits.sidebarWidthRange.lowerBound) }
+        return width
     }
 
     /// briefs/3 "Pencere Yönetimi": boyut ve konum, oturum geri yükleme KAPALIYKEN de
@@ -67,6 +73,8 @@ struct MainWindowView: View {
     @State private var hasPlacedWindow = false
 
     @Environment(\.openWindow) private var openWindow
+    /// Sidebar'daki Settings satırları paletle aynı yolu kullanır.
+    @Environment(\.openSettings) private var openSettings
 
     @MainActor
     init(services: AppServices) {
@@ -97,6 +105,17 @@ struct MainWindowView: View {
         // kullanımını engellememeli"). Kardeş görünüm olduğu için oturumlar okumaya ve
         // çalışmaya devam eder; klavye odağı panele girmedikçe terminaldedir.
         HStack(spacing: 0) {
+            // briefs/3 "Sidebar": kapalıyken ikon şeridi BIRAKMAZ, tamamen kaybolur.
+            if services.settings.settings.isSidebarVisible {
+                SidebarView(sections: SidebarCatalog.sections(from: paletteItems()),
+                            onDismiss: { services.settings.settings.isSidebarVisible = false })
+                    .frame(width: services.settings.settings.sidebarWidth)
+                    .transition(.move(edge: .leading))
+                SidebarResizeHandle(width: Binding(
+                    get: { services.settings.settings.sidebarWidth },
+                    set: { services.settings.settings.sidebarWidth = $0 }
+                ))
+            }
             terminalColumn
             if ai.isPresented {
                 Divider()
@@ -107,9 +126,11 @@ struct MainWindowView: View {
                     .transition(.move(edge: .trailing))
             }
         }
-        .frame(minWidth: WindowLayout.minWidth(withAIPanel: ai.isPresented),
+        .frame(minWidth: WindowLayout.minWidth(withAIPanel: ai.isPresented,
+                                               withSidebar: services.settings.settings.isSidebarVisible),
                minHeight: WindowLayout.minHeight)
         .motionAnimation(.panel, value: ai.isPresented)
+        .motionAnimation(.panel, value: services.settings.settings.isSidebarVisible)
         .focusedSceneValue(\.aiPanel, ai)
         .onChange(of: ai.isPresented) { _, isPresented in
             // Panel açıldığında gönderilecek bağlam TAZE olmalı; kapanırken klavye
@@ -390,6 +411,23 @@ struct MainWindowView: View {
         let probed = services.sessionManager.shellPID(sessionID: sessionID)
             .flatMap { ProcessProbe.currentWorkingDirectory(pid: $0) }
         return probed ?? services.sessionManager.session(id: sessionID)?.workingDirectory
+    }
+
+    /// Sidebar'ın gösterdiği komutlar. Palet ile TAM AYNI kaynaktan üretilir; sidebar
+    /// yalnızca `SidebarCatalog` ile kendi kategorilerini ayıklar. İki yüzeyin ayrışması
+    /// (paletten açılan bir workspace'in sidebar'da görünmemesi) böylece mümkün değil.
+    ///
+    /// Yalnız sidebar çiziliyken çağrılır; kapalıyken hiçbir liste kurulmaz.
+    private func paletteItems() -> [CommandPaletteItem] {
+        CommandPaletteCatalog.items(workspace: workspace,
+                                    settings: services.settings,
+                                    themes: services.themes,
+                                    ssh: services.sshHosts,
+                                    folders: services.recentFolders,
+                                    docker: DockerStore.shared,
+                                    ai: ai,
+                                    currentDirectory: currentWorkingDirectory(),
+                                    openSettings: { openSettings() })
     }
 
     /// Klavye odağını aktif panelin terminaline geri verir.

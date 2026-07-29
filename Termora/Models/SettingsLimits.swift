@@ -9,7 +9,11 @@ enum SettingsLimits {
     static let lineSpacingRange: ClosedRange<Double> = 1.0...1.6
     static let opacityRange: ClosedRange<Double> = 0.5...1.0
 
+    /// briefs/3 "Sidebar": minimum 220 pt, varsayılan 260 pt, maksimum 380 pt.
+    static let sidebarWidthRange: ClosedRange<Double> = 220...380
+
     static let defaultFontSize: Double = 13
+    static let defaultSidebarWidth: Double = 260
 
     static func clampScrollback(_ value: Int) -> Int {
         min(max(value, scrollbackRange.lowerBound), scrollbackRange.upperBound)
@@ -28,6 +32,11 @@ enum SettingsLimits {
     static func clampOpacity(_ value: Double) -> Double {
         guard !value.isNaN else { return opacityRange.upperBound }
         return min(max(value, opacityRange.lowerBound), opacityRange.upperBound)
+    }
+
+    static func clampSidebarWidth(_ value: Double) -> Double {
+        guard !value.isNaN else { return defaultSidebarWidth }
+        return min(max(value, sidebarWidthRange.lowerBound), sidebarWidthRange.upperBound)
     }
 
     /// Scrollback metin alanı için: ayrıştırılamayan girdi `fallback`'e düşer,

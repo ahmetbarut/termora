@@ -28,7 +28,7 @@ struct TermoraApp: App {
         }
         .defaultSize(width: 900, height: 560)
         .commands {
-            AppCommands()
+            AppCommands(settings: services.settings)
             ProfileCommands(profiles: services.profiles)
         }
 

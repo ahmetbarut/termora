@@ -57,6 +57,9 @@ enum AppShortcuts {
 
     // MARK: - View
 
+    static let toggleSidebar = AppShortcut(
+        id: "toggleSidebar", title: "Show / Hide Sidebar", key: "s", modifiers: [.command, .shift]
+    )
     static let toggleAIPanel = AppShortcut(
         id: "toggleAIPanel", title: "Show / Hide AI Assistant", key: "a", modifiers: [.command, .shift]
     )
@@ -127,7 +130,7 @@ enum AppShortcuts {
     static let all: [AppShortcut] = [
         newTab, closeTabOrWindow,
         find, findNext, findPrevious,
-        toggleAIPanel, explainSelection, commandPalette,
+        toggleSidebar, toggleAIPanel, explainSelection, commandPalette,
         clearScreen, restartSession, restartWithDefaultShell,
         splitVertically, splitHorizontally, closePane,
         focusPaneLeft, focusPaneRight, focusPaneUp, focusPaneDown,

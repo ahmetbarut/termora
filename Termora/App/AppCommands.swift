@@ -33,6 +33,11 @@ extension FocusedValues {
 }
 
 struct AppCommands: Commands {
+    /// Sidebar görünürlüğü pencere başına değil uygulama genelinde saklanır (briefs/3
+    /// "Sidebar" onu bir tercih olarak tanımlar), bu yüzden @FocusedValue değil doğrudan
+    /// depo verilir.
+    let settings: SettingsStore
+
     @FocusedValue(\.workspace) private var workspace
     @FocusedValue(\.commandPalette) private var commandPalette
     @FocusedValue(\.aiPanel) private var aiPanel
@@ -42,6 +47,12 @@ struct AppCommands: Commands {
         // Panel bir görünüm anahtarıdır, yeri View menüsüdür.
         // DİKKAT: `CommandGroup { … }.disabled(…)` menüde çalışmaz; etkinlik Button'a verilir.
         CommandGroup(after: .sidebar) {
+            // briefs/3 "Sidebar": tamamen açılıp kapanır, ikon şeridi bırakmaz.
+            Button(settings.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                settings.settings.isSidebarVisible.toggle()
+            }
+            .shortcut(AppShortcuts.toggleSidebar)
+
             Button(aiPanel?.isPresented == true ? "Hide AI Assistant" : "Show AI Assistant") {
                 aiPanel?.isPresented.toggle()
             }

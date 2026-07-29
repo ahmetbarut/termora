@@ -47,6 +47,10 @@ struct AppSettings: Codable, Equatable {
     var defaultShellPath: String? = nil
     var startupDirectory: String? = nil
     var showStatusBar: Bool = true
+    /// briefs/3 "Sidebar": varsayılan kapalı. Yeni kullanıcı yalnız terminali görmeli
+    /// (briefs/3 "Aşamalı Karmaşıklık"); workspace, SSH ve Docker istendiğinde açılır.
+    var isSidebarVisible: Bool = false
+    var sidebarWidth: Double = SettingsLimits.defaultSidebarWidth
     /// brief 3 "İlk Açılış Akışı": ilk açılış akışı yalnızca bir kez gösterilir.
     /// Akış tamamlandığında **ve atlandığında** true olur.
     var hasCompletedOnboarding: Bool = false
@@ -112,6 +116,11 @@ struct AppSettings: Codable, Equatable {
         defaultShellPath = try container.decodeIfPresent(String.self, forKey: .defaultShellPath)
         startupDirectory = try container.decodeIfPresent(String.self, forKey: .startupDirectory)
         showStatusBar = try container.decodeIfPresent(Bool.self, forKey: .showStatusBar) ?? defaults.showStatusBar
+        isSidebarVisible = try container.decodeIfPresent(Bool.self, forKey: .isSidebarVisible)
+            ?? defaults.isSidebarVisible
+        sidebarWidth = SettingsLimits.clampSidebarWidth(
+            try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? defaults.sidebarWidth
+        )
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding)
             ?? defaults.hasCompletedOnboarding
         // Güvenlik/gizlilik: bayrak eksikse KAPALI kabul edilir. Eksik veri asla oturum
